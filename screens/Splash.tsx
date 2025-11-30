@@ -1,7 +1,7 @@
 
 import React from 'react';
 import Growbot from '../components/Growbot';
-import { ArrowRight, ShieldCheck, TrendingUp, RefreshCw } from 'lucide-react';
+import { ArrowRight, ShieldCheck, TrendingUp } from 'lucide-react';
 
 interface SplashProps {
   onGetStarted: () => void;
@@ -42,45 +42,8 @@ const Splash: React.FC<SplashProps> = ({ onGetStarted }) => {
             AI instantly analyzes plant health to detect issues early and help protect yield and quality for all types of growers.
           </p>
 
-          {/* Before/After Visual - Split View Construction */}
-          <div className="relative w-full h-52 rounded-2xl overflow-hidden shadow-card border border-white/50 my-5 flex bg-gray-100 group">
-             
-             {/* Left: Before (Sick Plant) */}
-             <div className="relative w-1/2 h-full border-r border-white/20 overflow-hidden">
-                <img 
-                  src="https://images.unsplash.com/photo-1531327427774-432ca08d844d?q=80&w=400&auto=format&fit=crop" 
-                  alt="Before Plant" 
-                  className="w-full h-full object-cover opacity-90 sepia-[0.3] contrast-125 transition-transform duration-1000 group-hover:scale-110"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60"></div>
-                <div className="absolute bottom-3 left-3 bg-red-600 text-white text-[10px] font-bold px-2.5 py-1 rounded shadow-lg z-10 border border-white/10">
-                   Before
-                </div>
-             </div>
-
-             {/* Right: After (Healthy Plant) */}
-             <div className="relative w-1/2 h-full overflow-hidden">
-                <img 
-                  src="https://images.unsplash.com/photo-1603909223429-69bb7101f420?q=80&w=400&auto=format&fit=crop" 
-                  alt="After Plant" 
-                  className="w-full h-full object-cover brightness-110 saturate-110 transition-transform duration-1000 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60"></div>
-                <div className="absolute bottom-3 right-3 bg-green-600 text-white text-[10px] font-bold px-2.5 py-1 rounded shadow-lg z-10 border border-white/10">
-                   After
-                </div>
-             </div>
-
-             {/* Central Divider & Icon */}
-             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-white/30 backdrop-blur-md p-1.5 rounded-full border border-white/40 shadow-lg">
-                <div className="bg-white rounded-full p-1 shadow-sm">
-                   <RefreshCw size={12} className="text-primary" />
-                </div>
-             </div>
-          </div>
-
           {/* Payoff Line - Updated */}
-          <p className="text-primary font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2">
+          <p className="text-primary font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 mt-8">
             <TrendingUp size={16} />
             Grow confidently — no more guessing
           </p>
