@@ -136,12 +136,12 @@ const WelcomeCarousel: React.FC<WelcomeCarouselProps> = ({ onStart }) => {
                     </div>
 
                     {/* Title */}
-                    <h2 className={`text-xl font-extrabold mb-3 leading-tight ${card.color} px-1`}>
+                    <h2 className={`text-3xl font-extrabold mb-4 leading-none ${card.color} px-1 tracking-tight`}>
                         {card.title}
                     </h2>
 
                     {/* Description */}
-                    <p className="text-sm text-text-sub font-medium leading-relaxed px-2 mb-4">
+                    <p className="text-lg text-text-sub font-bold leading-snug px-2 mb-6">
                         {card.description}
                     </p>
 
@@ -156,7 +156,7 @@ const WelcomeCarousel: React.FC<WelcomeCarouselProps> = ({ onStart }) => {
 
                     {/* Emotional Payoff (Card 1) */}
                     {card.payoff && (
-                        <p className="text-xs text-primary font-bold italic opacity-80 mt-2">
+                        <p className="text-sm text-primary font-bold italic opacity-80 mt-2">
                             "{card.payoff}"
                         </p>
                     )}
