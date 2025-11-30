@@ -1,0 +1,8 @@
+{
+  "name": "Vone MasterGrowbot AI",
+  "description": "An AI-powered cannabis plant health assistant helping legal growers prevent crop loss and optimize yields.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
