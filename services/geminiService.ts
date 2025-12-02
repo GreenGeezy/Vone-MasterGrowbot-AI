@@ -51,30 +51,33 @@ export const diagnosePlant = async (
       }
     }));
 
+    const systemInstruction = `Act as an expert cannabis cultivator. Analyze these plant images.${contextStr}
+            
+    1.  **Diagnosis**: Identify deficiencies, pests, or stress. Take the provided Strain and Environment into account for specific advice.
+    2.  **Health**: Determine overall health strictly as one of: "Poor", "Fair", "Good", "Great", "Excellent".
+    3.  **Stage**: Estimate growth stage (e.g., Seedling, Vegetative, Flowering, Harvest).
+    4.  **TopAction**: Write ONE single, concise sentence of the most important action the grower should take immediately.
+    5.  **Severity**: low, medium, or high.
+    6.  **Fixes**: Step-by-step recovery.
+    7.  **Yield**: Techniques to increase yield.
+    8.  **Quality**: Tips for potency.
+    9.  **Advice**: Brief summary.
+    10. **Confidence**: A number between 0 and 100 representing confidence level.
+
+    Return strictly valid JSON.`;
+
     const response = await ai.models.generateContent({
       model,
       contents: {
         parts: [
           ...imageParts,
           {
-            text: `Act as an expert cannabis cultivator. Analyze these plant images.${contextStr}
-            
-            1.  **Diagnosis**: Identify deficiencies, pests, or stress. Take the provided Strain and Environment into account for specific advice.
-            2.  **Health**: Determine overall health strictly as one of: "Poor", "Fair", "Good", "Great", "Excellent".
-            3.  **Stage**: Estimate growth stage (e.g., Seedling, Vegetative, Flowering, Harvest).
-            4.  **TopAction**: Write ONE single, concise sentence of the most important action the grower should take immediately.
-            5.  **Severity**: low, medium, or high.
-            6.  **Fixes**: Step-by-step recovery.
-            7.  **Yield**: Techniques to increase yield.
-            8.  **Quality**: Tips for potency.
-            9.  **Advice**: Brief summary.
-            10. **Confidence**: A number between 0 and 100 representing confidence level.
-
-            Return strictly valid JSON.`
+            text: `Analyze these plant images.`
           }
         ]
       },
       config: {
+        systemInstruction: systemInstruction,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,

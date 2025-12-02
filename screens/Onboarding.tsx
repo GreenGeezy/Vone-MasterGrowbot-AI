@@ -55,6 +55,8 @@ const STEPS = [
   }
 ];
 
+const STEP_LABELS = ["Experience", "Environment", "Goals", "Scale"];
+
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [showIntro, setShowIntro] = useState(true);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -82,62 +84,71 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   }
 
   return (
-    <div className="h-screen bg-surface overflow-hidden flex flex-col font-sans">
+    <div className="flex flex-col h-full bg-surface overflow-hidden">
       
-      {/* Progress Bar */}
-      <div className="pt-12 px-8 pb-4 z-30">
-        <div className="flex justify-between items-center mb-3">
-           <span className="text-xs font-bold text-text-sub uppercase tracking-widest">
-            Step {currentStepIndex + 1} of {STEPS.length}
-           </span>
-           <span className="text-xs font-bold text-primary">{currentStep.title}</span>
-        </div>
-        <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-primary transition-all duration-500 ease-out"
-            style={{ width: `${((currentStepIndex + 1) / STEPS.length) * 100}%` }}
-          />
+      {/* PROGRESS BAR HEADER */}
+      <div className="pt-8 px-4 pb-4 w-full z-30 bg-surface/95 backdrop-blur-sm relative">
+        <div className="flex items-end gap-2">
+           {STEP_LABELS.map((label, idx) => {
+              const isActive = idx === currentStepIndex;
+              const isPast = idx < currentStepIndex;
+              
+              return (
+                <div key={label} className="flex-1 flex flex-col gap-1.5">
+                   {/* Label */}
+                   <span className={`text-[9px] font-bold uppercase tracking-wider text-center transition-all duration-300 ${
+                      isActive ? 'text-primary opacity-100' : isPast ? 'text-primary/50 opacity-70' : 'text-gray-300 opacity-60'
+                   }`}>
+                      {label}
+                   </span>
+                   {/* Bar Segment */}
+                   <div className={`w-full h-1.5 rounded-full transition-all duration-500 ${
+                      isActive ? 'bg-primary shadow-sm' : isPast ? 'bg-primary/40' : 'bg-gray-100'
+                   }`} />
+                </div>
+              );
+           })}
         </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 relative">
+      <div className="flex-1 flex items-center justify-center p-6 relative">
         
         {/* Animated Card Container */}
-        <div className="w-full max-w-sm animate-in zoom-in-95 duration-500">
+        <div className="w-full max-w-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
            
            <div className="flex justify-center mb-8">
                <div className="relative">
-                   <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse"></div>
+                   <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full" />
                    <div className="relative bg-white p-4 rounded-2xl shadow-sm border border-gray-50">
-                       <StepIcon size={32} className="text-primary" />
+                       <StepIcon size={32} color="#059669" />
                    </div>
                </div>
            </div>
 
-           <h1 className="text-2xl font-extrabold text-center text-text-main mb-3 leading-tight">
+           <h2 className="text-2xl font-extrabold text-center text-text-main mb-3 leading-tight">
              {currentStep.question}
-           </h1>
+           </h2>
            <p className="text-center text-text-sub text-xs font-medium mb-8">
              I'll use this to calibrate your AI assistant.
            </p>
 
-           <div className="space-y-3">
+           <div className="flex flex-col gap-3">
              {currentStep.options.map((option) => (
                <button
                  key={option.value}
                  onClick={() => handleSelect(currentStep.id, option.value)}
-                 className="w-full group bg-white hover:bg-primary/5 border border-gray-100 hover:border-primary/30 p-4 rounded-2xl flex items-center justify-between transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98]"
+                 className="w-full bg-white border border-gray-100 p-4 rounded-2xl flex items-center justify-between shadow-sm active:scale-[0.98] transition-transform hover:border-primary/30 group"
                >
-                 <div className="text-left">
-                    <span className="block text-base font-bold text-text-main group-hover:text-primary transition-colors">
+                 <div className="flex-1 mr-4 text-left">
+                    <span className="block text-base font-bold text-text-main mb-1 group-hover:text-primary transition-colors">
                       {option.label}
                     </span>
-                    <span className="block text-xs text-text-sub mt-0.5 font-medium">
+                    <span className="block text-xs text-text-sub font-medium">
                       {option.desc}
                     </span>
                  </div>
-                 <div className="w-6 h-6 rounded-full border-2 border-gray-200 group-hover:border-primary flex items-center justify-center transition-colors">
+                 <div className="w-6 h-6 rounded-full border-2 border-gray-200 flex justify-center items-center group-hover:border-primary/50">
                     <div className="w-2.5 h-2.5 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                  </div>
                </button>

@@ -3,7 +3,7 @@ import { Send, Image as ImageIcon, Sparkles, AudioLines, X, Activity, Power, Boo
 import { chatWithCoach } from '../services/geminiService';
 import { ChatMessage, JournalEntry, Plant, UserProfile } from '../types';
 import Growbot from '../components/Growbot';
-import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
+import { GoogleGenAI, LiveServerMessage, Modality, Blob } from "@google/genai";
 
 interface ChatProps {
     onSaveToJournal?: (entry: Omit<JournalEntry, 'id' | 'date'>) => void;
@@ -460,7 +460,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   );
 };
 
-function createBlob(data: Float32Array) {
+function createBlob(data: Float32Array): Blob {
     const l = data.length;
     const int16 = new Int16Array(l);
     for (let i = 0; i < l; i++) {

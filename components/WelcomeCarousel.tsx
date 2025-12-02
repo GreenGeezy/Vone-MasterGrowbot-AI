@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { ArrowRight, TrendingUp, Sparkles, Trophy, Camera, ScanLine, Sprout, Search, ShieldCheck } from 'lucide-react';
 import Growbot from './Growbot';
@@ -10,10 +9,9 @@ interface WelcomeCarouselProps {
 const CARDS = [
   {
     id: 1,
-    title: "Save Your Cannabis Plants in Seconds Just By Taking a Pic",
-    description: "AI instantly analyzes plant health to detect issues early and help protect yield and quality for all types of growers.",
-    microBenefit: "Trusted by Elite Growers Worldwide",
-    payoff: "Grow confidently — no more guessing or unexpected plant loss.",
+    title: "Spot Plant Problems in Seconds — Just Snap a Pic",
+    description: "AI helps you recognize early signs of stress, pests, deficiencies, and other plant issues before they spread.",
+    payoff: "Grow with confidence — no more guessing.",
     mood: 'happy' as const,
     icon: Camera,
     color: 'text-primary',
@@ -21,9 +19,9 @@ const CARDS = [
   },
   {
     id: 2,
-    title: "AI Plant Health Analysis for All Growers",
-    description: "Identify deficiencies, pests, mold, nutrient stress, and environment problems with a single photo.",
-    benefit: "Instant, accurate diagnostics for indoor, outdoor, and tent grows.",
+    title: "AI Plant Health Analysis for Every Grower",
+    description: "Get plant insights by identifying potential nutrient issues, pests, mold, and environmental stress from a single photo.",
+    benefit: "Accurate insights for indoor, outdoor, and tent grows.",
     mood: 'alert' as const,
     icon: ScanLine,
     color: 'text-neon-blue',
@@ -31,9 +29,9 @@ const CARDS = [
   },
   {
     id: 3,
-    title: "Custom Grow Reports for Better Harvests",
-    description: "Get personalized nutrient plans, feeding schedules, and grow optimization tips tailored to your strains and grow setup.",
-    benefit: "Boost plant health, consistency, and overall grow success across every grow cycle.",
+    title: "Personalized Grow Reports for Healthier Plants",
+    description: "Receive tailored recommendations on feeding, environment, and plant care based on your setup and growing style.",
+    benefit: "Improve plant consistency and overall grow success.",
     mood: 'thinking' as const,
     icon: TrendingUp,
     color: 'text-deep-purple',
@@ -41,9 +39,9 @@ const CARDS = [
   },
   {
     id: 4,
-    title: "Strain Search & Expert Grow Profiles",
-    description: "Access strain-specific data, difficulty levels, recommended settings, and best practices for each cultivar.",
-    benefit: "Your AI grow coach and strain database help you make smarter decisions from seedling to harvest.",
+    title: "Strain Profiles & Growing Tips, All in One Place",
+    description: "Explore strain details, difficulty ratings, preferred environments, and care tips — all organized for growers.",
+    benefit: "Your AI assistant helps you make informed decisions from seedling to harvest.",
     mood: 'speaking' as const,
     icon: Search,
     color: 'text-primary',
@@ -76,7 +74,6 @@ const WelcomeCarousel: React.FC<WelcomeCarouselProps> = ({ onStart }) => {
     const offset = index - activeIndex;
     const isActive = offset === 0;
     
-    // Alma-style math
     const scale = isActive ? 1 : 0.85;
     const opacity = isActive ? 1 : 0.4;
     const zIndex = isActive ? 20 : 10 - Math.abs(offset);
@@ -102,7 +99,7 @@ const WelcomeCarousel: React.FC<WelcomeCarouselProps> = ({ onStart }) => {
 
       {/* Carousel Area */}
       <div 
-        className="relative w-full max-w-sm h-[75vh] flex items-center justify-center"
+        className="relative w-full max-w-sm h-[80vh] flex items-center justify-center"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -119,17 +116,9 @@ const WelcomeCarousel: React.FC<WelcomeCarouselProps> = ({ onStart }) => {
                 <div className={`absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b ${card.bg === 'bg-green-50' ? 'from-green-100' : card.bg === 'bg-blue-50' ? 'from-blue-100' : 'from-purple-100'} to-transparent opacity-50`} />
 
                 {/* Content Container */}
-                <div className="relative z-10 flex-1 flex flex-col items-center justify-start pt-6">
+                <div className="relative z-10 flex-1 flex flex-col items-center justify-start pt-6 w-full">
                     
-                    {/* Micro Benefit (Card 1) */}
-                    {card.microBenefit && (
-                        <div className="mb-4 bg-white/80 backdrop-blur px-3 py-1 rounded-full border border-gray-100 shadow-sm flex items-center gap-1.5">
-                            <ShieldCheck size={12} className="text-primary" />
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-text-sub">{card.microBenefit}</span>
-                        </div>
-                    )}
-
-                    {/* Mascot */}
+                    {/* Visual: Mascot */}
                     <div className="mb-4 relative">
                         <div className="absolute inset-0 bg-white/50 blur-xl rounded-full scale-150 animate-pulse" />
                         <Growbot size="lg" mood={card.mood} />
@@ -170,7 +159,7 @@ const WelcomeCarousel: React.FC<WelcomeCarouselProps> = ({ onStart }) => {
                             onClick={onStart}
                             className="w-full py-4 bg-text-main text-white font-black rounded-2xl shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-2 text-lg"
                             >
-                            Get Started <ArrowRight size={24} />
+                            Start My Grow <ArrowRight size={24} />
                             </button>
                             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
                                 Secure, Private, and AI-Powered
@@ -178,9 +167,7 @@ const WelcomeCarousel: React.FC<WelcomeCarouselProps> = ({ onStart }) => {
                         </div>
                     ) : (
                         <div className="flex items-center justify-center gap-2 animate-pulse pb-4">
-                            {/* Updated Size: text-2xl (was 5xl) */}
                             <span className="text-2xl font-black text-black tracking-tight">SWIPE</span>
-                            {/* Updated Arrow: size 24 (was 48) */}
                             <ArrowRight size={24} className="text-black" />
                         </div>
                     )}
