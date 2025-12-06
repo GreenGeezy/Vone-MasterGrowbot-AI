@@ -294,12 +294,47 @@ const Diagnose: React.FC<DiagnoseProps> = ({ onSaveToJournal, plant }) => {
                         onChange={(e) => { setSelectedStrain(e.target.value); setShowStrainDropdown(true); }}
                         placeholder="Select Strain..."
                         className="w-full bg-white border-0 rounded-xl px-4 py-3 text-sm font-bold text-text-main shadow-sm ring-1 ring-gray-100 focus:ring-2 focus:ring-primary/20 outline-none"
+                        onFocus={() => setShowStrainDropdown(true)}
                     />
                     {showStrainDropdown && (
-                        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl z-40 max-h-40 overflow-y-auto">
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl z-40 max-h-60 overflow-y-auto border border-gray-100">
+                             {/* 1. Add Custom Option (Pinned to Top) */}
+                             <button
+                                onClick={() => { setShowStrainDropdown(false); }} 
+                                className="w-full text-left px-4 py-3 text-sm hover:bg-primary/5 flex items-center gap-2 border-b border-gray-50 text-primary font-bold bg-white"
+                             >
+                                <Plus size={16} />
+                                {selectedStrain.trim() ? `Add Custom: "${selectedStrain}"` : "Add Custom Strain"}
+                             </button>
+
+                             {/* 2. Leave Blank Option (Pinned to Top) */}
+                             <button
+                                onClick={() => { setSelectedStrain(''); setShowStrainDropdown(false); }}
+                                className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 flex items-center gap-2 border-b border-gray-50 text-gray-500 font-medium bg-white"
+                             >
+                                <X size={16} className="text-gray-400" />
+                                Leave Blank / Unknown
+                             </button>
+                            
+                            {/* Database Matches Header (Sticky) */}
+                            {filteredStrains.length > 0 && (
+                                <div className="px-4 py-1.5 bg-gray-50/95 backdrop-blur-sm text-[10px] font-bold text-gray-400 uppercase tracking-wider sticky top-0 z-10 border-b border-gray-100">
+                                    Database Strains
+                                </div>
+                            )}
+                            
                             {filteredStrains.map(s => (
-                                <button key={s.name} onClick={() => { setSelectedStrain(s.name); setShowStrainDropdown(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50">{s.name}</button>
+                                <button key={s.name} onClick={() => { setSelectedStrain(s.name); setShowStrainDropdown(false); }} className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 text-text-main border-b border-gray-50 last:border-0 flex items-center justify-between group">
+                                    <span>{s.name}</span>
+                                    <span className="text-[10px] text-gray-300 font-medium group-hover:text-primary transition-colors">{s.type}</span>
+                                </button>
                             ))}
+                            
+                            {filteredStrains.length === 0 && selectedStrain.trim() !== '' && (
+                                <div className="px-4 py-3 text-xs text-gray-400 italic text-center">
+                                    No database matches found.
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

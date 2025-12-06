@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Image as ImageIcon, Sparkles, AudioLines, X, Activity, Power, BookmarkPlus } from 'lucide-react';
+import { Send, Image as ImageIcon, Sparkles, AudioLines, X, Activity, Power, BookmarkPlus, Settings2, Check } from 'lucide-react';
 import { chatWithCoach } from '../services/geminiService';
 import { ChatMessage, JournalEntry, Plant, UserProfile } from '../types';
 import Growbot from '../components/Growbot';
@@ -18,6 +18,12 @@ const SUGGESTED_PROMPTS = [
   "Mold prevention"
 ];
 
+const VOICE_OPTIONS = [
+  { id: 'Aoede', label: 'Coach Sarah', type: 'Female' },
+  { id: 'Charon', label: 'Coach Mike', type: 'Male' },
+  { id: 'Fenrir', label: 'MasterGrowbot', type: 'Robot' },
+];
+
 const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: '1', text: "Greetings. I am MasterGrowbot, your expert cultivation teacher. How is your garden thriving today?", isUser: false, timestamp: Date.now() }
@@ -30,6 +36,10 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
   const [liveTranscript, setLiveTranscript] = useState("");
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+  
+  // Voice Settings State
+  const [selectedVoice, setSelectedVoice] = useState('Aoede');
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   
   const endRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<ChatMessage[]>(messages); 
@@ -132,18 +142,30 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       }});
       streamRef.current = stream;
       
-      // Build Master Grower System Instruction
-      let systemInstruction = "You are MasterGrowbot, the world's best cannabis cultivation teacher. You are friendly, encouraging, and an expert in botany and horticulture. ";
+      // --- DYNAMIC PERSONA GENERATION ---
+      let baseInstruction = "";
+      let styleInstruction = "";
       
+      if (selectedVoice === 'Fenrir') {
+         // ROBOTIC / FUTURISTIC PERSONA
+         baseInstruction = "You are MasterGrowbot, a highly advanced, futuristic AI unit dedicated to precision cannabis cultivation. Speak in a robotic, precise, and data-driven manner. Use phrases like 'Affirmative', 'Scanning data', 'Parameters optimized', and 'Protocol complete'. Refer to the user as 'Grower' or 'Operator'. ";
+         styleInstruction = "Maintain a steady, synthetic tone. Avoid casual contractions (e.g., say 'do not' instead of 'don't'). Focus on technical accuracy, efficiency, and logic. Be helpful but distinctly artificial.";
+      } else {
+         // HUMAN COACH PERSONA (Default)
+         baseInstruction = "You are MasterGrowbot, the world's best cannabis cultivation teacher. You are friendly, encouraging, and an expert in botany and horticulture. ";
+         styleInstruction = "Speak like a helpful, warm mentor. Use natural language and standard growing terms like 'nugs', 'flush', and 'terps'. Be conversational and empathetic.";
+      }
+
+      let contextInstruction = "";
       if (userProfile) {
-          systemInstruction += `The user is a ${userProfile.experience} grower focused on ${userProfile.goal} in a ${userProfile.space} ${userProfile.grow_mode} setup. `;
+          contextInstruction += `User Profile: ${userProfile.experience} experience, growing ${userProfile.grow_mode} in a ${userProfile.space} space. Goal: ${userProfile.goal}. `;
       }
       
       if (plant?.strainDetails) {
-          systemInstruction += `Currently discussing a ${plant.strainDetails.name} plant (${plant.strainDetails.type}) in the ${plant.stage} stage. `;
+          contextInstruction += `Target Plant: ${plant.strainDetails.name} (${plant.strainDetails.type}), ${plant.stage} stage. `;
       }
       
-      systemInstruction += "Keep answers concise, actionable, and focus on visual cues since this is a voice conversation. Speak like a helpful mentor. Use terms like 'VPD', 'flush', and 'terpenes' appropriately.";
+      const fullSystemInstruction = `${baseInstruction} ${contextInstruction} ${styleInstruction} Keep answers concise and actionable for voice chat.`;
 
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -152,15 +174,15 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
           inputAudioTranscription: {},
           outputAudioTranscription: {},
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Aoede' } }
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: selectedVoice } }
           },
-          systemInstruction: systemInstruction,
+          systemInstruction: fullSystemInstruction,
         },
         callbacks: {
           onopen: () => {
             setIsLive(true);
             setConnectionState('connected');
-            setLiveTranscript("Listening...");
+            setLiveTranscript(selectedVoice === 'Fenrir' ? "System Online. Listening..." : "Listening...");
             
             const source = inputCtx.createMediaStreamSource(stream);
             sourceRef.current = source;
@@ -302,6 +324,37 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
             </p>
             </div>
         </div>
+
+        {/* Voice Selection */}
+        <div className="relative">
+            <button 
+                onClick={() => setShowVoiceSettings(!showVoiceSettings)}
+                className="p-2 text-text-sub hover:text-primary transition-colors bg-gray-50 hover:bg-white rounded-full border border-gray-100"
+            >
+                <Settings2 size={20} />
+            </button>
+            
+            {showVoiceSettings && (
+                <div className="absolute top-full right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 p-2 animate-in fade-in slide-in-from-top-2 z-50">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 py-2 border-b border-gray-50 mb-1">Select Voice</p>
+                    {VOICE_OPTIONS.map(v => (
+                        <button
+                            key={v.id}
+                            onClick={() => { setSelectedVoice(v.id); setShowVoiceSettings(false); }}
+                            className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold flex items-center justify-between transition-colors ${
+                                selectedVoice === v.id ? 'bg-primary/10 text-primary' : 'hover:bg-gray-50 text-text-main'
+                            }`}
+                        >
+                            <div className="flex flex-col">
+                                <span>{v.label}</span>
+                                <span className="text-[9px] font-medium opacity-60 font-mono uppercase">{v.type}</span>
+                            </div>
+                            {selectedVoice === v.id && <Check size={14} />}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
       </div>
 
       {/* Chat Area */}
@@ -433,7 +486,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
 
               <div className="w-full max-w-xs text-center min-h-[4rem]">
                  <p className="text-xl font-medium text-text-main leading-relaxed transition-all duration-300">
-                    "{liveTranscript || (connectionState === 'connecting' ? "Connecting..." : "Listening...")}"
+                    "{liveTranscript || (connectionState === 'connecting' ? "Connecting..." : (selectedVoice === 'Fenrir' ? "System Online. Listening..." : "Listening..."))}"
                  </p>
                  {isUserSpeaking && (
                     <div className="flex gap-1 justify-center mt-4">
