@@ -112,20 +112,12 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, isMandatory = false,
                     : 'border-gray-100 bg-white hover:border-gray-200'
                 }`}
               >
-                {selectedPlan === 'month' && (
-                   <div className="bg-primary text-white text-[9px] font-black px-2 py-0.5 absolute top-0 left-0 rounded-br-lg shadow-sm tracking-wider z-10">
-                    BEST VALUE
-                   </div>
-                )}
+                {/* No Badge on Monthly */}
                 
                 <div className="flex justify-between items-center w-full">
                     <div>
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="block font-bold text-text-main text-lg">Monthly Access</span>
-                        {/* Most Popular Badge (Moved here) */}
-                        <span className="bg-orange-100 text-orange-600 text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wide border border-orange-200">
-                            Most Popular
-                        </span>
                       </div>
                       <span className="text-xs text-text-sub">Flexible billing.</span>
                     </div>
@@ -150,6 +142,11 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, isMandatory = false,
                     : 'border-gray-100 bg-white hover:border-gray-200'
                 }`}
               >
+                {/* Badge added here */}
+                <div className="bg-primary text-white text-[9px] font-black px-2 py-0.5 absolute top-0 left-0 rounded-br-lg shadow-sm tracking-wider z-10">
+                    BEST VALUE
+                </div>
+
                 <div className="flex justify-between items-center w-full mb-1">
                     <div className="pl-1 mt-1">
                         <div className="flex items-center gap-2 mb-0.5">

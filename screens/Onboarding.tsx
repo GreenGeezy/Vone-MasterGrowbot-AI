@@ -95,7 +95,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       <div className="absolute bottom-6 right-6 z-20 pointer-events-none">
            <div className="relative animate-in slide-in-from-bottom-20 duration-1000">
               <div className="absolute -top-10 -left-10 bg-white px-3 py-1.5 rounded-2xl rounded-br-none shadow-sm border border-gray-100 animate-bounce duration-[2000ms]">
-                  <span className="text-[10px] font-black text-primary uppercase tracking-wide">I'm learning!</span>
+                  <span className="text-[10px] font-black text-primary uppercase tracking-wide">I'm Learning About You</span>
               </div>
               <Growbot size="lg" mood="happy" />
            </div>

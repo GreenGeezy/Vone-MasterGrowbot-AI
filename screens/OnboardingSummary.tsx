@@ -22,12 +22,12 @@ const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
         return "Small space: we’ll prioritize compact training and airflow tips to keep plants healthy.";
     }
 
-    // Priority 3: Specific Goals
+    // Priority 3: Specific Goals (Yield)
     if (profile.goal === 'Maximize Yield') {
-        return "Focus on consistent nutrient schedules and targeted lighting cycles to boost yields.";
+        return "Focus on consistent nutrient schedules and targeted lighting cycles to boost yields in a small space.";
     }
 
-    // Priority 4: Environment Specifics
+    // Priority 4: Environment Specifics (Indoor)
     if (profile.grow_mode === 'Indoor') {
         return "Indoor setup: watch VPD and airflow closely — we’ll surface timely alerts when conditions drift.";
     }
@@ -78,72 +78,77 @@ const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
               </div>
            </div>
            
-           <h1 className="text-2xl sm:text-3xl font-extrabold text-center text-text-main mb-4 tracking-tight leading-tight">
+           <h1 className="text-2xl sm:text-3xl font-extrabold text-center text-text-main mb-3 tracking-tight leading-tight">
              Your Personalized Grow Plan Is Ready!
            </h1>
+
+           {/* Value Summary */}
+           <p className="text-center text-text-sub text-sm font-medium leading-relaxed px-4 mb-6 max-w-md">
+             Your grow is now optimized for healthier plants and a smoother harvest. Your plan is uniquely calibrated to your setup and experience.
+           </p>
            
            {/* Concise Personalized Insight */}
-           <div className="bg-primary/5 border-l-4 border-primary/20 pl-4 pr-3 py-2 rounded-r-xl max-w-sm mb-5">
-              <p className="text-text-main text-left font-bold text-sm leading-relaxed">
+           <div className="bg-primary/5 border-l-4 border-primary/20 pl-4 pr-3 py-3 rounded-r-xl max-w-sm mb-5 shadow-sm">
+              <p className="text-text-main text-left font-bold text-sm leading-snug">
                 {insight}
               </p>
            </div>
            
            {/* AI Personalization Badges */}
            <div className="flex flex-wrap justify-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1 bg-white border border-gray-200 px-2.5 py-1 rounded-full text-[10px] font-bold text-text-sub shadow-sm">
+              <span className="inline-flex items-center gap-1.5 bg-white border border-gray-200 px-3 py-1.5 rounded-full text-[10px] font-bold text-text-sub shadow-sm">
                  <BrainCircuit size={12} className="text-neon-blue" /> AI-Tuned
               </span>
-              <span className="inline-flex items-center gap-1 bg-white border border-gray-200 px-2.5 py-1 rounded-full text-[10px] font-bold text-text-sub shadow-sm">
+              <span className="inline-flex items-center gap-1.5 bg-white border border-gray-200 px-3 py-1.5 rounded-full text-[10px] font-bold text-text-sub shadow-sm">
                  <Sparkles size={12} className="text-deep-purple" /> Personalized to You
               </span>
-              <span className="inline-flex items-center gap-1 bg-white border border-gray-200 px-2.5 py-1 rounded-full text-[10px] font-bold text-text-sub shadow-sm">
+              <span className="inline-flex items-center gap-1.5 bg-white border border-gray-200 px-3 py-1.5 rounded-full text-[10px] font-bold text-text-sub shadow-sm">
                  <ListChecks size={12} className="text-primary" /> Actionable Steps
               </span>
            </div>
         </div>
 
         {/* Personalized Plan Card */}
-        <div className="bg-gradient-to-br from-white to-[#F0FDF4] rounded-[2rem] p-6 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] border border-emerald-100/60 mb-4 flex-shrink-0 relative overflow-hidden animate-in slide-in-from-bottom-8 duration-700 delay-100">
+        <div className="bg-gradient-to-br from-white to-[#F0FDF4] rounded-[2rem] p-6 shadow-card border border-emerald-100/80 mb-4 flex-shrink-0 relative overflow-hidden animate-in slide-in-from-bottom-8 duration-700 delay-100">
            {/* Decorative background blob */}
-           <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100/20 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+           <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100/30 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
 
-           <h3 className="text-xs font-bold text-text-sub uppercase tracking-wider mb-5 border-b border-gray-100 pb-3 relative z-10">
+           <h3 className="text-xs font-black text-text-sub uppercase tracking-wider mb-5 border-b border-emerald-100 pb-3 relative z-10 flex items-center gap-2">
              Your Personalized Settings:
            </h3>
            
-           <div className="space-y-5 relative z-10">
+           <div className="space-y-6 relative z-10">
               <div className="flex items-start gap-4">
-                 <div className="bg-blue-50 p-3 rounded-2xl text-neon-blue shadow-sm">
-                    <Target size={24} strokeWidth={2.5} />
+                 <div className="bg-blue-50 p-3.5 rounded-2xl text-neon-blue shadow-sm ring-1 ring-blue-100/50">
+                    <Target size={26} strokeWidth={2.5} />
                  </div>
                  <div className="pt-0.5">
-                    <h4 className="font-extrabold text-text-main text-base">Goal: {profile.goal}</h4>
-                    <p className="text-xs text-text-sub mt-1 font-medium leading-relaxed">
+                    <h4 className="font-black text-text-main text-base tracking-tight">Goal: {profile.goal}</h4>
+                    <p className="text-xs text-text-sub mt-1.5 font-medium leading-relaxed opacity-90">
                       AI will prioritize nutrients and lighting tips specifically for {getValueProp()}.
                     </p>
                  </div>
               </div>
 
               <div className="flex items-start gap-4">
-                 <div className="bg-green-50 p-3 rounded-2xl text-primary shadow-sm">
-                    <Sprout size={24} strokeWidth={2.5} />
+                 <div className="bg-green-50 p-3.5 rounded-2xl text-primary shadow-sm ring-1 ring-green-100/50">
+                    <Sprout size={26} strokeWidth={2.5} />
                  </div>
                  <div className="pt-0.5">
-                    <h4 className="font-extrabold text-text-main text-base">Space: {profile.space}</h4>
-                    <p className="text-xs text-text-sub mt-1 font-medium leading-relaxed">
+                    <h4 className="font-black text-text-main text-base tracking-tight">Space: {profile.space}</h4>
+                    <p className="text-xs text-text-sub mt-1.5 font-medium leading-relaxed opacity-90">
                       Monitoring calibrated for a {profile.space.toLowerCase()} scale operation.
                     </p>
                  </div>
               </div>
 
               <div className="flex items-start gap-4">
-                 <div className="bg-purple-50 p-3 rounded-2xl text-deep-purple shadow-sm">
-                    <Zap size={24} strokeWidth={2.5} />
+                 <div className="bg-purple-50 p-3.5 rounded-2xl text-deep-purple shadow-sm ring-1 ring-purple-100/50">
+                    <Zap size={26} strokeWidth={2.5} />
                  </div>
                  <div className="pt-0.5">
-                    <h4 className="font-extrabold text-text-main text-base">24/7 AI Coach</h4>
-                    <p className="text-xs text-text-sub mt-1 font-medium leading-relaxed">
+                    <h4 className="font-black text-text-main text-base tracking-tight">24/7 AI Coach</h4>
+                    <p className="text-xs text-text-sub mt-1.5 font-medium leading-relaxed opacity-90">
                       Instant diagnosis for pests, deficiencies, and environmental stress.
                     </p>
                  </div>
