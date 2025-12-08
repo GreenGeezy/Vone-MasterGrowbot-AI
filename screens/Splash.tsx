@@ -1,12 +1,32 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import Growbot from '../components/Growbot';
 import { ArrowRight, ShieldCheck, TrendingUp } from 'lucide-react';
+import { supabase } from '../services/supabaseClient';
 
 interface SplashProps {
   onGetStarted: () => void;
+  onSessionActive?: () => void;
 }
 
-const Splash: React.FC<SplashProps> = ({ onGetStarted }) => {
+const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
+  
+  // Check for existing Supabase session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session && onSessionActive) {
+          console.log("Active session found, redirecting to home...");
+          onSessionActive();
+        }
+      } catch (error) {
+        console.error("Session check failed", error);
+      }
+    };
+    
+    checkSession();
+  }, [onSessionActive]);
+
   return (
     <div className="h-screen bg-surface text-text-main relative overflow-hidden flex flex-col">
       {/* Light Mode Gradients */}

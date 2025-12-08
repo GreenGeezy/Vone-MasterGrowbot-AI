@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import Growbot from '../components/Growbot';
-import { CheckCircle2, ArrowRight, Zap, Target, Sprout, Sparkles, ShieldCheck, BrainCircuit, ListChecks } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Zap, Target, Sprout, Sparkles, ShieldCheck, BrainCircuit, ListChecks, Loader2 } from 'lucide-react';
+import { updateOnboardingProfile } from '../services/supabaseClient';
 
 interface SummaryProps {
   profile: UserProfile;
@@ -9,7 +10,8 @@ interface SummaryProps {
 }
 
 const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
-  
+  const [isSaving, setIsSaving] = useState(false);
+
   // Logic to generate ONE concise, accurate personalized insight based on quiz answers
   const getInsight = () => {
     // Priority 1: Experience Level (Novice needs guidance)
@@ -43,6 +45,26 @@ const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
     if (profile.goal === 'Maximize Yield') return "Boosting Yields";
     if (profile.goal === 'Improve Quality') return "Maximizing Potency";
     return "Expert Education";
+  };
+
+  const handleSaveAndContinue = async () => {
+    setIsSaving(true);
+    try {
+      // Map domain types to DB schema
+      await updateOnboardingProfile({
+        experience: profile.experience,
+        environment: profile.grow_mode,
+        goal: profile.goal,
+        grow_space_size: profile.space
+      });
+      console.log("Profile saved to Supabase");
+    } catch (error) {
+      console.error("Failed to save profile:", error);
+      // We proceed anyway to not block the user flow
+    } finally {
+      setIsSaving(false);
+      onContinue();
+    }
   };
 
   return (
@@ -159,10 +181,19 @@ const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
 
       <div className="absolute bottom-0 left-0 right-0 p-8 pb-12 z-20 bg-gradient-to-t from-surface via-surface/95 to-transparent">
           <button 
-            onClick={onContinue}
-            className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-xl shadow-primary/30 flex items-center justify-center gap-2 active:scale-95 active:shadow-sm hover:scale-[1.02] hover:shadow-2xl transition-all duration-300 group"
+            onClick={handleSaveAndContinue}
+            disabled={isSaving}
+            className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-xl shadow-primary/30 flex items-center justify-center gap-2 active:scale-95 active:shadow-sm hover:scale-[1.02] hover:shadow-2xl transition-all duration-300 group disabled:opacity-80 disabled:cursor-not-allowed"
           >
-            Continue — View plan options <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+            {isSaving ? (
+              <>
+                <Loader2 size={20} className="animate-spin" /> Saving Profile...
+              </>
+            ) : (
+              <>
+                Continue — View plan options <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+              </>
+            )}
           </button>
       </div>
 

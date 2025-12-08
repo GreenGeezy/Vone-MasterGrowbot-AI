@@ -11,6 +11,7 @@ import OnboardingSummary from './screens/OnboardingSummary';
 import Splash from './screens/Splash';
 import DevTools from './components/DevTools';
 import { STRAIN_DATABASE } from './data/strains';
+import { getUserProfile } from './services/supabaseClient';
 
 // Mock Data for Prototype
 const MOCK_USER_PROFILE: UserProfile = {
@@ -134,6 +135,38 @@ const App: React.FC = () => {
     setOnboardingStatus(OnboardingStep.QUIZ);
   };
 
+  const handleSessionActive = async () => {
+    try {
+      // 1. Fetch Profile from Supabase
+      const { data, error } = await getUserProfile();
+      
+      if (data && !error) {
+        // 2. Map DB fields to App types
+        const profile: UserProfile = {
+          experience: data.experience as any,
+          grow_mode: data.environment as any, // DB: environment -> App: grow_mode
+          goal: data.goal as any,
+          space: data.grow_space_size as any // DB: grow_space_size -> App: space
+        };
+        
+        // 3. Update State
+        setUserProfile(profile);
+        localStorage.setItem('mastergrowbot_profile', JSON.stringify(profile));
+        updateTasksBasedOnProfile(profile);
+        
+        // 4. Skip Onboarding
+        setOnboardingStatus(OnboardingStep.COMPLETED);
+      } else {
+        // Session exists but no profile (weird edge case), go to quiz
+        console.warn("Session active but profile missing", error);
+        setOnboardingStatus(OnboardingStep.QUIZ);
+      }
+    } catch (e) {
+      console.error("Error hydrating session:", e);
+      setOnboardingStatus(OnboardingStep.SPLASH);
+    }
+  };
+
   const handleQuizComplete = (profile: UserProfile) => {
     setUserProfile(profile);
     localStorage.setItem('mastergrowbot_profile', JSON.stringify(profile));
@@ -240,7 +273,12 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     if (onboardingStatus === OnboardingStep.SPLASH) {
-      return <Splash onGetStarted={handleSplashGetStarted} />;
+      return (
+        <Splash 
+          onGetStarted={handleSplashGetStarted} 
+          onSessionActive={handleSessionActive} 
+        />
+      );
     }
 
     if (onboardingStatus === OnboardingStep.QUIZ) {
