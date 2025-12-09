@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import Growbot from '../components/Growbot';
 import { ArrowRight, ShieldCheck, TrendingUp } from 'lucide-react';
-import { supabase } from '../services/supabaseClient';
+import { supabase, getUserProfile } from '../services/supabaseClient';
 
 interface SplashProps {
   onGetStarted: () => void;
@@ -10,22 +10,47 @@ interface SplashProps {
 
 const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
   
-  // Check for existing Supabase session on mount
   useEffect(() => {
-    const checkSession = async () => {
+    const checkUserStatus = async () => {
       try {
+        // 1. Check Session
         const { data: { session } } = await supabase.auth.getSession();
-        if (session && onSessionActive) {
-          console.log("Active session found, redirecting to home...");
-          onSessionActive();
+        
+        if (session) {
+          console.log("Active session found. Verifying profile status...");
+          
+          // 2. Check Profile Data
+          const { data: profile, error } = await getUserProfile();
+          
+          if (error || !profile) {
+             // Session valid but profile fetch failed or empty -> Go to Quiz
+             console.log("Profile missing or error. Redirecting to Quiz.");
+             onGetStarted();
+             return;
+          }
+
+          // 3. Verify Onboarding Fields (experience, environment, goal)
+          // We check if the key fields typically set during onboarding are present.
+          const isProfileComplete = 
+             profile.experience && 
+             profile.environment && 
+             profile.goal;
+
+          if (isProfileComplete) {
+            console.log("Profile complete. Redirecting to Home.");
+            if (onSessionActive) onSessionActive();
+          } else {
+            console.log("Profile incomplete. Redirecting to Quiz.");
+            onGetStarted();
+          }
         }
       } catch (error) {
-        console.error("Session check failed", error);
+        console.error("User status check failed", error);
       }
     };
     
-    checkSession();
-  }, [onSessionActive]);
+    checkUserStatus();
+  }, [onGetStarted, onSessionActive]);
 
   return (
     <div className="h-screen bg-surface text-text-main relative overflow-hidden flex flex-col">

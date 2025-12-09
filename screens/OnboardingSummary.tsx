@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import Growbot from '../components/Growbot';
-import { CheckCircle2, ArrowRight, Zap, Target, Sprout, Sparkles, ShieldCheck, BrainCircuit, ListChecks, Loader2 } from 'lucide-react';
-import { updateOnboardingProfile } from '../services/supabaseClient';
+import { CheckCircle2, ArrowRight, Zap, Target, Sprout, Sparkles, ShieldCheck, BrainCircuit, ListChecks, Loader2, LogIn } from 'lucide-react';
+import { updateOnboardingProfile, signInWithGoogle, supabase } from '../services/supabaseClient';
 
 interface SummaryProps {
   profile: UserProfile;
@@ -11,6 +11,23 @@ interface SummaryProps {
 
 const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
   const [isSaving, setIsSaving] = useState(false);
+  const [session, setSession] = useState<any>(null);
+
+  useEffect(() => {
+    // Check initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Logic to generate ONE concise, accurate personalized insight based on quiz answers
   const getInsight = () => {
@@ -47,10 +64,22 @@ const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
     return "Expert Education";
   };
 
-  const handleSaveAndContinue = async () => {
+  const handleAction = async () => {
     setIsSaving(true);
+    
+    if (!session) {
+        // User NOT logged in -> Sign In
+        try {
+            await signInWithGoogle();
+        } catch (error) {
+            console.error("Login failed", error);
+            setIsSaving(false);
+        }
+        return;
+    }
+
+    // User IS logged in -> Save Profile & Continue
     try {
-      // Map domain types to DB schema
       await updateOnboardingProfile({
         experience: profile.experience,
         environment: profile.grow_mode,
@@ -181,18 +210,24 @@ const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
 
       <div className="absolute bottom-0 left-0 right-0 p-8 pb-12 z-20 bg-gradient-to-t from-surface via-surface/95 to-transparent">
           <button 
-            onClick={handleSaveAndContinue}
+            onClick={handleAction}
             disabled={isSaving}
             className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-xl shadow-primary/30 flex items-center justify-center gap-2 active:scale-95 active:shadow-sm hover:scale-[1.02] hover:shadow-2xl transition-all duration-300 group disabled:opacity-80 disabled:cursor-not-allowed"
           >
             {isSaving ? (
               <>
-                <Loader2 size={20} className="animate-spin" /> Saving Profile...
+                <Loader2 size={20} className="animate-spin" /> {session ? 'Saving Profile...' : 'Redirecting...'}
               </>
             ) : (
-              <>
-                Continue — View plan options <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-              </>
+              session ? (
+                 <>
+                   Confirm & Go Home <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                 </>
+              ) : (
+                 <>
+                   Sign In with Google to Save Your Plan <LogIn size={20} className="group-hover:translate-x-1 transition-transform" />
+                 </>
+              )
             )}
           </button>
       </div>
