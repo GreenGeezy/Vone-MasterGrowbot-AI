@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { UserProfile } from '../types';
 import Growbot from '../components/Growbot';
-import { CheckCircle2, ArrowRight, Zap, Target, Sprout, Sparkles, ShieldCheck, BrainCircuit, ListChecks, Loader2, LogIn } from 'lucide-react';
-import { updateOnboardingProfile, signInWithGoogle, supabase } from '../services/supabaseClient';
+import { CheckCircle2, ArrowRight, Target, Sprout, Zap, ShieldCheck, BrainCircuit, Sparkles, ListChecks } from 'lucide-react';
 
 interface SummaryProps {
   profile: UserProfile;
@@ -10,25 +9,7 @@ interface SummaryProps {
 }
 
 const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
-  const [isSaving, setIsSaving] = useState(false);
-  const [session, setSession] = useState<any>(null);
-
-  useEffect(() => {
-    // Check initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
+  
   // Logic to generate ONE concise, accurate personalized insight based on quiz answers
   const getInsight = () => {
     // Priority 1: Experience Level (Novice needs guidance)
@@ -62,38 +43,6 @@ const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
     if (profile.goal === 'Maximize Yield') return "Boosting Yields";
     if (profile.goal === 'Improve Quality') return "Maximizing Potency";
     return "Expert Education";
-  };
-
-  const handleAction = async () => {
-    setIsSaving(true);
-    
-    if (!session) {
-        // User NOT logged in -> Sign In
-        try {
-            await signInWithGoogle();
-        } catch (error) {
-            console.error("Login failed", error);
-            setIsSaving(false);
-        }
-        return;
-    }
-
-    // User IS logged in -> Save Profile & Continue
-    try {
-      await updateOnboardingProfile({
-        experience: profile.experience,
-        environment: profile.grow_mode,
-        goal: profile.goal,
-        grow_space_size: profile.space
-      });
-      console.log("Profile saved to Supabase");
-    } catch (error) {
-      console.error("Failed to save profile:", error);
-      // We proceed anyway to not block the user flow
-    } finally {
-      setIsSaving(false);
-      onContinue();
-    }
   };
 
   return (
@@ -210,25 +159,10 @@ const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
 
       <div className="absolute bottom-0 left-0 right-0 p-8 pb-12 z-20 bg-gradient-to-t from-surface via-surface/95 to-transparent">
           <button 
-            onClick={handleAction}
-            disabled={isSaving}
-            className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-xl shadow-primary/30 flex items-center justify-center gap-2 active:scale-95 active:shadow-sm hover:scale-[1.02] hover:shadow-2xl transition-all duration-300 group disabled:opacity-80 disabled:cursor-not-allowed"
+            onClick={onContinue}
+            className="w-full py-4 bg-text-main text-white font-bold rounded-2xl shadow-xl shadow-gray-300/30 flex items-center justify-center gap-2 active:scale-95 hover:scale-[1.02] transition-all duration-300 group"
           >
-            {isSaving ? (
-              <>
-                <Loader2 size={20} className="animate-spin" /> {session ? 'Saving Profile...' : 'Redirecting...'}
-              </>
-            ) : (
-              session ? (
-                 <>
-                   Confirm & Go Home <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                 </>
-              ) : (
-                 <>
-                   Sign In with Google to Save Your Plan <LogIn size={20} className="group-hover:translate-x-1 transition-transform" />
-                 </>
-              )
-            )}
+             View My Personalized Plan <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
           </button>
       </div>
 
