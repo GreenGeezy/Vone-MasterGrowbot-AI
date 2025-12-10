@@ -125,5 +125,6 @@ export enum OnboardingStep {
   QUIZ = 'quiz',
   SUMMARY = 'summary',
   TRIAL_PAYWALL = 'trial_paywall',
+  POST_PAYMENT_AUTH = 'post_payment_auth',
   COMPLETED = 'completed'
 }

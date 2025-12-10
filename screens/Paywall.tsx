@@ -1,21 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, ArrowRight, Mail, Infinity, Headphones, Sprout, ShieldCheck, Lock } from 'lucide-react';
+import { X, Check, ArrowRight, Infinity, Headphones, Sprout, ShieldCheck } from 'lucide-react';
 import Growbot from '../components/Growbot';
 import { UserProfile } from '../types';
-import { supabase, signInWithGoogle } from '../services/supabaseClient';
+import { supabase } from '../services/supabaseClient';
 
 interface PaywallProps {
-  onClose: () => void; // Triggered on "Start Free Trial" (after auth)
-  onSkip?: () => void; // Triggered on "Maybe Later"
+  onClose: () => void; // Called when flow completes (synced & ready)
+  onAuthRedirect?: () => void; // Called when payment succeeds but user needs to auth
+  onSkip?: () => void; 
   isMandatory?: boolean;
   userProfile?: UserProfile | null;
 }
 
-const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, isMandatory = false, userProfile }) => {
+// Mock RevenueCat function
+const purchaseSubscriptionWithRevenueCat = async () => {
+  return new Promise<void>((resolve) => {
+    setTimeout(() => {
+      resolve();
+    }, 1500);
+  });
+};
+
+// Mock RevenueCat Sync
+const syncRevenueCatUserID = async (userId: string) => {
+  console.log(`Syncing RevenueCat for user ${userId}`);
+  return Promise.resolve();
+};
+
+const Paywall: React.FC<PaywallProps> = ({ onClose, onAuthRedirect, onSkip, isMandatory = false, userProfile }) => {
   const [selectedPlan, setSelectedPlan] = useState<'week' | 'month' | 'year'>('month');
   const [session, setSession] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isPurchasing, setIsPurchasing] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -25,37 +41,33 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, isMandatory = false,
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         setSession(session);
-        if (session && showAuthModal) {
-            // Automatically close auth modal and proceed if user logs in while it's open
-            setShowAuthModal(false);
-            onClose();
-        }
     });
 
     return () => subscription.unsubscribe();
-  }, [showAuthModal, onClose]);
+  }, []);
 
-  const handleStartTrial = () => {
-      if (session) {
-          // User is logged in, proceed to trial/app
-          onClose();
-      } else {
-          // User needs to sign in first to secure the plan
-          setShowAuthModal(true);
-      }
-  };
+  const handleStartTrial = async () => {
+    setIsPurchasing(true);
+    
+    // 1. Simulate Purchase
+    await purchaseSubscriptionWithRevenueCat();
+    
+    setIsPurchasing(false);
 
-  const handleAppleLogin = async () => {
-    await supabase.auth.signInWithOAuth({ provider: 'apple' });
-  };
-
-  const handleGoogleLogin = async () => {
-    await signInWithGoogle();
-  };
-
-  const handleEmailLogin = () => {
-    console.log("Navigating to Email Signup/Login");
-    window.location.hash = "#signup"; 
+    // 2. Decide Next Step based on Auth State
+    if (session) {
+        // Already logged in - just sync and close
+        await syncRevenueCatUserID(session.user.id);
+        onClose();
+    } else {
+        // Not logged in - redirect to Auth screen to save purchase
+        if (onAuthRedirect) {
+            onAuthRedirect();
+        } else {
+            // Fallback for non-mandatory/overlay mode if callback missing
+            onClose();
+        }
+    }
   };
 
   const benefits = [
@@ -74,7 +86,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, isMandatory = false,
       <div className="absolute top-[-20%] right-[-20%] w-[600px] h-[600px] bg-primary/10 rounded-full blur-[120px] pointer-events-none"></div>
       
       {/* Close Button - Only show if not mandatory */}
-      {!isMandatory && !showAuthModal && (
+      {!isMandatory && (
         <button 
           onClick={onClose}
           className="absolute top-4 right-4 bg-white p-2 rounded-full text-text-sub hover:text-text-main shadow-sm border border-gray-100 z-50 transition-colors"
@@ -222,11 +234,18 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, isMandatory = false,
                     <div className="absolute -inset-0.5 bg-primary/30 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-pulse motion-reduce:animate-none"></div>
                     <button 
                         onClick={handleStartTrial}
-                        className="relative w-full bg-text-main text-white font-black text-lg py-3 rounded-2xl shadow-xl active:scale-[0.98] transition-transform overflow-hidden z-10 group"
+                        disabled={isPurchasing}
+                        className="relative w-full bg-text-main text-white font-black text-lg py-3 rounded-2xl shadow-xl active:scale-[0.98] transition-transform overflow-hidden z-10 group disabled:opacity-80"
                     >
-                        <span className="relative flex items-center justify-center gap-2 tracking-wide">
-                            Start Free Trial <ArrowRight size={20} />
-                        </span>
+                        {isPurchasing ? (
+                             <span className="relative flex items-center justify-center gap-2 tracking-wide">
+                                Processing...
+                             </span>
+                        ) : (
+                             <span className="relative flex items-center justify-center gap-2 tracking-wide">
+                                Start Free Trial <ArrowRight size={20} />
+                             </span>
+                        )}
                     </button>
                     <p className="text-center text-[10px] text-text-sub mt-2 font-medium">
                         Cancel anytime. No risk — 3-day free trial.
@@ -245,70 +264,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, isMandatory = false,
         </div>
 
       </div>
-
-      {/* AUTH MODAL OVERLAY */}
-      {showAuthModal && (
-         <div className="absolute inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center animate-in fade-in duration-200">
-             <div className="bg-white w-full max-w-md rounded-t-[2rem] sm:rounded-[2rem] p-6 shadow-2xl animate-in slide-in-from-bottom duration-300 relative">
-                 
-                 <button 
-                    onClick={() => setShowAuthModal(false)}
-                    className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full text-text-sub hover:text-text-main transition-colors"
-                 >
-                    <X size={20} />
-                 </button>
-
-                 <div className="text-center mb-6 pt-2">
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 text-primary mb-3">
-                       <Lock size={24} />
-                    </div>
-                    <h2 className="text-xl font-extrabold text-text-main leading-tight mb-2">
-                       Secure Your Plan
-                    </h2>
-                    <p className="text-sm text-text-sub font-medium leading-relaxed max-w-xs mx-auto">
-                       Sign in to save your personalized grow plan and activate your free trial.
-                    </p>
-                 </div>
-
-                 <div className="space-y-3 mb-4">
-                    <button 
-                        onClick={handleAppleLogin}
-                        className="w-full bg-black text-white font-bold text-lg py-3.5 rounded-2xl shadow-lg flex items-center justify-center gap-3 active:scale-[0.98] transition-transform"
-                    >
-                        <svg className="w-5 h-5 fill-current" viewBox="0 0 384 512">
-                            <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 52.3-11.4 69.5-34.3z"/>
-                        </svg>
-                        Continue with Apple
-                    </button>
-
-                    <button 
-                        onClick={handleGoogleLogin}
-                        className="w-full bg-white text-text-main border border-gray-200 font-bold text-lg py-3.5 rounded-2xl shadow-sm flex items-center justify-center gap-3 active:scale-[0.98] transition-transform hover:bg-gray-50"
-                    >
-                        <img 
-                           src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 
-                           alt="Google" 
-                           className="w-5 h-5" 
-                        />
-                        Continue with Google
-                    </button>
-
-                    <button 
-                        onClick={handleEmailLogin}
-                        className="w-full bg-white text-text-main border border-gray-200 font-bold text-lg py-3.5 rounded-2xl shadow-sm flex items-center justify-center gap-3 active:scale-[0.98] transition-transform hover:bg-gray-50"
-                    >
-                        <Mail size={20} className="text-text-main" />
-                        Continue with Email
-                    </button>
-                 </div>
-
-                 <p className="text-center text-[10px] text-text-sub">
-                    By continuing, you agree to our Terms and Privacy Policy.
-                 </p>
-             </div>
-         </div>
-      )}
-
     </div>
   );
 };

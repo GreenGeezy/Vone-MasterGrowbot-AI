@@ -5,6 +5,7 @@ import Home from './screens/Home';
 import Diagnose from './screens/Diagnose';
 import Chat from './screens/Chat';
 import Paywall from './screens/Paywall';
+import PostPaymentAuth from './screens/PostPaymentAuth';
 import Journal from './screens/Journal';
 import Onboarding from './screens/Onboarding';
 import OnboardingSummary from './screens/OnboardingSummary';
@@ -124,6 +125,8 @@ const App: React.FC = () => {
       }
     } else if (savedProfile) {
       setUserProfile(JSON.parse(savedProfile));
+      // If we have profile but no trial active, where do we go?
+      // For now, default to paywall to ensure they pay/auth
       setOnboardingStatus(OnboardingStep.TRIAL_PAYWALL);
     } else {
       setOnboardingStatus(OnboardingStep.SPLASH);
@@ -176,6 +179,10 @@ const App: React.FC = () => {
 
   const handleSummaryContinue = () => {
     setOnboardingStatus(OnboardingStep.TRIAL_PAYWALL);
+  };
+
+  const handlePaymentSuccess = () => {
+     setOnboardingStatus(OnboardingStep.POST_PAYMENT_AUTH);
   };
 
   const handleTrialActivation = () => {
@@ -290,13 +297,22 @@ const App: React.FC = () => {
     }
 
     if (onboardingStatus === OnboardingStep.TRIAL_PAYWALL) {
-      // Mandatory onboarding paywall - has Skip option
       return (
         <Paywall 
-          onClose={handleTrialActivation} 
+          onClose={handleTrialActivation} // Used if user is already logged in
+          onAuthRedirect={handlePaymentSuccess} // New: Triggered after payment if not logged in
           onSkip={handleSkipTrial}
           isMandatory={true} 
           userProfile={userProfile} 
+        />
+      );
+    }
+
+    if (onboardingStatus === OnboardingStep.POST_PAYMENT_AUTH) {
+      return (
+        <PostPaymentAuth 
+           userProfile={userProfile}
+           onComplete={handleTrialActivation}
         />
       );
     }
@@ -396,7 +412,8 @@ const App: React.FC = () => {
 
       {showPaywall && (
         <Paywall 
-            onClose={handleTrialActivation} 
+            onClose={() => setShowPaywall(false)} // For overlay mode
+            onAuthRedirect={() => setShowPaywall(false)} // In overlay mode, maybe just close? Or go to auth?
             isMandatory={false} 
             userProfile={userProfile} 
         />
