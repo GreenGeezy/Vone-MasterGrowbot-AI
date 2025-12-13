@@ -81,7 +81,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onAuthRedirect, onSkip, isMa
   }
 
   return (
-    <div className="fixed inset-0 bg-surface z-[60] flex flex-col overflow-hidden font-sans text-text-main">
+    <div className="fixed inset-0 z-[60] flex flex-col overflow-hidden font-sans text-text-main bg-surface w-full max-w-[768px] mx-auto shadow-2xl border-x border-gray-100">
       {/* Background Effects */}
       <div className="absolute top-[-20%] right-[-20%] w-[600px] h-[600px] bg-primary/10 rounded-full blur-[120px] pointer-events-none"></div>
       
