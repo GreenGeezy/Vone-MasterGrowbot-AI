@@ -13,6 +13,8 @@ import Splash from './screens/Splash';
 import DevTools from './components/DevTools';
 import { STRAIN_DATABASE } from './data/strains';
 import { getUserProfile } from './services/supabaseClient';
+import { Capacitor } from '@capacitor/core';
+import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor';
 
 // Mock Data for Prototype
 const MOCK_USER_PROFILE: UserProfile = {
@@ -30,7 +32,7 @@ const MOCK_PLANTS_DATA: Plant[] = [
     id: '1',
     name: 'Northern Lights #5',
     strain: 'Northern Lights',
-    // No exact match in DB for "Northern Lights", so strainDetails undefined initially
+    // No match in DB for "Northern Lights"
     stage: PlantStage.VEG,
     daysInStage: 24,
     totalDays: 45,
@@ -114,6 +116,20 @@ const App: React.FC = () => {
 
   // Load initial state
   useEffect(() => {
+    // RevenueCat Initialization
+    const initRevenueCat = async () => {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
+          // REVENUECAT PUBLIC API KEY
+          await Purchases.configure({ apiKey: "appl_REPLACE_WITH_YOUR_REVENUECAT_KEY" });
+        } catch (e) {
+          console.error("RevenueCat Init Error:", e);
+        }
+      }
+    };
+    initRevenueCat();
+
     const savedProfile = localStorage.getItem('mastergrowbot_profile');
     const trialActive = localStorage.getItem('mastergrowbot_trial_active');
 
@@ -125,8 +141,7 @@ const App: React.FC = () => {
       }
     } else if (savedProfile) {
       setUserProfile(JSON.parse(savedProfile));
-      // If we have profile but no trial active, where do we go?
-      // For now, default to paywall to ensure they pay/auth
+      // If we have profile but no trial active, default to paywall
       setOnboardingStatus(OnboardingStep.TRIAL_PAYWALL);
     } else {
       setOnboardingStatus(OnboardingStep.SPLASH);
@@ -147,9 +162,9 @@ const App: React.FC = () => {
         // 2. Map DB fields to App types
         const profile: UserProfile = {
           experience: data.experience as any,
-          grow_mode: data.environment as any, // DB: environment -> App: grow_mode
+          grow_mode: data.environment as any,
           goal: data.goal as any,
-          space: data.grow_space_size as any // DB: grow_space_size -> App: space
+          space: data.grow_space_size as any
         };
         
         // 3. Update State
@@ -160,7 +175,7 @@ const App: React.FC = () => {
         // 4. Skip Onboarding
         setOnboardingStatus(OnboardingStep.COMPLETED);
       } else {
-        // Session exists but no profile (weird edge case), go to quiz
+        // Session exists but no profile, go to quiz
         console.warn("Session active but profile missing", error);
         setOnboardingStatus(OnboardingStep.QUIZ);
       }
@@ -193,14 +208,13 @@ const App: React.FC = () => {
   };
 
   const handleSkipTrial = () => {
-    // User clicked "Maybe Later" - proceed but don't activate trial features in state
+    // User clicked "Maybe Later"
     setOnboardingStatus(OnboardingStep.COMPLETED);
     setShowPaywall(false);
   };
 
   const updateTasksBasedOnProfile = (profile: UserProfile) => {
     const newTasks = [...DEFAULT_TASKS];
-    // Add dynamic tasks based on profile
     if (profile.grow_mode === 'Indoor') {
       newTasks.unshift({ id: 'dev-1', title: 'Check Grow Light Height', completed: false, type: 'check' });
     }
@@ -236,7 +250,6 @@ const App: React.FC = () => {
         return updated;
     });
 
-    // Only auto-navigate if it came from Chat or Diagnose
     if (currentScreen !== AppScreen.JOURNAL) {
         setTimeout(() => {
             setCurrentScreen(AppScreen.JOURNAL);
@@ -299,8 +312,8 @@ const App: React.FC = () => {
     if (onboardingStatus === OnboardingStep.TRIAL_PAYWALL) {
       return (
         <Paywall 
-          onClose={handleTrialActivation} // Used if user is already logged in
-          onAuthRedirect={handlePaymentSuccess} // New: Triggered after payment if not logged in
+          onClose={handleTrialActivation} 
+          onAuthRedirect={handlePaymentSuccess} 
           onSkip={handleSkipTrial}
           isMandatory={true} 
           userProfile={userProfile} 
@@ -412,8 +425,8 @@ const App: React.FC = () => {
 
       {showPaywall && (
         <Paywall 
-            onClose={() => setShowPaywall(false)} // For overlay mode
-            onAuthRedirect={() => setShowPaywall(false)} // In overlay mode, maybe just close? Or go to auth?
+            onClose={() => setShowPaywall(false)}
+            onAuthRedirect={() => setShowPaywall(false)}
             isMandatory={false} 
             userProfile={userProfile} 
         />

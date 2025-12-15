@@ -3,6 +3,8 @@ import { X, Check, ArrowRight, Infinity, Headphones, Sprout, ShieldCheck } from 
 import Growbot from '../components/Growbot';
 import { UserProfile } from '../types';
 import { supabase } from '../services/supabaseClient';
+import { Purchases, PACKAGE_TYPE } from '@revenuecat/purchases-capacitor';
+import { Capacitor } from '@capacitor/core';
 
 interface PaywallProps {
   onClose: () => void; // Called when flow completes (synced & ready)
@@ -12,19 +14,12 @@ interface PaywallProps {
   userProfile?: UserProfile | null;
 }
 
-// Mock RevenueCat function
-const purchaseSubscriptionWithRevenueCat = async () => {
-  return new Promise<void>((resolve) => {
-    setTimeout(() => {
-      resolve();
-    }, 1500);
-  });
-};
-
-// Mock RevenueCat Sync
+// Sync RevenueCat User ID
 const syncRevenueCatUserID = async (userId: string) => {
-  console.log(`Syncing RevenueCat for user ${userId}`);
-  return Promise.resolve();
+  if (Capacitor.isNativePlatform()) {
+     console.log(`Syncing RevenueCat for user ${userId}`);
+     await Purchases.logIn({ appUserID: userId });
+  }
 };
 
 const Paywall: React.FC<PaywallProps> = ({ onClose, onAuthRedirect, onSkip, isMandatory = false, userProfile }) => {
@@ -49,24 +44,58 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onAuthRedirect, onSkip, isMa
   const handleStartTrial = async () => {
     setIsPurchasing(true);
     
-    // 1. Simulate Purchase
-    await purchaseSubscriptionWithRevenueCat();
-    
-    setIsPurchasing(false);
-
-    // 2. Decide Next Step based on Auth State
-    if (session) {
-        // Already logged in - just sync and close
-        await syncRevenueCatUserID(session.user.id);
-        onClose();
-    } else {
-        // Not logged in - redirect to Auth screen to save purchase
-        if (onAuthRedirect) {
-            onAuthRedirect();
+    try {
+        if (!Capacitor.isNativePlatform()) {
+            // Web Mock for Browser Testing
+            console.log("Web Mode: Simulating Purchase");
+            await new Promise<void>((resolve) => setTimeout(resolve, 1500));
         } else {
-            // Fallback for non-mandatory/overlay mode if callback missing
-            onClose();
+            // Real RevenueCat Purchase
+            const offerings = await Purchases.getOfferings();
+            if (offerings.current && offerings.current.availablePackages.length > 0) {
+                 // Logic to select package based on 'selectedPlan' state
+                 // Note: This relies on RevenueCat Offering setup matching these types.
+                 // Fallback to the first available package if exact match logic isn't complex.
+                 let packageToBuy = offerings.current.availablePackages[0];
+                 
+                 // Example simple selection logic if your RC packages are tagged or named
+                 if (selectedPlan === 'month') {
+                    const monthly = offerings.current.availablePackages.find(p => p.packageType === PACKAGE_TYPE.MONTHLY);
+                    if (monthly) packageToBuy = monthly;
+                 } else if (selectedPlan === 'year') {
+                    const annual = offerings.current.availablePackages.find(p => p.packageType === PACKAGE_TYPE.ANNUAL);
+                    if (annual) packageToBuy = annual;
+                 } else if (selectedPlan === 'week') {
+                     const weekly = offerings.current.availablePackages.find(p => p.packageType === PACKAGE_TYPE.WEEKLY);
+                     if (weekly) packageToBuy = weekly;
+                 }
+
+                 await Purchases.purchasePackage({ aPackage: packageToBuy });
+            } else {
+                throw new Error("No offerings available");
+            }
         }
+
+        // 2. Decide Next Step based on Auth State
+        if (session) {
+            // Already logged in - just sync and close
+            await syncRevenueCatUserID(session.user.id);
+            onClose();
+        } else {
+            // Not logged in - redirect to Auth screen to save purchase
+            if (onAuthRedirect) {
+                onAuthRedirect();
+            } else {
+                onClose();
+            }
+        }
+    } catch (error: any) {
+        if (!error.userCancelled) {
+            console.error("Purchase Error:", error);
+            alert("Purchase failed or cancelled. Please try again.");
+        }
+    } finally {
+        setIsPurchasing(false);
     }
   };
 

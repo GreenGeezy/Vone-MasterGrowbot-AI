@@ -1,7 +1,7 @@
-
 import React, { useState } from 'react';
-import { Settings, RotateCcw, UserPlus, Unlock, Lock } from 'lucide-react';
+import { Settings, RotateCcw, UserPlus, Unlock, Lock, LogOut } from 'lucide-react';
 import { OnboardingStep, UserProfile } from '../types';
+import { supabase } from '../services/supabaseClient';
 
 interface DevToolsProps {
   onReset: () => void;
@@ -19,6 +19,12 @@ const DevTools: React.FC<DevToolsProps> = ({
   currentStep 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+
+  const handleHardLogout = async () => {
+    await supabase.auth.signOut();
+    // Force reload to clear all states
+    window.location.reload();
+  };
 
   if (!isOpen) {
     return (
@@ -66,6 +72,13 @@ const DevTools: React.FC<DevToolsProps> = ({
           className="w-full flex items-center gap-2 bg-alert-red/20 hover:bg-alert-red/40 text-xs text-alert-red py-2 px-3 rounded transition-colors border border-alert-red/20"
         >
           <RotateCcw size={14} /> Restart Onboarding
+        </button>
+
+        <button 
+          onClick={handleHardLogout}
+          className="w-full flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-xs text-white py-2 px-3 rounded transition-colors border border-gray-600 mt-2"
+        >
+          <LogOut size={14} className="text-orange-400" /> SUPABASE HARD LOGOUT
         </button>
       </div>
     </div>
