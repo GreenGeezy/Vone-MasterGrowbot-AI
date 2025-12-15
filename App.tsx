@@ -12,7 +12,7 @@ import OnboardingSummary from './screens/OnboardingSummary';
 import Splash from './screens/Splash';
 import DevTools from './components/DevTools';
 import { STRAIN_DATABASE } from './data/strains';
-import { getUserProfile } from './services/supabaseClient';
+import { supabase, getUserProfile, updateOnboardingProfile } from './services/supabaseClient';
 import { Capacitor } from '@capacitor/core';
 import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor';
 
@@ -114,7 +114,7 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>(DEFAULT_TASKS);
   const [plants, setPlants] = useState<Plant[]>(MOCK_PLANTS_DATA);
 
-  // Load initial state
+  // Load initial state and Listen for Auth Redirects
   useEffect(() => {
     // RevenueCat Initialization
     const initRevenueCat = async () => {
@@ -130,6 +130,7 @@ const App: React.FC = () => {
     };
     initRevenueCat();
 
+    // 1. Check Local Storage
     const savedProfile = localStorage.getItem('mastergrowbot_profile');
     const trialActive = localStorage.getItem('mastergrowbot_trial_active');
 
@@ -141,11 +142,60 @@ const App: React.FC = () => {
       }
     } else if (savedProfile) {
       setUserProfile(JSON.parse(savedProfile));
-      // If we have profile but no trial active, default to paywall
       setOnboardingStatus(OnboardingStep.TRIAL_PAYWALL);
     } else {
       setOnboardingStatus(OnboardingStep.SPLASH);
     }
+
+    // 2. Global Auth Listener (Handles Google Redirect)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // If user just signed in (e.g. via Google Redirect)
+      if (event === 'SIGNED_IN' && session) {
+        try {
+          // Check if profile exists
+          const { data: profile } = await getUserProfile();
+          
+          if (profile) {
+            // Profile exists -> Restore and Go Home
+            const appProfile: UserProfile = {
+              experience: profile.experience as any,
+              grow_mode: profile.environment as any,
+              goal: profile.goal as any,
+              space: profile.grow_space_size as any
+            };
+            setUserProfile(appProfile);
+            localStorage.setItem('mastergrowbot_profile', JSON.stringify(appProfile));
+            setOnboardingStatus(OnboardingStep.COMPLETED);
+          } else {
+            // Profile MISSING (New Google User) -> Create Default & Go Home
+            // This prevents looping back to the Quiz/Splash
+            const defaultProfile: UserProfile = {
+               experience: 'Intermediate', 
+               grow_mode: 'Indoor',
+               goal: 'Maximize Yield',
+               space: 'Medium'
+            };
+            
+            await updateOnboardingProfile({
+               experience: defaultProfile.experience,
+               environment: defaultProfile.grow_mode,
+               goal: defaultProfile.goal,
+               grow_space_size: defaultProfile.space
+            });
+
+            setUserProfile(defaultProfile);
+            localStorage.setItem('mastergrowbot_profile', JSON.stringify(defaultProfile));
+            setOnboardingStatus(OnboardingStep.COMPLETED);
+          }
+        } catch (e) {
+           console.error("Auth hydration error", e);
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Handlers for Onboarding Flow
