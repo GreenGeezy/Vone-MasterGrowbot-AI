@@ -6,7 +6,14 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https'
-  }
+  },
+  plugins: {
+    GoogleAuth: {
+      scopes: ['profile', 'email'],
+      serverClientId: 'YOUR_GOOGLE_CLIENT_ID', // Replace with actual Client ID if available
+      forceCodeForRefreshToken: true,
+    },
+  },
 };
 
 export default config;

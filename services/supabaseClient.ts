@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { Capacitor } from '@capacitor/core';
 
 // Hardcoded credentials as requested for sandbox environment
 const supabaseUrl = 'https://vofwdhlwsahwxecewyek.supabase.co';
@@ -12,12 +13,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
  * Handles the deep-link redirect back to the app via custom scheme.
  */
 export const signInWithGoogle = async () => {
-  // 'mastergrowbot' is the custom scheme for this application
-  const appScheme = 'mastergrowbot://callback';
-  
-  // In a real hybrid app, we might check if we are running native or web
-  // For this requirement, we default to the requested deep-link scheme.
-  const redirectUrl = appScheme;
+  // 'mastergrowbot' is the custom scheme for this application.
+  // We use this explicitly on native platforms to trigger the deep link.
+  // On web, we use window.location.origin to prevent the browser from hanging on an unknown scheme.
+  const redirectUrl = Capacitor.isNativePlatform() 
+    ? 'mastergrowbot://callback' 
+    : window.location.origin;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
