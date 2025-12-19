@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AppScreen, Plant, Task, PlantStage, UserProfile, OnboardingStep, JournalEntry } from './types';
 import BottomNav from './components/BottomNav';
@@ -16,7 +17,6 @@ import { supabase, getUserProfile, updateOnboardingProfile } from './services/su
 import { Capacitor } from '@capacitor/core';
 import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor';
 
-// Mock Data for Prototype
 const MOCK_USER_PROFILE: UserProfile = {
   experience: 'Intermediate',
   grow_mode: 'Indoor',
@@ -24,7 +24,6 @@ const MOCK_USER_PROFILE: UserProfile = {
   space: 'Medium'
 };
 
-// Initialize mock plants with strain details if they match our DB
 const getStrainDetails = (name: string) => STRAIN_DATABASE.find(s => s.name === name);
 
 const MOCK_PLANTS_DATA: Plant[] = [
@@ -32,7 +31,6 @@ const MOCK_PLANTS_DATA: Plant[] = [
     id: '1',
     name: 'Northern Lights #5',
     strain: 'Northern Lights',
-    // No match in DB for "Northern Lights"
     stage: PlantStage.VEG,
     daysInStage: 24,
     totalDays: 45,
@@ -68,31 +66,6 @@ const MOCK_PLANTS_DATA: Plant[] = [
             aiNotes: "Transition to veg successful. Slight nitrogen uptake increase detected. Leaf color is optimal."
         }
     ]
-  },
-  {
-    id: '2',
-    name: 'Blue Dream Auto',
-    strain: 'Blue Dream',
-    strainDetails: getStrainDetails('Blue Dream'),
-    stage: PlantStage.FLOWER_EARLY,
-    daysInStage: 12,
-    totalDays: 67,
-    healthScore: 82,
-    imageUri: 'https://picsum.photos/200/200?random=2',
-    nextHarvestDate: '2023-11-15',
-    streak: 4,
-    tasks: [],
-    journal: [],
-    weeklySummaries: [
-        {
-            id: 'w4',
-            weekNumber: 6,
-            date: 'Oct 20',
-            healthScore: 88,
-            imageUri: 'https://picsum.photos/200/200?random=13',
-            aiNotes: "Pre-flower stretch complete. Vertical height increased by 40%. Nutrient demands shifting to P-K."
-        }
-    ]
   }
 ];
 
@@ -103,60 +76,72 @@ const DEFAULT_TASKS: Task[] = [
 ];
 
 const App: React.FC = () => {
-  // Onboarding & Auth State
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isTrialActive, setIsTrialActive] = useState(false);
-  
-  // App State
   const [currentScreen, setCurrentScreen] = useState<AppScreen>(AppScreen.HOME);
   const [showPaywall, setShowPaywall] = useState(false);
   const [tasks, setTasks] = useState<Task[]>(DEFAULT_TASKS);
   const [plants, setPlants] = useState<Plant[]>(MOCK_PLANTS_DATA);
 
-  // Load initial state and Listen for Auth Redirects
+  // Helper to check RevenueCat entitlement
+  const checkSubscriptionStatus = async () => {
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const customerInfo = await Purchases.getCustomerInfo();
+        return customerInfo.entitlements.active['pro_access'] !== undefined;
+      } catch (e) {
+        console.error("RevenueCat Check Error:", e);
+        return false;
+      }
+    }
+    // Web fallback uses localStorage for development/testing
+    return localStorage.getItem('mastergrowbot_trial_active') === 'true';
+  };
+
   useEffect(() => {
-    // RevenueCat Initialization
-    const initRevenueCat = async () => {
+    const initApp = async () => {
+      // 1. RevenueCat Init
       if (Capacitor.isNativePlatform()) {
         try {
           await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
-          // REVENUECAT PUBLIC API KEY
           await Purchases.configure({ apiKey: "appl_REPLACE_WITH_YOUR_REVENUECAT_KEY" });
         } catch (e) {
           console.error("RevenueCat Init Error:", e);
         }
       }
-    };
-    initRevenueCat();
 
-    // 1. Check Local Storage
-    const savedProfile = localStorage.getItem('mastergrowbot_profile');
-    const trialActive = localStorage.getItem('mastergrowbot_trial_active');
+      // 2. Initial State Load
+      const subscribed = await checkSubscriptionStatus();
+      setIsTrialActive(subscribed);
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      const savedProfile = localStorage.getItem('mastergrowbot_profile');
 
-    if (trialActive === 'true') {
-      setIsTrialActive(true);
-      setOnboardingStatus(OnboardingStep.COMPLETED);
-      if (savedProfile) {
-        setUserProfile(JSON.parse(savedProfile));
+      if (subscribed) {
+        if (session && savedProfile) {
+          setUserProfile(JSON.parse(savedProfile));
+          setOnboardingStatus(OnboardingStep.COMPLETED);
+        } else if (session) {
+          setOnboardingStatus(OnboardingStep.QUIZ);
+        } else {
+          setOnboardingStatus(OnboardingStep.SPLASH);
+        }
+      } else {
+        // Not subscribed? Always start from splash/onboarding
+        setOnboardingStatus(OnboardingStep.SPLASH);
       }
-    } else if (savedProfile) {
-      setUserProfile(JSON.parse(savedProfile));
-      setOnboardingStatus(OnboardingStep.TRIAL_PAYWALL);
-    } else {
-      setOnboardingStatus(OnboardingStep.SPLASH);
-    }
+    };
+    initApp();
 
-    // 2. Global Auth Listener (Handles Google Redirect)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // If user just signed in (e.g. via Google Redirect)
       if (event === 'SIGNED_IN' && session) {
-        try {
-          // Check if profile exists
+        const subscribed = await checkSubscriptionStatus();
+        setIsTrialActive(subscribed);
+
+        if (subscribed) {
           const { data: profile } = await getUserProfile();
-          
           if (profile) {
-            // Profile exists -> Restore and Go Home
             const appProfile: UserProfile = {
               experience: profile.experience as any,
               grow_mode: profile.environment as any,
@@ -167,71 +152,46 @@ const App: React.FC = () => {
             localStorage.setItem('mastergrowbot_profile', JSON.stringify(appProfile));
             setOnboardingStatus(OnboardingStep.COMPLETED);
           } else {
-            // Profile MISSING (New Google User) -> Create Default & Go Home
-            // This prevents looping back to the Quiz/Splash
-            const defaultProfile: UserProfile = {
-               experience: 'Intermediate', 
-               grow_mode: 'Indoor',
-               goal: 'Maximize Yield',
-               space: 'Medium'
-            };
-            
-            await updateOnboardingProfile({
-               experience: defaultProfile.experience,
-               environment: defaultProfile.grow_mode,
-               goal: defaultProfile.goal,
-               grow_space_size: defaultProfile.space
-            });
-
-            setUserProfile(defaultProfile);
-            localStorage.setItem('mastergrowbot_profile', JSON.stringify(defaultProfile));
-            setOnboardingStatus(OnboardingStep.COMPLETED);
+            setOnboardingStatus(OnboardingStep.QUIZ);
           }
-        } catch (e) {
-           console.error("Auth hydration error", e);
+        } else {
+          // Logged in but no subscription? Force paywall.
+          setOnboardingStatus(OnboardingStep.TRIAL_PAYWALL);
         }
+      } else if (event === 'SIGNED_OUT') {
+        setUserProfile(null);
+        setIsTrialActive(false);
+        setOnboardingStatus(OnboardingStep.SPLASH);
       }
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Handlers for Onboarding Flow
-  const handleSplashGetStarted = () => {
-    setOnboardingStatus(OnboardingStep.QUIZ);
-  };
+  const handleSplashGetStarted = () => setOnboardingStatus(OnboardingStep.QUIZ);
 
   const handleSessionActive = async () => {
-    try {
-      // 1. Fetch Profile from Supabase
-      const { data, error } = await getUserProfile();
-      
-      if (data && !error) {
-        // 2. Map DB fields to App types
-        const profile: UserProfile = {
-          experience: data.experience as any,
-          grow_mode: data.environment as any,
-          goal: data.goal as any,
-          space: data.grow_space_size as any
-        };
-        
-        // 3. Update State
-        setUserProfile(profile);
-        localStorage.setItem('mastergrowbot_profile', JSON.stringify(profile));
-        updateTasksBasedOnProfile(profile);
-        
-        // 4. Skip Onboarding
-        setOnboardingStatus(OnboardingStep.COMPLETED);
-      } else {
-        // Session exists but no profile, go to quiz
-        console.warn("Session active but profile missing", error);
-        setOnboardingStatus(OnboardingStep.QUIZ);
-      }
-    } catch (e) {
-      console.error("Error hydrating session:", e);
-      setOnboardingStatus(OnboardingStep.SPLASH);
+    const subscribed = await checkSubscriptionStatus();
+    setIsTrialActive(subscribed);
+
+    if (!subscribed) {
+      setOnboardingStatus(OnboardingStep.TRIAL_PAYWALL);
+      return;
+    }
+
+    const { data, error } = await getUserProfile();
+    if (data && !error) {
+      const profile: UserProfile = {
+        experience: data.experience as any,
+        grow_mode: data.environment as any,
+        goal: data.goal as any,
+        space: data.grow_space_size as any
+      };
+      setUserProfile(profile);
+      localStorage.setItem('mastergrowbot_profile', JSON.stringify(profile));
+      setOnboardingStatus(OnboardingStep.COMPLETED);
+    } else {
+      setOnboardingStatus(OnboardingStep.QUIZ);
     }
   };
 
@@ -239,247 +199,88 @@ const App: React.FC = () => {
     setUserProfile(profile);
     localStorage.setItem('mastergrowbot_profile', JSON.stringify(profile));
     setOnboardingStatus(OnboardingStep.SUMMARY);
-    updateTasksBasedOnProfile(profile);
   };
 
-  const handleSummaryContinue = () => {
-    setOnboardingStatus(OnboardingStep.TRIAL_PAYWALL);
-  };
-
+  const handleSummaryContinue = () => setOnboardingStatus(OnboardingStep.TRIAL_PAYWALL);
+  
   const handlePaymentSuccess = () => {
-     setOnboardingStatus(OnboardingStep.POST_PAYMENT_AUTH);
+    // This is called by the Paywall after successful purchase
+    setIsTrialActive(true);
+    setOnboardingStatus(OnboardingStep.POST_PAYMENT_AUTH);
   };
 
-  const handleTrialActivation = () => {
+  const handleFinalActivation = () => {
     localStorage.setItem('mastergrowbot_trial_active', 'true');
     setIsTrialActive(true);
     setOnboardingStatus(OnboardingStep.COMPLETED);
     setShowPaywall(false);
   };
 
-  const handleSkipTrial = () => {
-    // User clicked "Maybe Later"
-    setOnboardingStatus(OnboardingStep.COMPLETED);
-    setShowPaywall(false);
-  };
-
-  const updateTasksBasedOnProfile = (profile: UserProfile) => {
-    const newTasks = [...DEFAULT_TASKS];
-    if (profile.grow_mode === 'Indoor') {
-      newTasks.unshift({ id: 'dev-1', title: 'Check Grow Light Height', completed: false, type: 'check' });
-    }
-    if (profile.goal === 'Maximize Yield') {
-      newTasks.push({ id: 'dev-2', title: 'Review LST Techniques', completed: false, type: 'train' });
-    }
-    setTasks(newTasks);
-  };
-
-  const handleToggleTask = (id: string) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
-  };
-
-  const handleNavigate = (screen: AppScreen) => {
-    setCurrentScreen(screen);
-  };
-
-  const handleAddJournalEntry = (entry: Omit<JournalEntry, 'id' | 'date'>) => {
-    const newEntry: JournalEntry = {
-      ...entry,
-      id: Date.now().toString(),
-      date: new Date().toLocaleDateString(),
-    };
-
-    setPlants(prev => {
-        const updated = [...prev];
-        if (updated.length > 0) {
-            updated[0] = {
-                ...updated[0],
-                journal: [newEntry, ...updated[0].journal]
-            };
-        }
-        return updated;
-    });
-
-    if (currentScreen !== AppScreen.JOURNAL) {
-        setTimeout(() => {
-            setCurrentScreen(AppScreen.JOURNAL);
-        }, 500);
-    }
-  };
-
-  const handleUpdatePlant = (plantId: string, updates: Partial<Plant>) => {
-    setPlants(prev => prev.map(p => p.id === plantId ? { ...p, ...updates } : p));
-  };
-
-  // Dev Tools Handlers
-  const handleDevReset = () => {
-    localStorage.removeItem('mastergrowbot_profile');
-    localStorage.removeItem('mastergrowbot_trial_active');
-    setUserProfile(null);
-    setIsTrialActive(false);
-    setOnboardingStatus(OnboardingStep.SPLASH);
-    setTasks(DEFAULT_TASKS);
-    setPlants(MOCK_PLANTS_DATA);
-  };
-
-  const handleDevInjectProfile = () => {
-    setUserProfile(MOCK_USER_PROFILE);
-    localStorage.setItem('mastergrowbot_profile', JSON.stringify(MOCK_USER_PROFILE));
-    updateTasksBasedOnProfile(MOCK_USER_PROFILE);
-    setOnboardingStatus(OnboardingStep.SUMMARY);
-  };
-
-  const handleDevToggleTrial = () => {
-    if (isTrialActive) {
-      setIsTrialActive(false);
-      localStorage.removeItem('mastergrowbot_trial_active');
-      setOnboardingStatus(OnboardingStep.TRIAL_PAYWALL);
-    } else {
-      setIsTrialActive(true);
-      localStorage.setItem('mastergrowbot_trial_active', 'true');
-      setOnboardingStatus(OnboardingStep.COMPLETED);
-    }
-  };
-
   const renderContent = () => {
-    if (onboardingStatus === OnboardingStep.SPLASH) {
-      return (
-        <Splash 
-          onGetStarted={handleSplashGetStarted} 
-          onSessionActive={handleSessionActive} 
-        />
-      );
-    }
-
-    if (onboardingStatus === OnboardingStep.QUIZ) {
-      return <Onboarding onComplete={handleQuizComplete} />;
-    }
-
-    if (onboardingStatus === OnboardingStep.SUMMARY && userProfile) {
-      return <OnboardingSummary profile={userProfile} onContinue={handleSummaryContinue} />;
-    }
-
-    if (onboardingStatus === OnboardingStep.TRIAL_PAYWALL) {
+    // MASTER GUARD: Block all main app views if subscription is missing
+    if (onboardingStatus === OnboardingStep.COMPLETED && !isTrialActive) {
       return (
         <Paywall 
-          onClose={handleTrialActivation} 
+          onClose={() => {}} 
           onAuthRedirect={handlePaymentSuccess} 
-          onSkip={handleSkipTrial}
           isMandatory={true} 
           userProfile={userProfile} 
         />
       );
     }
 
-    if (onboardingStatus === OnboardingStep.POST_PAYMENT_AUTH) {
-      return (
-        <PostPaymentAuth 
-           userProfile={userProfile}
-           onComplete={handleTrialActivation}
-        />
-      );
+    switch (onboardingStatus) {
+      case OnboardingStep.SPLASH: 
+        return <Splash onGetStarted={handleSplashGetStarted} onSessionActive={handleSessionActive} />;
+      case OnboardingStep.QUIZ: 
+        return <Onboarding onComplete={handleQuizComplete} />;
+      case OnboardingStep.SUMMARY: 
+        return userProfile && <OnboardingSummary profile={userProfile} onContinue={handleSummaryContinue} />;
+      case OnboardingStep.TRIAL_PAYWALL: 
+        return (
+          <Paywall 
+            onClose={handleFinalActivation} 
+            onAuthRedirect={handlePaymentSuccess} 
+            isMandatory={true} 
+            userProfile={userProfile} 
+          />
+        );
+      case OnboardingStep.POST_PAYMENT_AUTH: 
+        return <PostPaymentAuth userProfile={userProfile} onComplete={handleFinalActivation} />;
+      default: break;
     }
 
-    // Main App Screens
+    // Authenticated and Subscribed Views
     switch (currentScreen) {
-      case AppScreen.HOME:
-        return (
-          <Home 
-            plants={plants} 
-            tasks={tasks} 
-            onToggleTask={handleToggleTask}
-            onNavigateToPlant={() => setCurrentScreen(AppScreen.DIAGNOSE)} 
-          />
-        );
-      case AppScreen.DIAGNOSE:
-        return <Diagnose onSaveToJournal={handleAddJournalEntry} plant={plants[0]} />;
-      case AppScreen.CHAT:
-        return <Chat onSaveToJournal={handleAddJournalEntry} plant={plants[0]} userProfile={userProfile} />;
-      case AppScreen.JOURNAL:
-        return (
-          <Journal 
-             plants={plants} 
-             tasks={tasks} 
-             onToggleTask={handleToggleTask} 
-             onAddEntry={handleAddJournalEntry}
-             onUpdatePlant={handleUpdatePlant}
-          />
-        );
-      case AppScreen.ACCOUNT:
-        return (
-          <div className="p-6 pt-12 h-full overflow-y-auto text-text-main bg-surface">
-             <h1 className="text-2xl font-bold mb-6">My Account</h1>
-             {userProfile && (
-               <div className="grid grid-cols-2 gap-3 mb-6">
-                  <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                    <span className="text-[10px] text-text-sub font-bold uppercase block mb-1">Level</span>
-                    <p className="text-primary font-bold text-lg">{userProfile.experience}</p>
-                  </div>
-                  <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                    <span className="text-[10px] text-text-sub font-bold uppercase block mb-1">Setup</span>
-                    <p className="text-text-main font-bold text-sm">{userProfile.grow_mode} • {userProfile.space}</p>
-                  </div>
-               </div>
-             )}
-             
-             {isTrialActive ? (
-                <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 rounded-2xl p-6 shadow-sm">
-                    <div className="flex justify-between items-center mb-4">
-                        <span className="text-text-main font-bold text-lg">Pro Plan</span>
-                        <span className="bg-primary text-white text-[10px] font-black px-2 py-0.5 rounded shadow-sm">ACTIVE</span>
-                    </div>
-                    <p className="text-sm text-text-sub mb-4 font-medium">Your free trial ends in 3 days.</p>
-                    <button onClick={() => setShowPaywall(true)} className="w-full py-3 bg-white text-primary rounded-xl font-bold shadow-sm border border-primary/10 active:scale-95 transition-transform">
-                        Manage Subscription
-                    </button>
-                </div>
-             ) : (
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                    <div className="flex justify-between items-center mb-4">
-                        <span className="text-text-main font-bold text-lg">Free Plan</span>
-                    </div>
-                    <p className="text-sm text-text-sub mb-4 font-medium">Upgrade to unlock unlimited AI features.</p>
-                    <button onClick={() => setShowPaywall(true)} className="w-full py-3 bg-text-main text-white rounded-xl font-bold shadow-lg active:scale-95 transition-transform">
-                        Upgrade to Pro
-                    </button>
-                </div>
-             )}
-          </div>
-        );
-      default:
-        return <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onNavigateToPlant={() => {}} />;
+      case AppScreen.HOME: 
+        return <Home plants={plants} tasks={tasks} onToggleTask={(id) => setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t))} onNavigateToPlant={() => setCurrentScreen(AppScreen.DIAGNOSE)} />;
+      case AppScreen.DIAGNOSE: 
+        return <Diagnose plant={plants[0]} />;
+      case AppScreen.CHAT: 
+        return <Chat plant={plants[0]} userProfile={userProfile} />;
+      case AppScreen.JOURNAL: 
+        return <Journal plants={plants} onAddEntry={(e) => setPlants(p => { const updated = [...p]; updated[0].journal.unshift({ ...e, id: Date.now().toString(), date: new Date().toLocaleDateString() }); return updated; })} />;
+      case AppScreen.ACCOUNT: 
+        return <div className="p-10">Account Settings (Pro Only)</div>;
+      default: 
+        return <Home plants={plants} tasks={tasks} onToggleTask={() => {}} onNavigateToPlant={() => {}} />;
     }
   };
 
   return (
     <div className="max-w-md mx-auto h-screen relative overflow-hidden shadow-2xl bg-surface border-x border-gray-100">
-      
       <DevTools 
-        onReset={handleDevReset} 
-        onInjectProfile={handleDevInjectProfile}
-        onToggleTrial={handleDevToggleTrial}
-        isTrialActive={isTrialActive}
-        currentStep={onboardingStatus}
+        onReset={() => { localStorage.clear(); window.location.reload(); }} 
+        onInjectProfile={() => {}} 
+        onToggleTrial={() => {}} 
+        isTrialActive={isTrialActive} 
+        currentStep={onboardingStatus} 
       />
-
       <div className="h-full overflow-y-auto no-scrollbar pb-0">
         {renderContent()}
       </div>
-
-      {onboardingStatus === OnboardingStep.COMPLETED && !showPaywall && (
-        <BottomNav 
-          currentScreen={currentScreen} 
-          onNavigate={handleNavigate} 
-        />
-      )}
-
-      {showPaywall && (
-        <Paywall 
-            onClose={() => setShowPaywall(false)}
-            onAuthRedirect={() => setShowPaywall(false)}
-            isMandatory={false} 
-            userProfile={userProfile} 
-        />
+      {onboardingStatus === OnboardingStep.COMPLETED && isTrialActive && !showPaywall && (
+        <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} />
       )}
     </div>
   );
