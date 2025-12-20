@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Home, BookOpen, ScanLine, MessageSquare, User } from 'lucide-react';
 import { AppScreen } from '../types';
@@ -18,8 +17,8 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate }) => {
   ];
 
   return (
-    <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center pointer-events-none">
-      <div className="glass-panel pointer-events-auto rounded-[32px] px-6 py-3.5 flex items-center gap-1 shadow-glass bg-white/90 border border-white/60">
+    <div className="absolute bottom-6 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
+      <div className="glass-panel pointer-events-auto rounded-[32px] px-6 py-3.5 flex items-center gap-2 sm:gap-4 shadow-glass bg-white/90 border border-white/60">
         {navItems.map((item) => {
           const isActive = currentScreen === item.id;
           const Icon = item.icon;
@@ -43,7 +42,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate }) => {
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className={`flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 group ${
+              className={`flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 group relative ${
                 isActive ? 'bg-primary/5' : 'hover:bg-gray-50'
               }`}
             >

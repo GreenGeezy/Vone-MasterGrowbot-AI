@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Plant, Task } from '../types';
 import PlantCard from '../components/PlantCard';
@@ -24,81 +23,82 @@ const Home: React.FC<HomeProps> = ({ plants, tasks, onToggleTask, onNavigateToPl
       }, 500);
     };
     fetchInsight();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const activeTasks = tasks.filter(t => !t.completed);
   const completedTasks = tasks.filter(t => t.completed);
 
   return (
-    <div className="pb-32 px-6 pt-12 min-h-screen bg-surface font-sans">
+    <div className="pb-32 px-4 sm:px-8 pt-8 sm:pt-12 min-h-screen bg-surface font-sans">
       
-      {/* 1. Minimalist Header & Insight */}
-      <div className="mb-10">
-        <div className="flex items-start gap-4">
-          <Growbot size="md" mood="happy" className="mt-1" />
-          <div>
-             <span className="text-[10px] font-bold text-text-sub uppercase tracking-widest flex items-center gap-1 mb-2">
+      {/* 1. Header & Insight */}
+      <div className="mb-8 sm:mb-12">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left">
+          <Growbot size="md" mood="happy" className="flex-shrink-0" />
+          <div className="flex-1">
+             <span className="text-[10px] font-bold text-text-sub uppercase tracking-widest flex items-center justify-center sm:justify-start gap-1 mb-2">
                <Sun size={12} className="text-primary" /> Daily Insight
              </span>
-             <h1 className="text-xl font-medium text-text-main leading-relaxed">
+             <h1 className="text-xl sm:text-2xl font-semibold text-text-main leading-relaxed">
                "{dailyInsight}"
              </h1>
           </div>
         </div>
       </div>
 
-      {/* 2. Today's Actions (Focus) */}
-      <div className="mb-10">
-        <div className="flex justify-between items-center mb-4">
-           <h2 className="text-lg font-bold text-text-main">Today's Care</h2>
-           <span className="text-xs font-bold text-text-sub bg-white px-2 py-1 rounded-lg border border-gray-100 shadow-sm">
-             {completedTasks.length}/{tasks.length} Done
-           </span>
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 items-start">
+        {/* 2. Today's Actions */}
+        <div>
+          <div className="flex justify-between items-center mb-6">
+             <h2 className="text-lg sm:text-xl font-bold text-text-main">Today's Care</h2>
+             <span className="text-xs font-bold text-text-sub bg-white px-3 py-1.5 rounded-xl border border-gray-100 shadow-sm">
+               {completedTasks.length}/{tasks.length} Done
+             </span>
+          </div>
 
-        <div className="space-y-3">
-          {activeTasks.length === 0 && completedTasks.length > 0 && (
-             <div className="p-4 bg-green-50 text-primary rounded-2xl text-sm font-medium flex items-center gap-2">
-                <CheckCircle2 size={18} /> You're all caught up for today!
-             </div>
-          )}
+          <div className="space-y-4">
+            {activeTasks.length === 0 && completedTasks.length > 0 && (
+               <div className="p-5 bg-green-50 text-primary rounded-[2rem] text-sm font-bold flex items-center gap-3 border border-primary/10">
+                  <CheckCircle2 size={20} /> You're all caught up for today!
+               </div>
+            )}
 
-          {tasks.map(task => (
-            <div 
-              key={task.id} 
-              onClick={() => onToggleTask(task.id)}
-              className={`group flex items-center gap-4 p-4 rounded-2xl transition-all duration-300 cursor-pointer ${
-                task.completed 
-                  ? 'bg-transparent' 
-                  : 'bg-white shadow-sm hover:shadow-md border border-gray-100'
-              }`}
-            >
-              <div className={`flex-shrink-0 transition-colors duration-300 ${
-                  task.completed ? 'text-primary' : 'text-gray-300 group-hover:text-primary'
-              }`}>
-                 {task.completed ? <CheckCircle2 size={24} className="fill-current bg-white rounded-full" /> : <Circle size={24} />}
+            {tasks.map(task => (
+              <div 
+                key={task.id} 
+                onClick={() => onToggleTask(task.id)}
+                className={`group flex items-center gap-4 p-5 rounded-[2rem] transition-all duration-300 cursor-pointer ${
+                  task.completed 
+                    ? 'bg-white/40 border border-transparent opacity-60' 
+                    : 'bg-white shadow-soft hover:shadow-md border border-gray-100 hover:border-primary/20'
+                }`}
+              >
+                <div className={`flex-shrink-0 transition-colors duration-300 ${
+                    task.completed ? 'text-primary' : 'text-gray-300 group-hover:text-primary'
+                }`}>
+                   {task.completed ? <CheckCircle2 size={26} className="fill-current bg-white rounded-full" /> : <Circle size={26} />}
+                </div>
+                
+                <span className={`text-base font-semibold transition-colors ${task.completed ? 'text-gray-400 line-through' : 'text-text-main'}`}>
+                    {task.title}
+                </span>
               </div>
-              
-              <span className={`text-sm font-medium transition-colors ${task.completed ? 'text-gray-400 line-through' : 'text-text-main'}`}>
-                  {task.title}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 3. My Garden (Status) */}
-      <div>
-        <h2 className="text-lg font-bold text-text-main mb-4">Your Plants</h2>
-        <div className="flex flex-col gap-3">
-            {plants.map(plant => (
-            <PlantCard 
-                key={plant.id} 
-                plant={plant} 
-                onPress={() => onNavigateToPlant(plant.id)} 
-            />
             ))}
+          </div>
+        </div>
+
+        {/* 3. My Garden */}
+        <div>
+          <h2 className="text-lg sm:text-xl font-bold text-text-main mb-6">Your Plants</h2>
+          <div className="grid grid-cols-1 gap-4">
+              {plants.map(plant => (
+              <PlantCard 
+                  key={plant.id} 
+                  plant={plant} 
+                  onPress={() => onNavigateToPlant(plant.id)} 
+              />
+              ))}
+          </div>
         </div>
       </div>
     </div>

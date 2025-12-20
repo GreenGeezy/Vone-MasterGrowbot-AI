@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { Settings, RotateCcw, UserPlus, Unlock, Lock, LogOut } from 'lucide-react';
-import { OnboardingStep, UserProfile } from '../types';
+import { OnboardingStep } from '../types';
 import { supabase } from '../services/supabaseClient';
 
 interface DevToolsProps {
@@ -22,7 +23,6 @@ const DevTools: React.FC<DevToolsProps> = ({
 
   const handleHardLogout = async () => {
     await supabase.auth.signOut();
-    // Force reload to clear all states
     window.location.reload();
   };
 
@@ -30,7 +30,7 @@ const DevTools: React.FC<DevToolsProps> = ({
     return (
       <button 
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-20 right-4 z-[100] bg-black/80 text-neon-green p-3 rounded-full border border-neon-green/50 shadow-lg hover:scale-110 transition-transform"
+        className="fixed bottom-24 right-4 z-[100] bg-black/80 text-primary-light p-3 rounded-full border border-white/20 shadow-lg hover:scale-110 transition-transform"
       >
         <Settings size={20} className="animate-spin-slow" />
       </button>
@@ -38,47 +38,49 @@ const DevTools: React.FC<DevToolsProps> = ({
   }
 
   return (
-    <div className="fixed bottom-20 right-4 z-[100] bg-black/90 backdrop-blur-md border border-neon-green/30 rounded-2xl p-4 w-64 shadow-2xl animate-in slide-in-from-right">
-      <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
-        <span className="text-xs font-bold text-neon-green uppercase tracking-widest">Dev Controls</span>
-        <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white">
+    <div className="fixed bottom-24 right-4 z-[100] bg-[#0A0A0A] border border-white/10 rounded-2xl p-4 w-64 shadow-[0_0_30px_rgba(0,0,0,0.5)] animate-in slide-in-from-right duration-300">
+      <div className="flex justify-between items-center mb-4">
+        <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] ml-1">Dev Controls</span>
+        <button onClick={() => setIsOpen(false)} className="text-white/20 hover:text-white transition-colors">
           <Settings size={16} />
         </button>
       </div>
 
       <div className="space-y-3">
-        <div className="bg-white/5 p-2 rounded text-[10px] font-mono text-gray-300 mb-3">
+        {/* Status Box */}
+        <div className="bg-[#141414] p-3 rounded-xl text-[11px] font-mono text-white/60 border border-white/5 mb-2 leading-relaxed">
           <div>Step: <span className="text-neon-blue">{currentStep}</span></div>
-          <div>Trial: <span className={isTrialActive ? "text-neon-green" : "text-alert-red"}>{isTrialActive ? 'ACTIVE' : 'INACTIVE'}</span></div>
+          <div>Trial: <span className={isTrialActive ? "text-white" : "text-alert-red"}>{isTrialActive ? 'ACTIVE' : 'INACTIVE'}</span></div>
         </div>
 
+        {/* Action Buttons */}
         <button 
           onClick={onInjectProfile}
-          className="w-full flex items-center gap-2 bg-white/10 hover:bg-white/20 text-xs text-white py-2 px-3 rounded transition-colors"
+          className="w-full flex items-center gap-3 bg-[#1F1F1F] hover:bg-[#2A2A2A] text-[11px] font-bold text-white py-3 px-4 rounded-xl transition-all active:scale-95"
         >
-          <UserPlus size={14} className="text-neon-blue" /> Inject Mock Profile
+          <UserPlus size={16} className="text-neon-blue" /> Inject Mock Profile
         </button>
 
         <button 
           onClick={onToggleTrial}
-          className="w-full flex items-center gap-2 bg-white/10 hover:bg-white/20 text-xs text-white py-2 px-3 rounded transition-colors"
+          className="w-full flex items-center gap-3 bg-[#1F1F1F] hover:bg-[#2A2A2A] text-[11px] font-bold text-white py-3 px-4 rounded-xl transition-all active:scale-95"
         >
-          {isTrialActive ? <Lock size={14} className="text-alert-red" /> : <Unlock size={14} className="text-neon-green" />}
+          {isTrialActive ? <Lock size={16} className="text-alert-red" /> : <Unlock size={16} className="text-primary-light" />}
           {isTrialActive ? 'Revoke Trial' : 'Force Activate Trial'}
         </button>
 
         <button 
           onClick={onReset}
-          className="w-full flex items-center gap-2 bg-alert-red/20 hover:bg-alert-red/40 text-xs text-alert-red py-2 px-3 rounded transition-colors border border-alert-red/20"
+          className="w-full flex items-center gap-3 bg-[#2A1616] hover:bg-[#3D1A1A] text-[11px] font-bold text-alert-red py-3 px-4 rounded-xl transition-all active:scale-95 border border-alert-red/10"
         >
-          <RotateCcw size={14} /> Restart Onboarding
+          <RotateCcw size={16} /> Restart Onboarding
         </button>
 
         <button 
           onClick={handleHardLogout}
-          className="w-full flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-xs text-white py-2 px-3 rounded transition-colors border border-gray-600 mt-2"
+          className="w-full flex items-center justify-center gap-3 bg-[#1B212A] hover:bg-[#242C38] text-[11px] font-black text-white py-3.5 px-4 rounded-xl transition-all active:scale-95 border border-white/5 uppercase tracking-wide mt-2"
         >
-          <LogOut size={14} className="text-orange-400" /> SUPABASE HARD LOGOUT
+          <LogOut size={16} className="text-orange-400" /> SUPABASE HARD LOGOUT
         </button>
       </div>
     </div>
