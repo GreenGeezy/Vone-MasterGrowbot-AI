@@ -55,8 +55,9 @@ const App: React.FC = () => {
       if (Capacitor.isNativePlatform()) {
         try {
           await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
-          // Production Google Public API Key
-          await Purchases.configure({ apiKey: "goog_kqOynvNRCABzUPrpfyFvlMvHUna" });
+          // Production Google Public API Key from Environment
+          const rcKey = process.env.REVENUECAT_API_KEY || "goog_kqOynvNRCABzUPrpfyFvlMvHUna";
+          await Purchases.configure({ apiKey: rcKey });
           
           // Sync existing session if available
           const { data: { session } } = await supabase.auth.getSession();
