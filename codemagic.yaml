@@ -27,6 +27,8 @@ workflows:
           npm install @capacitor/android --legacy-peer-deps
           npx cap add android
           npx cap sync android
+          rm -rf ~/.gradle/caches
+          echo "android.useAndroidX=true" > android/gradle.properties
           echo "android.enableJetifier=false" >> android/gradle.properties
           echo "android.jetifier.ignorelist=bcprov-jdk18on" >> android/gradle.properties
       - name: Set up KeyStore
@@ -42,8 +44,7 @@ workflows:
         script: |
           cd android
           chmod +x gradlew
-          ./gradlew clean
-          ./gradlew bundleRelease
+          ./gradlew bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
     publishing:
