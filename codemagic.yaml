@@ -11,6 +11,8 @@ workflows:
         REVENUECAT_API_KEY: ${REVENUECAT_API_KEY}
         PACKAGE_NAME: "com.mastergrowbot.app"
         JAVA_HOME: /Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home
+        JAVA_OPTS: "-Xmx4g"
+        GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
       node: latest
     scripts:
       - name: Install Dependencies
@@ -25,6 +27,7 @@ workflows:
           npm install @capacitor/android --legacy-peer-deps
           npx cap add android
           npx cap sync android
+          echo "android.enableJetifier=false" >> android/gradle.properties
           echo "android.jetifier.ignorelist=bcprov-jdk18on" >> android/gradle.properties
       - name: Set up KeyStore
         script: |
@@ -39,6 +42,7 @@ workflows:
         script: |
           cd android
           chmod +x gradlew
+          ./gradlew clean
           ./gradlew bundleRelease
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
