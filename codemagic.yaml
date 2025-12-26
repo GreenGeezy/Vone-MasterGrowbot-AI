@@ -14,13 +14,16 @@ workflows:
     scripts:
       - name: Install Dependencies
         script: |
-          npm install --legacy-peer-deps && npm install @capacitor/android --legacy-peer-deps
+          npm install --legacy-peer-deps
       - name: Web Build
         script: |
           npm run build
       - name: Capacitor Sync
         script: |
-          npx cap add android || true && npx cap sync android
+          rm -rf android
+          npm install @capacitor/android --legacy-peer-deps
+          npx cap add android
+          npx cap sync android
       - name: Set up KeyStore
         script: |
           echo $CM_KEYSTORE | base64 --decode > android/app/mastergrowbot.keystore
@@ -33,7 +36,6 @@ workflows:
       - name: Build Android App Bundle
         script: |
           cd android
-          gradle wrapper
           chmod +x gradlew
           ./gradlew bundleRelease
     artifacts:
