@@ -1,30 +1,41 @@
 workflows:
-  android-workflow:
-    name: Android Workflow
+  android-release:
+    name: Android Release Build
     max_build_duration: 60
     instance_type: mac_mini_m1
     environment:
       groups:
-        - google_play
+        - google_play_credentials
       vars:
-        GEMINI_API_KEY: "your_api_key_here" # Ensure this is set in Codemagic environment variables
+        GEMINI_API_KEY: ${GEMINI_API_KEY}
+        PACKAGE_NAME: "com.mastergrowbot.app"
       node: latest
     scripts:
-      - name: Install dependencies
+      - name: Install Dependencies
         script: |
           npm install
-      - name: Build web assets
+      - name: Web Build
         script: |
           npm run build
-      - name: Sync Capacitor
+      - name: Capacitor Sync
         script: |
           npx cap sync android
-      - name: Build Android APK
+      - name: Set up KeyStore
         script: |
-          cd android && ./gradlew assembleDebug
+          echo $CM_KEYSTORE | base64 --decode > android/app/mastergrowbot.keystore
+          cat > android/key.properties <<EOF
+          storePassword=$CM_KEY_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=mastergrowbot.keystore
+          EOF
+      - name: Build Android App Bundle
+        script: |
+          cd android && ./gradlew bundleRelease
     artifacts:
-      - android/app/build/outputs/apk/**/*.apk
+      - android/app/build/outputs/bundle/release/*.aab
     publishing:
-      email:
-        recipients:
-          - grower@mastergrowbot.ai
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        submit_as_draft: false

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AppScreen, Plant, Task, PlantStage, UserProfile, OnboardingStep, JournalEntry } from './types';
 import BottomNav from './components/BottomNav';
@@ -17,7 +16,6 @@ import { supabase, getUserProfile, updateOnboardingProfile } from './services/su
 import { Capacitor } from '@capacitor/core';
 import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor';
 
-// Initialize mock plants with strain details if they match our DB
 const getStrainDetails = (name: string) => STRAIN_DATABASE.find(s => s.name === name);
 
 const MOCK_PLANTS_DATA: Plant[] = [
@@ -33,65 +31,14 @@ const MOCK_PLANTS_DATA: Plant[] = [
     nextHarvestDate: '2023-12-01',
     streak: 12,
     tasks: [],
-    journal: [
-      {
-        id: 'j1',
-        date: new Date().toLocaleDateString(),
-        type: 'note',
-        title: 'Training Day',
-        notes: 'Performed LST on main stem. Plant responded well.'
-      }
-    ],
-    weeklySummaries: [
-        {
-            id: 'w1',
-            weekNumber: 1,
-            date: 'Oct 10',
-            healthScore: 98,
-            imageUri: 'https://picsum.photos/200/200?random=10',
-            aiNotes: "Strong seedling establishment. Root development looks vigorous. No signs of damping off."
-        },
-        {
-            id: 'w2',
-            weekNumber: 2,
-            date: 'Oct 17',
-            healthScore: 95,
-            imageUri: 'https://picsum.photos/200/200?random=11',
-            aiNotes: "Transition to veg successful. Slight nitrogen uptake increase detected. Leaf color is optimal."
-        }
-    ]
-  },
-  {
-    id: '2',
-    name: 'Blue Dream Auto',
-    strain: 'Blue Dream',
-    strainDetails: getStrainDetails('Blue Dream'),
-    stage: PlantStage.FLOWER_EARLY,
-    daysInStage: 12,
-    totalDays: 67,
-    healthScore: 82,
-    imageUri: 'https://picsum.photos/200/200?random=2',
-    nextHarvestDate: '2023-11-15',
-    streak: 4,
-    tasks: [],
     journal: [],
-    weeklySummaries: [
-        {
-            id: 'w4',
-            weekNumber: 6,
-            date: 'Oct 20',
-            healthScore: 88,
-            imageUri: 'https://picsum.photos/200/200?random=13',
-            aiNotes: "Pre-flower stretch complete. Vertical height increased by 40%. Nutrient demands shifting to P-K."
-        }
-    ]
+    weeklySummaries: []
   }
 ];
 
 const DEFAULT_TASKS: Task[] = [
   { id: '1', title: 'Water Northern Lights', completed: false, type: 'water' },
   { id: '2', title: 'Check pH levels', completed: true, type: 'check' },
-  { id: '3', title: 'Feed Blue Dream (Week 4 Veg)', completed: false, type: 'feed' },
 ];
 
 const App: React.FC = () => {
@@ -108,7 +55,14 @@ const App: React.FC = () => {
       if (Capacitor.isNativePlatform()) {
         try {
           await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
-          await Purchases.configure({ apiKey: "appl_REPLACE_WITH_YOUR_REVENUECAT_KEY" });
+          // Production Google Public API Key
+          await Purchases.configure({ apiKey: "goog_kqOynvNRCABzUPrpfyFvlMvHUna" });
+          
+          // Sync existing session if available
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            await Purchases.logIn({ appUserID: session.user.id });
+          }
         } catch (e) {
           console.error("RevenueCat Init Error:", e);
         }
@@ -131,38 +85,33 @@ const App: React.FC = () => {
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        try {
-          const { data: profile } = await getUserProfile();
-          if (profile) {
-            const appProfile: UserProfile = {
-              experience: profile.experience as any,
-              grow_mode: profile.environment as any,
-              goal: profile.goal as any,
-              space: profile.grow_space_size as any
-            };
-            setUserProfile(appProfile);
-            localStorage.setItem('mastergrowbot_profile', JSON.stringify(appProfile));
-            setOnboardingStatus(OnboardingStep.COMPLETED);
-          } else {
-            const defaultProfile: UserProfile = {
-               experience: 'Intermediate', 
-               grow_mode: 'Indoor',
-               goal: 'Maximize Yield',
-               space: 'Medium'
-            };
-            await updateOnboardingProfile({
-               experience: defaultProfile.experience,
-               environment: defaultProfile.grow_mode,
-               goal: defaultProfile.goal,
-               grow_space_size: defaultProfile.space
-            });
-            setUserProfile(defaultProfile);
-            localStorage.setItem('mastergrowbot_profile', JSON.stringify(defaultProfile));
-            setOnboardingStatus(OnboardingStep.COMPLETED);
+      if (session?.user) {
+        // Sync User with RevenueCat on every login/auth state change
+        if (Capacitor.isNativePlatform()) {
+          try {
+            await Purchases.logIn({ appUserID: session.user.id });
+          } catch (e) {
+            console.error("RC Sync Error:", e);
           }
-        } catch (e) {
-           console.error("Auth hydration error", e);
+        }
+
+        if (event === 'SIGNED_IN') {
+          try {
+            const { data: profile } = await getUserProfile();
+            if (profile) {
+              const appProfile: UserProfile = {
+                experience: profile.experience as any,
+                grow_mode: profile.environment as any,
+                goal: profile.goal as any,
+                space: profile.grow_space_size as any
+              };
+              setUserProfile(appProfile);
+              localStorage.setItem('mastergrowbot_profile', JSON.stringify(appProfile));
+              setOnboardingStatus(OnboardingStep.COMPLETED);
+            }
+          } catch (e) {
+            console.error("Auth hydration error", e);
+          }
         }
       }
     });
@@ -229,57 +178,10 @@ const App: React.FC = () => {
         }
         return updated;
     });
-    if (currentScreen !== AppScreen.JOURNAL) {
-        setTimeout(() => setCurrentScreen(AppScreen.JOURNAL), 500);
-    }
   };
 
   const handleUpdatePlant = (plantId: string, updates: Partial<Plant>) => {
     setPlants(prev => prev.map(p => p.id === plantId ? { ...p, ...updates } : p));
-  };
-
-  // --- DEV TOOLS HANDLERS ---
-  const handleToggleTrial = () => {
-    const newState = !isTrialActive;
-    setIsTrialActive(newState);
-    localStorage.setItem('mastergrowbot_trial_active', newState.toString());
-    
-    // If activating trial, force skip everything to get to the dashboard
-    if (newState) {
-      if (!userProfile) {
-        const mockProfile: UserProfile = {
-          experience: 'Intermediate',
-          grow_mode: 'Indoor',
-          goal: 'Maximize Yield',
-          space: 'Medium'
-        };
-        setUserProfile(mockProfile);
-        localStorage.setItem('mastergrowbot_profile', JSON.stringify(mockProfile));
-      }
-      setOnboardingStatus(OnboardingStep.COMPLETED);
-      setCurrentScreen(AppScreen.HOME);
-    } else {
-      // If revoking trial, usually want to go back to paywall if we were testing
-      if (onboardingStatus === OnboardingStep.COMPLETED) {
-         setOnboardingStatus(OnboardingStep.TRIAL_PAYWALL);
-      }
-    }
-  };
-
-  const handleInjectProfile = () => {
-    const mockProfile: UserProfile = {
-      experience: 'Expert',
-      grow_mode: 'Indoor',
-      goal: 'Improve Quality',
-      space: 'Medium'
-    };
-    setUserProfile(mockProfile);
-    localStorage.setItem('mastergrowbot_profile', JSON.stringify(mockProfile));
-    
-    // If we were at splash or quiz, skip to summary to let user "continue" normally
-    if (onboardingStatus === OnboardingStep.SPLASH || onboardingStatus === OnboardingStep.QUIZ) {
-      setOnboardingStatus(OnboardingStep.SUMMARY);
-    }
   };
 
   const renderContent = () => {
@@ -306,28 +208,9 @@ const App: React.FC = () => {
                     <span className="text-[10px] text-text-sub font-bold uppercase block mb-1">Level</span>
                     <p className="text-primary font-bold text-lg">{userProfile.experience}</p>
                   </div>
-                  <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                    <span className="text-[10px] text-text-sub font-bold uppercase block mb-1">Setup</span>
-                    <p className="text-text-main font-bold text-sm">{userProfile.grow_mode} • {userProfile.space}</p>
-                  </div>
                </div>
              )}
-             {isTrialActive ? (
-                <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 rounded-2xl p-6 shadow-sm">
-                    <div className="flex justify-between items-center mb-4">
-                        <span className="text-text-main font-bold text-lg">Pro Plan</span>
-                        <span className="bg-primary text-white text-[10px] font-black px-2 py-0.5 rounded shadow-sm">ACTIVE</span>
-                    </div>
-                    <p className="text-sm text-text-sub mb-4 font-medium">Your free trial ends soon.</p>
-                    <button onClick={() => setShowPaywall(true)} className="w-full py-3 bg-white text-primary rounded-xl font-bold shadow-sm border border-primary/10 active:scale-95 transition-transform">Manage Subscription</button>
-                </div>
-             ) : (
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                    <div className="flex justify-between items-center mb-4"><span className="text-text-main font-bold text-lg">Free Plan</span></div>
-                    <p className="text-sm text-text-sub mb-4 font-medium">Upgrade to unlock unlimited AI features.</p>
-                    <button onClick={() => setShowPaywall(true)} className="w-full py-3 bg-text-main text-white rounded-xl font-bold shadow-lg active:scale-95 transition-transform">Upgrade to Pro</button>
-                </div>
-             )}
+             <button onClick={() => setShowPaywall(true)} className="w-full py-3 bg-text-main text-white rounded-xl font-bold shadow-lg">Manage Pro Account</button>
           </div>
         );
       default: return <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onNavigateToPlant={() => {}} />;
@@ -338,8 +221,8 @@ const App: React.FC = () => {
     <div className="max-w-md sm:max-w-xl md:max-w-2xl mx-auto h-screen relative overflow-hidden shadow-2xl bg-surface sm:border-x border-gray-100">
       <DevTools 
         onReset={() => { localStorage.clear(); window.location.reload(); }} 
-        onInjectProfile={handleInjectProfile} 
-        onToggleTrial={handleToggleTrial} 
+        onInjectProfile={() => {}} 
+        onToggleTrial={() => setIsTrialActive(!isTrialActive)} 
         isTrialActive={isTrialActive} 
         currentStep={onboardingStatus} 
       />
