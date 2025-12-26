@@ -30,6 +30,10 @@ workflows:
           rm -rf ~/.gradle/caches
           echo "android.useAndroidX=true" > android/gradle.properties
           echo "android.enableJetifier=false" >> android/gradle.properties
+          cd android
+          chmod +x gradlew
+          ./gradlew wrapper --gradle-version 8.5
+          cd ..
       - name: Set up KeyStore
         script: |
           echo $CM_KEYSTORE | base64 --decode > android/app/mastergrowbot.keystore
@@ -43,6 +47,7 @@ workflows:
         script: |
           cd android
           chmod +x gradlew
+          ./gradlew clean
           ./gradlew bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
