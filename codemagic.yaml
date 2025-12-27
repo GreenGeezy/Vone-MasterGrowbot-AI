@@ -12,7 +12,7 @@ workflows:
         GEMINI_API_KEY: ${GEMINI_API_KEY}
         REVENUECAT_API_KEY: ${REVENUECAT_API_KEY}
         PACKAGE_NAME: "com.mastergrowbot.app"
-        JAVA_HOME: /Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home
+        JAVA_HOME: /Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home
         JAVA_TOOL_OPTIONS: "-Xmx6g"
         GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6g"
       node: latest
