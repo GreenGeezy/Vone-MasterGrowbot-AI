@@ -30,21 +30,15 @@ workflows:
           npx cap add android
           npx cap sync android
           rm -rf ~/.gradle/caches
-          # Global Resolution Strategy Fix: Injected into root build.gradle to force bcprov version across all submodules
-          echo "allprojects { configurations.all { resolutionStrategy.force 'org.bouncycastle:bcprov-jdk18on:1.79' } }" >> android/build.gradle
-          # Ensure Jetifier is disabled to prevent transformation of security libraries
+          # Direct File Injection: Forcing resolution strategy into root build.gradle to fix bcprov corruption
+          printf "\nallprojects { configurations.all { resolutionStrategy.force 'org.bouncycastle:bcprov-jdk18on:1.79' } }\n" >> android/build.gradle
+          # Hardened gradle properties
           echo "android.useAndroidX=true" > android/gradle.properties
           echo "android.enableJetifier=false" >> android/gradle.properties
           echo "android.jetifier.ignorelist=bcprov-jdk18on" >> android/gradle.properties
-          # Force upgrade to Gradle 8.7
-          cd android
-          ./gradlew wrapper --gradle-version 8.7 --distribution-type all
-          chmod +x gradlew
-          ./gradlew --version
-          cd ..
       - name: Set up KeyStore
         script: |
-          # Use official Codemagic environment variables for automatic signing
+          # Generate key.properties using official Codemagic automatic system variables
           cat >> android/key.properties <<EOF
           storePassword=\$CM_KEYSTORE_PASSWORD
           keyPassword=\$CM_KEY_PASSWORD
@@ -53,8 +47,11 @@ workflows:
           EOF
       - name: Build Android App Bundle
         script: |
+          # The Wrapper Force: Upgrade to 8.7 before any build tasks to ensure Multi-release JAR support
           cd android
           chmod +x gradlew
+          ./gradlew wrapper --gradle-version 8.7 --distribution-type all
+          ./gradlew --version
           ./gradlew clean
           ./gradlew bundleRelease --no-daemon
     artifacts:
