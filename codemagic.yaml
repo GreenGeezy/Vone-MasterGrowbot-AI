@@ -47,24 +47,23 @@ workflows:
           }
           EOF
 
-          # 3. Inject missing/empty app/build.gradle with standard Capacitor 6 template
+          # 3. Inject missing/empty app/build.gradle with standard Capacitor 6 template (Modern Syntax)
           cat <<EOF > android/app/build.gradle
           apply plugin: 'com.android.application'
 
           android {
               namespace "${PACKAGE_NAME}"
-              compileSdkVersion rootProject.ext.compileSdkVersion
+              compileSdk rootProject.ext.compileSdkVersion
+
               defaultConfig {
                   applicationId "${PACKAGE_NAME}"
-                  minSdkVersion rootProject.ext.minSdkVersion
-                  targetSdkVersion rootProject.ext.targetSdkVersion
+                  minSdk rootProject.ext.minSdkVersion
+                  targetSdk rootProject.ext.targetSdkVersion
                   versionCode 1
                   versionName "1.0"
                   testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-                  aaptOptions {
-                       nocompress 'capgen'
-                  }
               }
+
               buildTypes {
                   release {
                       minifyEnabled false
@@ -72,6 +71,7 @@ workflows:
                       signingConfig signingConfigs.debug
                   }
               }
+
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_21
                   targetCompatibility JavaVersion.VERSION_21
@@ -142,11 +142,14 @@ workflows:
           # 8. Purge corrupted JAR cache
           rm -rf ~/.gradle/caches/jars-9
           
+          # 9. Ensure Android 15 Platform SDK is installed
+          echo "y" | sdkmanager "platforms;android-35"
+
           cd android
           chmod +x gradlew
           ./gradlew --version
           ./gradlew clean
-          # 9. Final build using JDK 21 and Gradle 8.7
+          # 10. Final build using JDK 21 and Gradle 8.7
           ./gradlew bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
