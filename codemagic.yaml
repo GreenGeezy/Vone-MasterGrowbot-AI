@@ -121,8 +121,20 @@ workflows:
           # 5. Force Gradle Wrapper to 8.7 (Multi-release JAR support)
           sed -i '' 's|distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-8.7-all.zip|' android/gradle/wrapper/gradle-wrapper.properties
           
-          # 6. Global BouncyCastle resolutionStrategy
-          printf "\nallprojects { configurations.all { resolutionStrategy.force 'org.bouncycastle:bcprov-jdk18on:1.79' } }\n" >> android/build.gradle
+          # 6. Global Resolution Strategy (Kotlin Alignment & BouncyCastle)
+          # Fixes: Duplicate class CollectionsJDK8Kt and BouncyCastle Multi-release JAR corruption
+          cat <<EOF >> android/build.gradle
+          allprojects {
+              configurations.all {
+                  resolutionStrategy {
+                      force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+                      force 'org.bouncycastle:bcprov-jdk18on:1.79'
+                  }
+                  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+                  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+              }
+          }
+          EOF
           
           # 7. Global properties
           echo "android.useAndroidX=true" > android/gradle.properties
