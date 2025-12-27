@@ -12,11 +12,9 @@ import OnboardingSummary from './screens/OnboardingSummary';
 import Splash from './screens/Splash';
 import DevTools from './components/DevTools';
 import { STRAIN_DATABASE } from './data/strains';
-import { supabase, getUserProfile, updateOnboardingProfile } from './services/supabaseClient';
+import { supabase, getUserProfile } from './services/supabaseClient';
 import { Capacitor } from '@capacitor/core';
 import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor';
-
-const getStrainDetails = (name: string) => STRAIN_DATABASE.find(s => s.name === name);
 
 const MOCK_PLANTS_DATA: Plant[] = [
   {
@@ -55,7 +53,7 @@ const App: React.FC = () => {
       if (Capacitor.isNativePlatform()) {
         try {
           await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
-          // Production Google Public API Key from Environment
+          // Priority: Environmental build variable injected by CI
           const rcKey = process.env.REVENUECAT_API_KEY || "goog_kqOynvNRCABzUPrpfyFvlMvHUna";
           await Purchases.configure({ apiKey: rcKey });
           
@@ -87,7 +85,6 @@ const App: React.FC = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        // Sync User with RevenueCat on every login/auth state change
         if (Capacitor.isNativePlatform()) {
           try {
             await Purchases.logIn({ appUserID: session.user.id });

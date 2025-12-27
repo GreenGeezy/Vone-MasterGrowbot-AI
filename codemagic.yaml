@@ -25,16 +25,16 @@ workflows:
           npm run build
       - name: Capacitor Sync & Self-Healing File Injection
         script: |
-          # 1. Start fresh to ensure sync is clean
+          # 1. Clean sync to ensure fresh project structure
           rm -rf android
           npm install @capacitor/android --legacy-peer-deps
           npx cap add android
           npx cap sync android
 
-          # 2. Inject variables.gradle with Android 15 (SDK 35) specifics
+          # 2. Inject variables.gradle with SDK 35 (Android 15) and Min SDK 24
           cat <<EOF > android/variables.gradle
           ext {
-              minSdkVersion = 22
+              minSdkVersion = 24
               compileSdkVersion = 35
               targetSdkVersion = 35
               androidxActivityVersion = '1.9.2'
@@ -47,7 +47,7 @@ workflows:
           }
           EOF
 
-          # 3. Inject missing/empty app/build.gradle with standard Capacitor 6 template (Modern Syntax)
+          # 3. Inject missing/empty app/build.gradle with modern Gradle syntax
           cat <<EOF > android/app/build.gradle
           apply plugin: 'com.android.application'
 
@@ -106,7 +106,7 @@ workflows:
           }
           EOF
 
-          # 4. Inject missing strings.xml
+          # 4. Inject missing strings.xml to resolve resource link errors
           mkdir -p android/app/src/main/res/values
           cat <<EOF > android/app/src/main/res/values/strings.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -118,18 +118,19 @@ workflows:
           </resources>
           EOF
 
-          # 5. Force Gradle Wrapper to 8.7 (fixes Multi-release JAR support)
+          # 5. Force Gradle Wrapper to 8.7 (Multi-release JAR support)
           sed -i '' 's|distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-8.7-all.zip|' android/gradle/wrapper/gradle-wrapper.properties
           
-          # 6. Global BouncyCastle resolutionStrategy injection
+          # 6. Global BouncyCastle resolutionStrategy
           printf "\nallprojects { configurations.all { resolutionStrategy.force 'org.bouncycastle:bcprov-jdk18on:1.79' } }\n" >> android/build.gradle
           
-          # 7. Core properties
+          # 7. Global properties
           echo "android.useAndroidX=true" > android/gradle.properties
           echo "android.enableJetifier=false" >> android/gradle.properties
 
       - name: Set up KeyStore
         script: |
+          # Use explicit CM UI variable names
           cat >> android/key.properties <<EOF
           storePassword=\$CM_KEYSTORE_PASSWORD
           keyPassword=\$CM_KEY_PASSWORD
@@ -142,14 +143,13 @@ workflows:
           # 8. Purge corrupted JAR cache
           rm -rf ~/.gradle/caches/jars-9
           
-          # 9. Ensure Android 15 Platform SDK is installed
+          # 9. Ensure Android 35 Platform is available
           echo "y" | sdkmanager "platforms;android-35"
 
           cd android
           chmod +x gradlew
           ./gradlew --version
           ./gradlew clean
-          # 10. Final build using JDK 21 and Gradle 8.7
           ./gradlew bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
