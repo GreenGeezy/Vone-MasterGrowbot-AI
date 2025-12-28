@@ -53,7 +53,7 @@ const App: React.FC = () => {
       if (Capacitor.isNativePlatform()) {
         try {
           await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
-          // Priority: Environmental build variable injected by CI
+          // Fetch API Key from environment variables injected during build
           const rcKey = process.env.REVENUECAT_API_KEY || "goog_kqOynvNRCABzUPrpfyFvlMvHUna";
           await Purchases.configure({ apiKey: rcKey });
           

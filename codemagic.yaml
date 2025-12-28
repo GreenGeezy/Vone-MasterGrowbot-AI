@@ -106,7 +106,7 @@ workflows:
           }
           EOF
 
-          # 4. Inject missing strings.xml to resolve resource link errors
+          # 4. Inject missing strings.xml
           mkdir -p android/app/src/main/res/values
           cat <<EOF > android/app/src/main/res/values/strings.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -122,7 +122,7 @@ workflows:
           sed -i '' 's|distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-8.7-all.zip|' android/gradle/wrapper/gradle-wrapper.properties
           
           # 6. Global Resolution Strategy (Kotlin Alignment & BouncyCastle)
-          # Fixes: Duplicate class CollectionsJDK8Kt and BouncyCastle Multi-release JAR corruption
+          # Fixes: Duplicate class CollectionsJDK8Kt by forcing 1.8.22 and excluding legacy modules
           cat <<EOF >> android/build.gradle
           allprojects {
               configurations.all {
@@ -136,13 +136,13 @@ workflows:
           }
           EOF
           
-          # 7. Global properties
+          # 7. Core properties
           echo "android.useAndroidX=true" > android/gradle.properties
           echo "android.enableJetifier=false" >> android/gradle.properties
 
       - name: Set up KeyStore
         script: |
-          # Use explicit CM UI variable names
+          # Use explicit CM UI variable names corresponding to 'mastergrowbot_keystore'
           cat >> android/key.properties <<EOF
           storePassword=\$CM_KEYSTORE_PASSWORD
           keyPassword=\$CM_KEY_PASSWORD
@@ -162,6 +162,7 @@ workflows:
           chmod +x gradlew
           ./gradlew --version
           ./gradlew clean
+          # 10. Build bundle with no daemon for cleaner memory usage
           ./gradlew bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
