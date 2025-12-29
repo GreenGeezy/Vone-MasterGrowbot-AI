@@ -160,12 +160,12 @@ workflows:
 
       - name: Set up KeyStore
         script: |
-          # Use CM UI variable names and ensure storeFile points to the actual temporary path
+          # Variable expansion is used here to write actual values into the properties file
           cat >> android/key.properties <<EOF
-          storePassword=\$CM_KEYSTORE_PASSWORD
-          keyPassword=\$CM_KEY_PASSWORD
-          keyAlias=\$CM_KEY_ALIAS
-          storeFile=\$CM_KEYSTORE_PATH
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=$CM_KEYSTORE_PATH
           EOF
 
       - name: Build Android App Bundle
