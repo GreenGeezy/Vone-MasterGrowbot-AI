@@ -1,4 +1,4 @@
-# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.2.0 - 2026 Edition)
+# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.3.0 - 2026 Edition)
 workflows:
   android-release:
     name: Android Release Build 2026
@@ -22,6 +22,7 @@ workflows:
         script: |
           npm install --legacy-peer-deps
           npm install @capacitor-community/in-app-review --legacy-peer-deps
+          npm install @revenuecat/purchases-capacitor --legacy-peer-deps
       - name: Web Build
         script: |
           npm run build
@@ -49,7 +50,7 @@ workflows:
           }
           EOF
 
-          # 3. Inject missing/empty app/build.gradle with Release Signing & Auto-Versioning
+          # 3. Inject missing/empty app/build.gradle with Release Signing, Auto-Versioning & Billing Library
           cat <<EOF > android/app/build.gradle
           apply plugin: 'com.android.application'
 
@@ -109,6 +110,7 @@ workflows:
               implementation "androidx.fragment:fragment:\$rootProject.ext.androidxFragmentVersion"
               implementation "androidx.core:core-splashscreen:\$rootProject.ext.coreSplashScreenVersion"
               implementation "androidx.webkit:webkit:\$rootProject.ext.androidxWebkitVersion"
+              implementation "com.android.billingclient:billing:7.0.0"
               implementation project(':capacitor-android')
               implementation project(':capacitor-cordova-android-plugins')
           }
@@ -123,7 +125,7 @@ workflows:
           }
           EOF
 
-          # 4. Inject Billing Permission into AndroidManifest.xml (Mandatory for 2026)
+          # 4. Inject Billing Permission into AndroidManifest.xml (Explicit for 2026 RevenueCat compatibility)
           sed -i '' 's|<manifest.*|<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="com.android.vending.BILLING" />|' android/app/src/main/AndroidManifest.xml
 
           # 5. Inject missing strings.xml
