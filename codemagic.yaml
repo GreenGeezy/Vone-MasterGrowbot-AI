@@ -20,6 +20,7 @@ workflows:
       - name: Install Dependencies
         script: |
           npm install --legacy-peer-deps
+          npm install @capacitor-community/in-app-review --legacy-peer-deps
       - name: Web Build
         script: |
           npm run build

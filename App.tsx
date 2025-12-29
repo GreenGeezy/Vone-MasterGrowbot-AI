@@ -11,10 +11,12 @@ import Onboarding from './screens/Onboarding';
 import OnboardingSummary from './screens/OnboardingSummary';
 import Splash from './screens/Splash';
 import DevTools from './components/DevTools';
-import { STRAIN_DATABASE } from './data/strains';
+import Growbot from './components/Growbot';
 import { supabase, getUserProfile } from './services/supabaseClient';
 import { Capacitor } from '@capacitor/core';
 import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor';
+import { InAppReview } from '@capacitor-community/in-app-review';
+import { Star, X } from 'lucide-react';
 
 const MOCK_PLANTS_DATA: Plant[] = [
   {
@@ -45,6 +47,7 @@ const App: React.FC = () => {
   const [isTrialActive, setIsTrialActive] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<AppScreen>(AppScreen.HOME);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [tasks, setTasks] = useState<Task[]>(DEFAULT_TASKS);
   const [plants, setPlants] = useState<Plant[]>(MOCK_PLANTS_DATA);
 
@@ -53,11 +56,9 @@ const App: React.FC = () => {
       if (Capacitor.isNativePlatform()) {
         try {
           await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
-          // Fetch API Key from environment variables injected during build
           const rcKey = process.env.REVENUECAT_API_KEY || "goog_kqOynvNRCABzUPrpfyFvlMvHUna";
           await Purchases.configure({ apiKey: rcKey });
           
-          // Sync existing session if available
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
             await Purchases.logIn({ appUserID: session.user.id });
@@ -117,6 +118,52 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  const checkReviewEligibility = () => {
+    const count = parseInt(localStorage.getItem('mgb_scan_count') || '0');
+    const lastPrompt = localStorage.getItem('mgb_last_prompt_date');
+    
+    // Logic 1: 3rd scan if never prompted
+    if (count === 3 && !lastPrompt) {
+      setShowReviewModal(true);
+      localStorage.setItem('mgb_last_prompt_date', new Date().toISOString());
+      return;
+    }
+
+    // Logic 2: 10+ scans AND 30 days since last prompt
+    if (count >= 10 && lastPrompt) {
+      const lastDate = new Date(lastPrompt);
+      const now = new Date();
+      const diffDays = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (diffDays >= 30) {
+        setShowReviewModal(true);
+        localStorage.setItem('mgb_last_prompt_date', new Date().toISOString());
+      }
+    }
+  };
+
+  const submitInternalRating = async (rating: number) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('app_ratings').insert({
+          user_id: user.id,
+          rating: rating,
+          created_at: new Date().toISOString()
+        });
+      }
+
+      // If positive (4 or 5 stars), trigger Native Store Review
+      if (rating >= 4 && Capacitor.isNativePlatform()) {
+        await InAppReview.requestReview();
+      }
+    } catch (e) {
+      console.error("Rating Error:", e);
+    } finally {
+      setShowReviewModal(false);
+    }
+  };
+
   const handleSplashGetStarted = () => setOnboardingStatus(OnboardingStep.QUIZ);
 
   const handleSessionActive = async () => {
@@ -169,6 +216,17 @@ const App: React.FC = () => {
       id: Date.now().toString(),
       date: new Date().toLocaleDateString(),
     };
+    
+    // Update local scan count if it was a diagnosis
+    if (entry.type === 'diagnosis') {
+      const currentCount = parseInt(localStorage.getItem('mgb_scan_count') || '0');
+      const newCount = currentCount + 1;
+      localStorage.setItem('mgb_scan_count', newCount.toString());
+      
+      // Delay eligibility check slightly for better UX after saving
+      setTimeout(checkReviewEligibility, 1500);
+    }
+
     setPlants(prev => {
         const updated = [...prev];
         if (updated.length > 0) {
@@ -224,14 +282,57 @@ const App: React.FC = () => {
         isTrialActive={isTrialActive} 
         currentStep={onboardingStatus} 
       />
+      
       <div className="h-full overflow-y-auto no-scrollbar pb-0">
         {renderContent()}
       </div>
+
       {onboardingStatus === OnboardingStep.COMPLETED && !showPaywall && (
         <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} />
       )}
+
       {showPaywall && (
         <Paywall onClose={() => setShowPaywall(false)} onAuthRedirect={() => setShowPaywall(false)} isMandatory={false} userProfile={userProfile} />
+      )}
+
+      {/* 2-STAGE REVIEW MODAL */}
+      {showReviewModal && (
+        <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl relative text-center overflow-hidden">
+            <button 
+              onClick={() => setShowReviewModal(false)}
+              className="absolute top-6 right-6 p-2 text-gray-300 hover:text-text-main"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="mb-6">
+              <Growbot size="xl" mood="happy" />
+            </div>
+
+            <h2 className="text-2xl font-black text-text-main mb-2 tracking-tight">How's your grow?</h2>
+            <p className="text-sm text-text-sub font-medium mb-8">
+              We're working hard to make our AI better for every grower. Please rate your experience!
+            </p>
+
+            <div className="flex justify-center gap-2 mb-4">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => submitInternalRating(star)}
+                  className="p-1 hover:scale-125 transition-transform duration-200"
+                >
+                  <Star size={36} className="text-yellow-400 fill-current" />
+                </button>
+              ))}
+            </div>
+            
+            <div className="flex justify-between px-2 text-[10px] font-bold text-gray-300 uppercase tracking-widest">
+              <span>Needs Help</span>
+              <span>Incredible</span>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
