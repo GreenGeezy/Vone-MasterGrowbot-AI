@@ -1,6 +1,7 @@
+# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.2.0 - 2026 Edition)
 workflows:
   android-release:
-    name: Android Release Build
+    name: Android Release Build 2026
     max_build_duration: 60
     instance_type: mac_mini_m1
     environment:
@@ -17,7 +18,7 @@ workflows:
         GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6g"
       node: latest
     scripts:
-      - name: Install Dependencies
+      - name: Install Dependencies (2026 Stack)
         script: |
           npm install --legacy-peer-deps
           npm install @capacitor-community/in-app-review --legacy-peer-deps
@@ -26,7 +27,7 @@ workflows:
           npm run build
       - name: Capacitor Sync & Self-Healing File Injection
         script: |
-          # 1. Clean sync to ensure fresh project structure
+          # 1. Clean sync to ensure fresh project structure for 2026 build
           rm -rf android
           npm install @capacitor/android --legacy-peer-deps
           npx cap add android
@@ -122,7 +123,7 @@ workflows:
           }
           EOF
 
-          # 4. Inject Billing Permission into AndroidManifest.xml
+          # 4. Inject Billing Permission into AndroidManifest.xml (Mandatory for 2026)
           sed -i '' 's|<manifest.*|<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="com.android.vending.BILLING" />|' android/app/src/main/AndroidManifest.xml
 
           # 5. Inject missing strings.xml
@@ -158,9 +159,9 @@ workflows:
           echo "android.useAndroidX=true" > android/gradle.properties
           echo "android.enableJetifier=false" >> android/gradle.properties
 
-      - name: Set up KeyStore
+      - name: Set up KeyStore (2026 Variable Fix)
         script: |
-          # Variable expansion is used here to write actual values into the properties file
+          # Use actual environment variable values without backslash escaping
           cat >> android/key.properties <<EOF
           storePassword=$CM_KEYSTORE_PASSWORD
           keyPassword=$CM_KEY_PASSWORD
@@ -173,7 +174,7 @@ workflows:
           # 9. Purge corrupted JAR cache
           rm -rf ~/.gradle/caches/jars-9
           
-          # 10. Ensure Android 35 Platform is available
+          # 10. Ensure Android 35 Platform is available (2026 Target)
           echo "y" | sdkmanager "platforms;android-35"
 
           cd android

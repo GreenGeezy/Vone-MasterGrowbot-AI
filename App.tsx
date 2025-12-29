@@ -28,7 +28,7 @@ const MOCK_PLANTS_DATA: Plant[] = [
     totalDays: 45,
     healthScore: 94,
     imageUri: 'https://picsum.photos/200/200?random=1',
-    nextHarvestDate: '2023-12-01',
+    nextHarvestDate: '2026-12-01',
     streak: 12,
     tasks: [],
     journal: [],
@@ -266,7 +266,7 @@ const App: React.FC = () => {
                   </div>
                </div>
              )}
-             <button onClick={() => setShowPaywall(true)} className="w-full py-3 bg-text-main text-white rounded-xl font-bold shadow-lg">Manage Pro Account</button>
+             <button onClick={() => setShowPaywall(true)} className="w-full py-3 bg-text-main text-white rounded-xl font-bold shadow-lg">Manage Pro Account (2026)</button>
           </div>
         );
       default: return <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onNavigateToPlant={() => {}} />;
@@ -312,7 +312,7 @@ const App: React.FC = () => {
 
             <h2 className="text-2xl font-black text-text-main mb-2 tracking-tight">How's your grow?</h2>
             <p className="text-sm text-text-sub font-medium mb-8">
-              We're working hard to make our AI better for every grower. Please rate your experience!
+              We're working hard to make our AI better for every grower in 2026. Please rate your experience!
             </p>
 
             <div className="flex justify-center gap-2 mb-4">
