@@ -47,20 +47,35 @@ workflows:
           }
           EOF
 
-          # 3. Inject missing/empty app/build.gradle with modern Gradle syntax
+          # 3. Inject missing/empty app/build.gradle with Release Signing & Auto-Versioning
           cat <<EOF > android/app/build.gradle
           apply plugin: 'com.android.application'
+
+          def keystorePropertiesFile = rootProject.file('key.properties')
+          def keystoreProperties = new Properties()
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+          }
 
           android {
               namespace "${PACKAGE_NAME}"
               compileSdk rootProject.ext.compileSdkVersion
 
+              signingConfigs {
+                  release {
+                      storeFile file(keystoreProperties['storeFile'])
+                      storePassword keystoreProperties['storePassword']
+                      keyAlias keystoreProperties['keyAlias']
+                      keyPassword keystoreProperties['keyPassword']
+                  }
+              }
+
               defaultConfig {
                   applicationId "${PACKAGE_NAME}"
                   minSdk rootProject.ext.minSdkVersion
                   targetSdk rootProject.ext.targetSdkVersion
-                  versionCode 1
-                  versionName "1.0"
+                  versionCode ${BUILD_NUMBER:-1}
+                  versionName "1.0.${BUILD_NUMBER:-1}"
                   testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
               }
 
@@ -68,7 +83,7 @@ workflows:
                   release {
                       minifyEnabled false
                       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                      signingConfig signingConfigs.debug
+                      signingConfig signingConfigs.release
                   }
               }
 
@@ -106,7 +121,10 @@ workflows:
           }
           EOF
 
-          # 4. Inject missing strings.xml
+          # 4. Inject Billing Permission into AndroidManifest.xml
+          sed -i '' 's|<manifest.*|<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="com.android.vending.BILLING" />|' android/app/src/main/AndroidManifest.xml
+
+          # 5. Inject missing strings.xml
           mkdir -p android/app/src/main/res/values
           cat <<EOF > android/app/src/main/res/values/strings.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -118,11 +136,10 @@ workflows:
           </resources>
           EOF
 
-          # 5. Force Gradle Wrapper to 8.7 (Multi-release JAR support)
+          # 6. Force Gradle Wrapper to 8.7 (Multi-release JAR support)
           sed -i '' 's|distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-8.7-all.zip|' android/gradle/wrapper/gradle-wrapper.properties
           
-          # 6. Global Resolution Strategy (Kotlin Alignment & BouncyCastle)
-          # Fixes: Duplicate class CollectionsJDK8Kt by forcing 1.8.22 and excluding legacy modules
+          # 7. Global Resolution Strategy (Kotlin Alignment & BouncyCastle)
           cat <<EOF >> android/build.gradle
           allprojects {
               configurations.all {
@@ -136,13 +153,13 @@ workflows:
           }
           EOF
           
-          # 7. Core properties
+          # 8. Core properties
           echo "android.useAndroidX=true" > android/gradle.properties
           echo "android.enableJetifier=false" >> android/gradle.properties
 
       - name: Set up KeyStore
         script: |
-          # Use explicit CM UI variable names corresponding to 'mastergrowbot_keystore'
+          # Use CM UI variable names and ensure storeFile points to the actual temporary path
           cat >> android/key.properties <<EOF
           storePassword=\$CM_KEYSTORE_PASSWORD
           keyPassword=\$CM_KEY_PASSWORD
@@ -152,17 +169,17 @@ workflows:
 
       - name: Build Android App Bundle
         script: |
-          # 8. Purge corrupted JAR cache
+          # 9. Purge corrupted JAR cache
           rm -rf ~/.gradle/caches/jars-9
           
-          # 9. Ensure Android 35 Platform is available
+          # 10. Ensure Android 35 Platform is available
           echo "y" | sdkmanager "platforms;android-35"
 
           cd android
           chmod +x gradlew
           ./gradlew --version
           ./gradlew clean
-          # 10. Build bundle with no daemon for cleaner memory usage
+          # 11. Build bundle with no daemon for cleaner memory usage
           ./gradlew bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
