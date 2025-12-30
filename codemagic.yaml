@@ -1,4 +1,4 @@
-# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.4.0 - 2026 Edition)
+# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.5.0 - 2026 Edition)
 workflows:
   android-release:
     name: Android Release Build 2026
@@ -127,11 +127,8 @@ workflows:
           }
           EOF
 
-          # 4. Inject Permissions into AndroidManifest.xml (Safe patch)
-          # Uses 'a' (append) to add permissions after the <manifest> tag without deleting attributes
-          sed -i '' '/<manifest/a\
-    <uses-permission android:name="android.permission.INTERNET" />\
-    <uses-permission android:name="com.android.vending.BILLING" />' android/app/src/main/AndroidManifest.xml
+          # 4. Inject Permissions into AndroidManifest.xml (Safe patch - Single Line fix for YAML 2026)
+          sed -i '' '/<manifest/a\\ \n    <uses-permission android:name="android.permission.INTERNET" />\\ \n    <uses-permission android:name="com.android.vending.BILLING" />' android/app/src/main/AndroidManifest.xml
 
           # 5. Inject missing strings.xml
           mkdir -p android/app/src/main/res/values
