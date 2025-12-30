@@ -1,4 +1,4 @@
-# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.5.0 - 2026 Edition)
+# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.6.0 - 2026 Edition)
 workflows:
   android-release:
     name: Android Release Build 2026
@@ -10,8 +10,9 @@ workflows:
       groups:
         - Production
       vars:
-        GEMINI_API_KEY: ${GEMINI_API_KEY}
-        REVENUECAT_API_KEY: ${REVENUECAT_API_KEY}
+        # Renamed with VITE_ prefix to ensure Vite loadEnv correctly injects into frontend
+        VITE_GEMINI_API_KEY: ${GEMINI_API_KEY}
+        VITE_REVENUECAT_API_KEY: ${REVENUECAT_API_KEY}
         PACKAGE_NAME: "com.mastergrowbot.app"
         JAVA_HOME: /Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home
         JAVA_TOOL_OPTIONS: "-Xmx6g"
@@ -20,23 +21,25 @@ workflows:
     scripts:
       - name: Install Dependencies (2026 Stack)
         script: |
+          # Mandatory Clean: Prevent cache-related blank screen errors
+          npm cache clean --force
           npm install --legacy-peer-deps
-          # Mandatory: Ensure all core Capacitor plugins are installed for the native build
+          # Ensure critical native bridges are installed
           npm install @capacitor-community/in-app-review @revenuecat/purchases-capacitor --legacy-peer-deps
       - name: Web Build
         script: |
-          # Generate web assets before Capacitor sync to avoid white screen (empty assets)
+          # Build frontend assets before native sync
           npm run build
       - name: Capacitor Sync & Self-Healing File Injection
         script: |
-          # 1. Clean sync to ensure fresh project structure for 2026 build
+          # 1. Clean sync to ensure fresh project structure
           rm -rf android
           npm install @capacitor/android --legacy-peer-deps
           npx cap add android
-          # Mandatory: Sync runs AFTER npm run build so dist/ contents are copied to native assets
+          # Sync runs AFTER npm run build to copy /dist to /android/app/src/main/assets/public
           npx cap sync android
 
-          # 2. Inject variables.gradle with SDK 35 (Android 15) and Min SDK 24
+          # 2. Inject variables.gradle with SDK 35 (Android 15)
           cat <<EOF > android/variables.gradle
           ext {
               minSdkVersion = 24
@@ -52,7 +55,7 @@ workflows:
           }
           EOF
 
-          # 3. Inject missing/empty app/build.gradle with Release Signing, Auto-Versioning & Billing Library
+          # 3. Inject app/build.gradle with Signing, Auto-Versioning & Billing
           cat <<EOF > android/app/build.gradle
           apply plugin: 'com.android.application'
 
@@ -127,10 +130,10 @@ workflows:
           }
           EOF
 
-          # 4. Inject Permissions into AndroidManifest.xml (Safe patch - Single Line fix for YAML 2026)
-          sed -i '' '/<manifest/a\\ \n    <uses-permission android:name="android.permission.INTERNET" />\\ \n    <uses-permission android:name="com.android.vending.BILLING" />' android/app/src/main/AndroidManifest.xml
+          # 4. Safe Manifest Patch: Uses perl for robust multi-line insertion in YAML
+          perl -i -pe 's/<manifest/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">\n    <uses-permission android:name="android.permission.INTERNET" \/>\n    <uses-permission android:name="com.android.vending.BILLING" \/>/' android/app/src/main/AndroidManifest.xml
 
-          # 5. Inject missing strings.xml
+          # 5. Inject strings.xml
           mkdir -p android/app/src/main/res/values
           cat <<EOF > android/app/src/main/res/values/strings.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -142,10 +145,10 @@ workflows:
           </resources>
           EOF
 
-          # 6. Force Gradle Wrapper to 8.7 (Multi-release JAR support)
+          # 6. Gradle Wrapper 8.7
           sed -i '' 's|distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-8.7-all.zip|' android/gradle/wrapper/gradle-wrapper.properties
           
-          # 7. Global Resolution Strategy (Kotlin Alignment & BouncyCastle)
+          # 7. Resolution Strategy
           cat <<EOF >> android/build.gradle
           allprojects {
               configurations.all {
@@ -165,7 +168,6 @@ workflows:
 
       - name: Set up KeyStore (2026 Variable Fix)
         script: |
-          # Use actual environment variable values without backslash escaping
           cat >> android/key.properties <<EOF
           storePassword=$CM_KEYSTORE_PASSWORD
           keyPassword=$CM_KEY_PASSWORD
@@ -175,17 +177,11 @@ workflows:
 
       - name: Build Android App Bundle
         script: |
-          # 9. Purge corrupted JAR cache
           rm -rf ~/.gradle/caches/jars-9
-          
-          # 10. Ensure Android 35 Platform is available (2026 Target)
           echo "y" | sdkmanager "platforms;android-35"
-
           cd android
           chmod +x gradlew
-          ./gradlew --version
           ./gradlew clean
-          # 11. Build bundle with no daemon for cleaner memory usage
           ./gradlew bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
