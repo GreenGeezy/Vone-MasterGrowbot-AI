@@ -1,4 +1,4 @@
-# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.3.0 - 2026 Edition)
+# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.4.0 - 2026 Edition)
 workflows:
   android-release:
     name: Android Release Build 2026
@@ -21,10 +21,11 @@ workflows:
       - name: Install Dependencies (2026 Stack)
         script: |
           npm install --legacy-peer-deps
-          npm install @capacitor-community/in-app-review --legacy-peer-deps
-          npm install @revenuecat/purchases-capacitor --legacy-peer-deps
+          # Mandatory: Ensure all core Capacitor plugins are installed for the native build
+          npm install @capacitor-community/in-app-review @revenuecat/purchases-capacitor --legacy-peer-deps
       - name: Web Build
         script: |
+          # Generate web assets before Capacitor sync to avoid white screen (empty assets)
           npm run build
       - name: Capacitor Sync & Self-Healing File Injection
         script: |
@@ -32,6 +33,7 @@ workflows:
           rm -rf android
           npm install @capacitor/android --legacy-peer-deps
           npx cap add android
+          # Mandatory: Sync runs AFTER npm run build so dist/ contents are copied to native assets
           npx cap sync android
 
           # 2. Inject variables.gradle with SDK 35 (Android 15) and Min SDK 24
@@ -125,8 +127,11 @@ workflows:
           }
           EOF
 
-          # 4. Inject Billing Permission into AndroidManifest.xml (Explicit for 2026 RevenueCat compatibility)
-          sed -i '' 's|<manifest.*|<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="com.android.vending.BILLING" />|' android/app/src/main/AndroidManifest.xml
+          # 4. Inject Permissions into AndroidManifest.xml (Safe patch)
+          # Uses 'a' (append) to add permissions after the <manifest> tag without deleting attributes
+          sed -i '' '/<manifest/a\
+    <uses-permission android:name="android.permission.INTERNET" />\
+    <uses-permission android:name="com.android.vending.BILLING" />' android/app/src/main/AndroidManifest.xml
 
           # 5. Inject missing strings.xml
           mkdir -p android/app/src/main/res/values
