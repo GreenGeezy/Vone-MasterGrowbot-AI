@@ -10,7 +10,6 @@ workflows:
       groups:
         - Production
       vars:
-        # Renamed with VITE_ prefix to ensure Vite loadEnv correctly injects into frontend
         VITE_GEMINI_API_KEY: ${GEMINI_API_KEY}
         VITE_REVENUECAT_API_KEY: ${REVENUECAT_API_KEY}
         VITE_SUPABASE_URL: ${SUPABASE_URL}
@@ -23,10 +22,8 @@ workflows:
     scripts:
       - name: Install Dependencies (2026 Stack)
         script: |
-          # Mandatory Clean: Prevent cache-related blank screen errors
           npm cache clean --force
           npm install --legacy-peer-deps
-          # Ensure critical native bridges are installed
           npm install @capacitor-community/in-app-review @revenuecat/purchases-capacitor --legacy-peer-deps
       - name: Web Build
         script: |
@@ -38,10 +35,53 @@ workflows:
           rm -rf android
           npm install @capacitor/android --legacy-peer-deps
           npx cap add android
-          # Sync runs strictly AFTER npm run build to copy /dist to /android/app/src/main/assets/public
           npx cap sync android
 
-          # 2. Inject variables.gradle with SDK 35 (Android 15)
+          # 2. Inject google-services.json
+          mkdir -p android/app
+          cat <<EOF > android/app/google-services.json
+          {
+            "project_info": {
+              "project_number": "360575943200",
+              "project_id": "gen-lang-client-0483274603",
+              "storage_bucket": "gen-lang-client-0483274603.firebasestorage.app"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:360575943200:android:9d2fad05b843bffa4d3245",
+                  "android_client_info": {
+                    "package_name": "com.mastergrowbot.app"
+                  }
+                },
+                "oauth_client": [
+                  {
+                    "client_id": "360575943200-mq17ju3a221117rgu96v7as1b4o49rq8.apps.googleusercontent.com",
+                    "client_type": 3
+                  }
+                ],
+                "api_key": [
+                  {
+                    "current_key": "AIzaSyBRIK10W7TOBUqxe9YjEXlGVkk0V43Nt9o"
+                  }
+                ],
+                "services": {
+                  "appinvite_service": {
+                    "other_platform_oauth_client": [
+                      {
+                        "client_id": "360575943200-mq17ju3a221117rgu96v7as1b4o49rq8.apps.googleusercontent.com",
+                        "client_type": 3
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+
+          # 3. Inject variables.gradle
           cat <<EOF > android/variables.gradle
           ext {
               minSdkVersion = 24
@@ -57,9 +97,33 @@ workflows:
           }
           EOF
 
-          # 3. Inject app/build.gradle with Signing, Auto-Versioning & Billing
+          # 4. Inject root build.gradle with Google Services plugin
+          cat <<EOF > android/build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.1'
+                  classpath 'com.google.gms:google-services:4.4.1'
+              }
+          }
+          plugins {
+              id "com.google.gms.google-services" version "4.4.4" apply false
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+
+          # 5. Inject app build.gradle with Firebase SDK
           cat <<EOF > android/app/build.gradle
           apply plugin: 'com.android.application'
+          apply plugin: 'com.google.gms.google-services'
 
           def keystorePropertiesFile = rootProject.file('key.properties')
           def keystoreProperties = new Properties()
@@ -86,7 +150,6 @@ workflows:
                   targetSdk rootProject.ext.targetSdkVersion
                   versionCode ${BUILD_NUMBER:-1}
                   versionName "1.0.${BUILD_NUMBER:-1}"
-                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
               }
 
               buildTypes {
@@ -103,36 +166,21 @@ workflows:
               }
           }
 
-          repositories {
-              flatDir {
-                  dirs 'libs'
-              }
-          }
-
           dependencies {
               implementation fileTree(dir: 'libs', include: ['*.jar'])
               implementation "androidx.appcompat:appcompat:\$rootProject.ext.androidxAppCompatVersion"
-              implementation "androidx.coordinatorlayout:coordinatorlayout:\$rootProject.ext.androidxCoordinatorLayoutVersion"
               implementation "androidx.core:core:\$rootProject.ext.androidxCoreVersion"
-              implementation "androidx.fragment:fragment:\$rootProject.ext.androidxFragmentVersion"
               implementation "androidx.core:core-splashscreen:\$rootProject.ext.coreSplashScreenVersion"
               implementation "androidx.webkit:webkit:\$rootProject.ext.androidxWebkitVersion"
               implementation "com.android.billingclient:billing:7.0.0"
+              implementation platform('com.google.firebase:firebase-bom:34.7.0')
+              implementation 'com.google.firebase:firebase-analytics'
               implementation project(':capacitor-android')
               implementation project(':capacitor-cordova-android-plugins')
           }
-
-          try {
-              def servicesJSON = file('google-services.json')
-              if (servicesJSON.text) {
-                  apply plugin: 'com.google.gms.google-services'
-              }
-          } catch(Exception e) {
-              logger.info("google-services.json not found, skipping Google Services plugin")
-          }
           EOF
 
-          # 4. Full Manifest Overwrite: Fixes blank screen by ensuring proper intent filters and permissions
+          # 6. Overwrite Manifest with required permissions and Intent Filter
           cat <<EOF > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -167,7 +215,7 @@ workflows:
                           <action android:name="android.intent.action.VIEW" />
                           <category android:name="android.intent.category.DEFAULT" />
                           <category android:name="android.intent.category.BROWSABLE" />
-                          <data android:scheme="com.mastergrowbot.app" />
+                          <data android:scheme="mastergrowbot" android:host="callback" />
                       </intent-filter>
 
                   </activity>
@@ -185,40 +233,7 @@ workflows:
           </manifest>
           EOF
 
-          # 5. Inject strings.xml
-          mkdir -p android/app/src/main/res/values
-          cat <<EOF > android/app/src/main/res/values/strings.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">MasterGrowbot AI</string>
-              <string name="title_activity_main">MasterGrowbot AI</string>
-              <string name="package_name">com.mastergrowbot.app</string>
-              <string name="custom_url_scheme">com.mastergrowbot.app</string>
-          </resources>
-          EOF
-
-          # 6. Gradle Wrapper 8.7
-          sed -i '' 's|distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-8.7-all.zip|' android/gradle/wrapper/gradle-wrapper.properties
-          
-          # 7. Resolution Strategy
-          cat <<EOF >> android/build.gradle
-          allprojects {
-              configurations.all {
-                  resolutionStrategy {
-                      force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
-                      force 'org.bouncycastle:bcprov-jdk18on:1.79'
-                  }
-                  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
-                  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
-              }
-          }
-          EOF
-          
-          # 8. Core properties
-          echo "android.useAndroidX=true" > android/gradle.properties
-          echo "android.enableJetifier=false" >> android/gradle.properties
-
-      - name: Set up KeyStore (2026 Variable Fix)
+      - name: Set up KeyStore
         script: |
           cat >> android/key.properties <<EOF
           storePassword=$CM_KEYSTORE_PASSWORD
@@ -229,8 +244,6 @@ workflows:
 
       - name: Build Android App Bundle
         script: |
-          rm -rf ~/.gradle/caches/jars-9
-          echo "y" | sdkmanager "platforms;android-35"
           cd android
           chmod +x gradlew
           ./gradlew clean

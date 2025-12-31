@@ -1,8 +1,6 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
 
-// Environment variables are injected via Vite's 'define' block (with fallbacks from vite.config.ts)
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
 
@@ -10,8 +8,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn("Supabase credentials missing. Auth and Database features will be disabled.");
 }
 
-// Defensive initialization: only create the client if credentials exist.
-// This prevents the "supabaseUrl is required" error during the module load.
 export const supabase = (supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
@@ -21,12 +17,13 @@ export const supabase = (supabaseUrl && supabaseAnonKey)
  */
 export const signInWithGoogle = async () => {
   if (!supabase) {
-    console.error("Supabase client not initialized. Check your VITE_SUPABASE_ANON_KEY.");
+    console.error("Supabase client not initialized.");
     return { data: null, error: new Error("Supabase configuration missing") };
   }
 
+  // Matching the intent filter scheme defined in the manifest
   const redirectUrl = Capacitor.isNativePlatform() 
-    ? 'com.mastergrowbot.app://callback' 
+    ? 'mastergrowbot://callback' 
     : window.location.origin;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
