@@ -1,0 +1,30 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // Essential for Capacitor and Android builds
+        classpath 'com.android.tools.build:gradle:8.2.1'
+        // Essential for Google Services/Firebase logic
+        classpath 'com.google.gms:google-services:4.4.2' 
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    // CRITICAL FIX: Forces stable Bouncy Castle (1.77) to resolve "Jar creation" errors
+    configurations.all {
+        resolutionStrategy {
+            force 'org.bouncycastle:bcprov-jdk18on:1.77'
+        }
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
