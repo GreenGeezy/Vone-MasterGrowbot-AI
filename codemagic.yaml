@@ -28,7 +28,7 @@ workflows:
       - name: Web Build
         script: |
           npm run build
-      - name: Capacitor Sync & Buildscript Injection
+      - name: Capacitor Sync & Self-Healing Config
         script: |
           # 1. Ensure android project is present and synced
           npx cap add android || true
@@ -69,14 +69,39 @@ workflows:
           }
           EOF
 
-          # 3. Inject classpath into root build.gradle using sed (macOS compatibility)
-          sed -i '' '/dependencies {/a \        classpath "com.google.gms:google-services:4.4.2"' android/build.gradle
+          # 3. Complete Root build.gradle replacement (Fixes Bouncy Castle & Google Services)
+          cat <<EOF > android/build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.1'
+                  classpath 'com.google.gms:google-services:4.4.2'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              configurations.all {
+                  resolutionStrategy {
+                      force 'org.bouncycastle:bcprov-jdk18on:1.77'
+                  }
+              }
+          }
+          task clean(type: Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
 
           # 4. Inject Firebase dependencies and apply plugin in app/build.gradle
           sed -i '' '/dependencies {/a \    implementation platform("com.google.firebase:firebase-bom:34.7.0")\n    implementation "com.google.firebase:firebase-analytics"' android/app/build.gradle
-          echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
+          grep -q "com.google.gms.google-services" android/app/build.gradle || echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
 
-          # 5. Overwrite AndroidManifest.xml for permissions and auth callback
+          # 5. Overwrite AndroidManifest.xml for permissions
           cat <<EOF > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -85,7 +110,6 @@ workflows:
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-permission android:name="android.permission.RECORD_AUDIO" />
               <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
@@ -93,7 +117,6 @@ workflows:
                   android:roundIcon="@mipmap/ic_launcher_round"
                   android:supportsRtl="true"
                   android:theme="@style/AppTheme">
-
                   <activity
                       android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
                       android:name=".MainActivity"
@@ -101,21 +124,17 @@ workflows:
                       android:theme="@style/AppTheme.NoActionBarLaunch"
                       android:launchMode="singleTop"
                       android:exported="true">
-
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
-
                       <intent-filter>
                           <action android:name="android.intent.action.VIEW" />
                           <category android:name="android.intent.category.DEFAULT" />
                           <category android:name="android.intent.category.BROWSABLE" />
                           <data android:scheme="mastergrowbot" android:host="callback" />
                       </intent-filter>
-
                   </activity>
-
                   <provider
                       android:name="androidx.core.content.FileProvider"
                       android:authorities="\${applicationId}.fileprovider"
@@ -140,11 +159,11 @@ workflows:
 
       - name: Build Android App Bundle
         script: |
+          rm -rf ~/.gradle/caches/
+          rm -rf android/.gradle
           cd android
           chmod +x gradlew
           ./gradlew clean
-          # Cache-Cleanup step: Resolve concurrent execution errors by clearing corrupted Gradle caches
-          rm -rf ~/.gradle/caches/
           ./gradlew bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
