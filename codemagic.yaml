@@ -20,21 +20,18 @@ workflows:
         GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6g"
       node: latest
     scripts:
-      - name: Install Dependencies (2026 Stack)
+      - name: Install Dependencies
         script: |
           npm cache clean --force
           npm install --legacy-peer-deps
-          npm install @capacitor-community/in-app-review @revenuecat/purchases-capacitor --legacy-peer-deps
+          npm install @capacitor/android @revenuecat/purchases-capacitor @capacitor-community/in-app-review --legacy-peer-deps
       - name: Web Build
         script: |
-          # Build frontend assets strictly BEFORE native sync
           npm run build
-      - name: Capacitor Sync & Self-Healing File Injection
+      - name: Capacitor Sync & Buildscript Injection
         script: |
-          # 1. Clean sync to ensure fresh project structure
-          rm -rf android
-          npm install @capacitor/android --legacy-peer-deps
-          npx cap add android
+          # 1. Ensure android project is present and synced
+          npx cap add android || true
           npx cap sync android
 
           # 2. Inject google-services.json
@@ -50,9 +47,7 @@ workflows:
               {
                 "client_info": {
                   "mobilesdk_app_id": "1:360575943200:android:9d2fad05b843bffa4d3245",
-                  "android_client_info": {
-                    "package_name": "com.mastergrowbot.app"
-                  }
+                  "android_client_info": { "package_name": "com.mastergrowbot.app" }
                 },
                 "oauth_client": [
                   {
@@ -60,18 +55,11 @@ workflows:
                     "client_type": 3
                   }
                 ],
-                "api_key": [
-                  {
-                    "current_key": "AIzaSyBRIK10W7TOBUqxe9YjEXlGVkk0V43Nt9o"
-                  }
-                ],
+                "api_key": [ { "current_key": "AIzaSyBRIK10W7TOBUqxe9YjEXlGVkk0V43Nt9o" } ],
                 "services": {
                   "appinvite_service": {
                     "other_platform_oauth_client": [
-                      {
-                        "client_id": "360575943200-mq17ju3a221117rgu96v7as1b4o49rq8.apps.googleusercontent.com",
-                        "client_type": 3
-                      }
+                      { "client_id": "360575943200-mq17ju3a221117rgu96v7as1b4o49rq8.apps.googleusercontent.com", "client_type": 3 }
                     ]
                   }
                 }
@@ -81,106 +69,18 @@ workflows:
           }
           EOF
 
-          # 3. Inject variables.gradle
-          cat <<EOF > android/variables.gradle
-          ext {
-              minSdkVersion = 24
-              compileSdkVersion = 35
-              targetSdkVersion = 35
-              androidxActivityVersion = '1.9.2'
-              androidxAppCompatVersion = '1.7.0'
-              androidxCoordinatorLayoutVersion = '1.2.0'
-              androidxCoreVersion = '1.12.0'
-              androidxFragmentVersion = '1.6.2'
-              coreSplashScreenVersion = '1.0.1'
-              androidxWebkitVersion = '1.9.0'
-          }
-          EOF
+          # 3. Inject classpath via sed into root build.gradle
+          # Using sed to find the first dependencies block and append the classpath
+          sed -i '' '/dependencies {/a \        classpath "com.google.gms:google-services:4.4.2"' android/build.gradle
 
-          # 4. Inject root build.gradle with Google Services plugin
-          cat <<EOF > android/build.gradle
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.1'
-                  classpath 'com.google.gms:google-services:4.4.1'
-              }
-          }
-          plugins {
-              id "com.google.gms.google-services" version "4.4.4" apply false
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          EOF
+          # 4. Inject Firebase BoM and apply plugin in app/build.gradle
+          # Add dependencies
+          sed -i '' '/dependencies {/a \    implementation platform("com.google.firebase:firebase-bom:34.7.0")\n    implementation "com.google.firebase:firebase-analytics"' android/app/build.gradle
+          
+          # Append apply plugin to the very bottom
+          echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
 
-          # 5. Inject app build.gradle with Firebase SDK
-          cat <<EOF > android/app/build.gradle
-          apply plugin: 'com.android.application'
-          apply plugin: 'com.google.gms.google-services'
-
-          def keystorePropertiesFile = rootProject.file('key.properties')
-          def keystoreProperties = new Properties()
-          if (keystorePropertiesFile.exists()) {
-              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-          }
-
-          android {
-              namespace "${PACKAGE_NAME}"
-              compileSdk rootProject.ext.compileSdkVersion
-
-              signingConfigs {
-                  release {
-                      storeFile file(keystoreProperties['storeFile'])
-                      storePassword keystoreProperties['storePassword']
-                      keyAlias keystoreProperties['keyAlias']
-                      keyPassword keystoreProperties['keyPassword']
-                  }
-              }
-
-              defaultConfig {
-                  applicationId "${PACKAGE_NAME}"
-                  minSdk rootProject.ext.minSdkVersion
-                  targetSdk rootProject.ext.targetSdkVersion
-                  versionCode ${BUILD_NUMBER:-1}
-                  versionName "1.0.${BUILD_NUMBER:-1}"
-              }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                      signingConfig signingConfigs.release
-                  }
-              }
-
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_21
-                  targetCompatibility JavaVersion.VERSION_21
-              }
-          }
-
-          dependencies {
-              implementation fileTree(dir: 'libs', include: ['*.jar'])
-              implementation "androidx.appcompat:appcompat:\$rootProject.ext.androidxAppCompatVersion"
-              implementation "androidx.core:core:\$rootProject.ext.androidxCoreVersion"
-              implementation "androidx.core:core-splashscreen:\$rootProject.ext.coreSplashScreenVersion"
-              implementation "androidx.webkit:webkit:\$rootProject.ext.androidxWebkitVersion"
-              implementation "com.android.billingclient:billing:7.0.0"
-              implementation platform('com.google.firebase:firebase-bom:34.7.0')
-              implementation 'com.google.firebase:firebase-analytics'
-              implementation project(':capacitor-android')
-              implementation project(':capacitor-cordova-android-plugins')
-          }
-          EOF
-
-          # 6. Overwrite Manifest with required permissions and Intent Filter
+          # 5. Overwrite AndroidManifest.xml with mandatory permissions
           cat <<EOF > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -246,7 +146,6 @@ workflows:
         script: |
           cd android
           chmod +x gradlew
-          ./gradlew clean
           ./gradlew bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab

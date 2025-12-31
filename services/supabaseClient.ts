@@ -21,7 +21,6 @@ export const signInWithGoogle = async () => {
     return { data: null, error: new Error("Supabase configuration missing") };
   }
 
-  // Matching the intent filter scheme defined in the manifest
   const redirectUrl = Capacitor.isNativePlatform() 
     ? 'mastergrowbot://callback' 
     : window.location.origin;
