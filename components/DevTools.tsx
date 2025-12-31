@@ -22,7 +22,9 @@ const DevTools: React.FC<DevToolsProps> = ({
   const [isOpen, setIsOpen] = useState(false);
 
   const handleHardLogout = async () => {
-    await supabase.auth.signOut();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
     window.location.reload();
   };
 

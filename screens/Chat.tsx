@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Image as ImageIcon, Sparkles, AudioLines, X, Activity, Power, BookmarkPlus, Settings2, Check } from 'lucide-react';
 import { chatWithCoach } from '../services/geminiService';
@@ -19,32 +20,30 @@ const SUGGESTED_PROMPTS = [
 ];
 
 const VOICE_OPTIONS = [
-  { id: 'Aoede', label: 'Coach Sarah', type: 'Female' },
-  { id: 'Charon', label: 'Coach Mike', type: 'Male' },
-  { id: 'Fenrir', label: 'MasterGrowbot', type: 'Robot' },
+  { id: 'Kore', label: 'Coach Kore', type: 'Calm' },
+  { id: 'Charon', label: 'Coach Mike', type: 'Bold' },
+  { id: 'Fenrir', label: 'MasterGrowbot', type: 'Synthetic' },
+  { id: 'Puck', label: 'Coach Puck', type: 'Energetic' },
 ];
 
 const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: '1', text: "Greetings. I am MasterGrowbot, your expert cultivation teacher. How is your garden thriving today?", isUser: false, timestamp: Date.now() }
+    { id: '1', text: "Greetings. I am MasterGrowbot. How is your garden thriving today?", isUser: false, timestamp: Date.now() }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // Live API State
   const [isLive, setIsLive] = useState(false);
   const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
   const [liveTranscript, setLiveTranscript] = useState("");
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   
-  // Voice Settings State
-  const [selectedVoice, setSelectedVoice] = useState('Aoede');
+  const [selectedVoice, setSelectedVoice] = useState('Kore');
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   
   const endRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<ChatMessage[]>(messages); 
 
-  // Audio & Live API Refs
   const audioContextRef = useRef<AudioContext | null>(null);
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const sessionRef = useRef<any>(null);
@@ -71,7 +70,6 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
     return () => {
       stopLiveSession();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSend = async (text: string) => {
@@ -87,7 +85,6 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       parts: [{ text: m.text }]
     }));
     
-    // Create context object
     const context = {
         plant: plant,
         userProfile: userProfile || undefined
@@ -142,30 +139,18 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       }});
       streamRef.current = stream;
       
-      // --- DYNAMIC PERSONA GENERATION ---
-      let baseInstruction = "";
-      let styleInstruction = "";
-      
+      let baseInstruction = `You are MasterGrowbot, a expert cultivation assistant. You are helping a user with their garden. `;
       if (selectedVoice === 'Fenrir') {
-         // ROBOTIC / FUTURISTIC PERSONA
-         baseInstruction = "You are MasterGrowbot, a highly advanced, futuristic AI unit dedicated to precision cannabis cultivation. Speak in a robotic, precise, and data-driven manner. Use phrases like 'Affirmative', 'Scanning data', 'Parameters optimized', and 'Protocol complete'. Refer to the user as 'Grower' or 'Operator'. ";
-         styleInstruction = "Maintain a steady, synthetic tone. Avoid casual contractions (e.g., say 'do not' instead of 'don't'). Focus on technical accuracy, efficiency, and logic. Be helpful but distinctly artificial.";
+         baseInstruction += "Speak in a slightly technical, precise manner. Affirmative protocols active. ";
       } else {
-         // HUMAN COACH PERSONA (Default)
-         baseInstruction = "You are MasterGrowbot, the world's best cannabis cultivation teacher. You are friendly, encouraging, and an expert in botany and horticulture. ";
-         styleInstruction = "Speak like a helpful, warm mentor. Use natural language and standard growing terms like 'nugs', 'flush', and 'terps'. Be conversational and empathetic.";
+         baseInstruction += "Be friendly and encouraging. ";
       }
 
-      let contextInstruction = "";
       if (userProfile) {
-          contextInstruction += `User Profile: ${userProfile.experience} experience, growing ${userProfile.grow_mode} in a ${userProfile.space} space. Goal: ${userProfile.goal}. `;
+          baseInstruction += `User is growing ${userProfile.grow_mode} with ${userProfile.experience} experience. `;
       }
       
-      if (plant?.strainDetails) {
-          contextInstruction += `Target Plant: ${plant.strainDetails.name} (${plant.strainDetails.type}), ${plant.stage} stage. `;
-      }
-      
-      const fullSystemInstruction = `${baseInstruction} ${contextInstruction} ${styleInstruction} Keep answers concise and actionable for voice chat.`;
+      const fullSystemInstruction = `${baseInstruction} Be concise for voice chat.`;
 
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -182,7 +167,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
           onopen: () => {
             setIsLive(true);
             setConnectionState('connected');
-            setLiveTranscript(selectedVoice === 'Fenrir' ? "System Online. Listening..." : "Listening...");
+            setLiveTranscript("Listening...");
             
             const source = inputCtx.createMediaStreamSource(stream);
             sourceRef.current = source;
@@ -250,7 +235,6 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
        sourcesRef.current.forEach((source) => { try { source.stop(); } catch (e) {} });
        sourcesRef.current.clear();
        nextStartTimeRef.current = ctx.currentTime;
-       setIsUserSpeaking(true);
     }
 
     if (serverContent.turnComplete) {
@@ -306,8 +290,6 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
 
   return (
     <div className="flex flex-col h-full bg-surface pb-24 relative overflow-hidden font-sans">
-      
-      {/* Header */}
       <div className="bg-white/90 backdrop-blur border-b border-gray-100 p-4 pt-6 flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-3">
             <div className="relative">
@@ -315,200 +297,64 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
                 <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 border-2 border-white rounded-full bg-primary"></div>
             </div>
             <div>
-            <h1 className="font-bold text-text-main text-lg leading-none flex items-center gap-2">
-                MasterGrowbot
-                <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded text-xs font-bold">AI</span>
-            </h1>
-            <p className="text-[10px] font-bold text-text-sub uppercase tracking-wider mt-1">
-                {plant?.strainDetails ? `ACTIVE: ${plant.strainDetails.name.toUpperCase()}` : 'SYSTEM ONLINE'}
-            </p>
+            <h1 className="font-bold text-text-main text-lg leading-none">MasterGrowbot</h1>
+            <p className="text-[10px] font-bold text-text-sub uppercase tracking-wider mt-1">AI Cultivation Coach</p>
             </div>
         </div>
-
-        {/* Voice Selection */}
         <div className="relative">
-            <button 
-                onClick={() => setShowVoiceSettings(!showVoiceSettings)}
-                className="p-2 text-text-sub hover:text-primary transition-colors bg-gray-50 hover:bg-white rounded-full border border-gray-100"
-            >
+            <button onClick={() => setShowVoiceSettings(!showVoiceSettings)} className="p-2 text-text-sub hover:text-primary transition-colors bg-gray-50 rounded-full border border-gray-100">
                 <Settings2 size={20} />
             </button>
-            
             {showVoiceSettings && (
-                <div className="absolute top-full right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 p-2 animate-in fade-in slide-in-from-top-2 z-50">
+                <div className="absolute top-full right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 p-2 z-50">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 py-2 border-b border-gray-50 mb-1">Select Voice</p>
                     {VOICE_OPTIONS.map(v => (
-                        <button
-                            key={v.id}
-                            onClick={() => { setSelectedVoice(v.id); setShowVoiceSettings(false); }}
-                            className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold flex items-center justify-between transition-colors ${
-                                selectedVoice === v.id ? 'bg-primary/10 text-primary' : 'hover:bg-gray-50 text-text-main'
-                            }`}
-                        >
-                            <div className="flex flex-col">
-                                <span>{v.label}</span>
-                                <span className="text-[9px] font-medium opacity-60 font-mono uppercase">{v.type}</span>
-                            </div>
-                            {selectedVoice === v.id && <Check size={14} />}
+                        <button key={v.id} onClick={() => { setSelectedVoice(v.id); setShowVoiceSettings(false); }} className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-between ${selectedVoice === v.id ? 'bg-primary/10 text-primary' : 'hover:bg-gray-50 text-text-main'}`}>
+                            {v.label} {selectedVoice === v.id && <Check size={14} />}
                         </button>
                     ))}
                 </div>
             )}
         </div>
       </div>
-
-      {/* Chat Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6 z-10">
         {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-            {!msg.isUser && (
-               <div className="mr-3 -mt-2">
-                   <Growbot size="sm" mood="happy" />
-               </div>
-            )}
+          <div key={msg.id} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
             <div className="max-w-[85%] group relative">
-                <div className={`p-4 text-sm leading-relaxed shadow-sm relative z-10 ${
-                msg.isUser 
-                    ? 'bg-text-main text-white rounded-2xl rounded-tr-sm shadow-md' 
-                    : 'bg-white text-text-main rounded-2xl rounded-tl-sm border border-gray-100 shadow-sm'
-                }`}>
+                <div className={`p-4 text-sm leading-relaxed shadow-sm ${msg.isUser ? 'bg-text-main text-white rounded-2xl rounded-tr-sm' : 'bg-white text-text-main rounded-2xl rounded-tl-sm border border-gray-100'}`}>
                 {msg.text}
                 </div>
-                {!msg.isUser && onSaveToJournal && (
-                    <button 
-                      onClick={() => saveMessageToJournal(msg.text)}
-                      className="absolute -right-8 top-2 p-1.5 bg-white rounded-full text-text-sub hover:text-primary transition-colors opacity-0 group-hover:opacity-100 shadow-sm border border-gray-100"
-                    >
-                        <BookmarkPlus size={14} />
-                    </button>
-                )}
             </div>
           </div>
         ))}
-        
-        {loading && (
-          <div className="flex justify-start pl-12">
-             <div className="bg-white px-4 py-3 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 flex items-center gap-2">
-                <div className="flex space-x-1.5">
-                    <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></div>
-                    <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                    <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0.4s]"></div>
-                </div>
-             </div>
-          </div>
-        )}
+        {loading && <div className="flex justify-start pl-4"><div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></div></div>}
         <div ref={endRef} />
       </div>
-
-      {/* Suggestions */}
-      {!loading && !isLive && (
-        <div className="px-4 py-2 overflow-x-auto whitespace-nowrap no-scrollbar z-20 mb-1">
+      <div className="px-4 py-2 overflow-x-auto whitespace-nowrap no-scrollbar z-20 mb-1">
           {SUGGESTED_PROMPTS.map(prompt => (
-            <button 
-              key={prompt}
-              onClick={() => handleSend(prompt)}
-              className="inline-flex items-center gap-1.5 mr-2 px-4 py-2 bg-white border border-gray-200 rounded-full text-xs text-text-main font-bold shadow-sm active:scale-95 transition-transform hover:border-primary/30"
-            >
-              <Sparkles size={12} className="text-primary" />
-              {prompt}
-            </button>
+            <button key={prompt} onClick={() => handleSend(prompt)} className="inline-flex items-center gap-1.5 mr-2 px-4 py-2 bg-white border border-gray-200 rounded-full text-xs text-text-main font-bold shadow-sm">{prompt}</button>
           ))}
-        </div>
-      )}
-
-      {/* Input Area */}
+      </div>
       <div className="p-4 bg-white/80 backdrop-blur-lg border-t border-gray-100 z-30 pb-6">
-        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-[24px] px-2 py-2 focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/5 transition-all relative">
-          <button className="text-gray-400 hover:text-primary transition-colors p-2 rounded-full hover:bg-white">
-            <ImageIcon size={20} />
-          </button>
-          
-          <input 
-            type="text" 
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend(input)}
-            placeholder="Ask MasterGrowbot..."
-            className="flex-1 bg-transparent outline-none text-sm text-text-main placeholder-text-sub font-medium ml-2"
-            disabled={loading}
-          />
-
-          <button 
-             onClick={startLiveSession}
-             className="p-2 rounded-full text-text-sub hover:text-primary hover:bg-white transition-colors"
-          >
-             <AudioLines size={20} />
-          </button>
-
-          <button 
-              onClick={() => handleSend(input)}
-              disabled={loading || !input.trim()}
-              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-sm ml-1 ${
-              input.trim() ? 'bg-text-main text-white hover:scale-105 active:scale-95' : 'bg-gray-200 text-gray-400'
-              }`}
-          >
-              <Send size={16} className={input.trim() ? "fill-current" : ""} />
-          </button>
+        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-[24px] px-2 py-2">
+          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend(input)} placeholder="Ask MasterGrowbot..." className="flex-1 bg-transparent outline-none text-sm text-text-main ml-2" />
+          <button onClick={startLiveSession} className="p-2 rounded-full text-text-sub hover:text-primary"><AudioLines size={20} /></button>
+          <button onClick={() => handleSend(input)} disabled={loading || !input.trim()} className={`w-9 h-9 rounded-full flex items-center justify-center ${input.trim() ? 'bg-text-main text-white' : 'bg-gray-200 text-gray-400'}`}><Send size={16} /></button>
         </div>
       </div>
-
-      {/* --- LIGHT MODE VOICE OVERLAY --- */}
       {isLive && (
-        <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-xl flex flex-col items-center justify-between p-6 animate-in fade-in duration-300">
-           {/* Top Bar */}
+        <div className="absolute inset-0 z-50 bg-white/95 flex flex-col items-center justify-between p-6">
            <div className="w-full flex justify-between items-start">
-               <div className="flex flex-col">
-                   <span className="text-primary font-mono text-xs uppercase tracking-[0.2em] animate-pulse flex items-center gap-2">
-                     <Activity size={12} /> {connectionState === 'connecting' ? 'Establishing Uplink...' : 'Live Audio Connection'}
-                   </span>
-               </div>
-               <button 
-                 onClick={stopLiveSession} 
-                 className="p-3 bg-gray-100 rounded-full text-text-main hover:bg-gray-200 transition-all"
-               >
-                 <X size={20} />
-               </button>
+               <span className="text-primary font-mono text-xs uppercase tracking-widest animate-pulse">Live Uplink Active</span>
+               <button onClick={stopLiveSession} className="p-3 bg-gray-100 rounded-full"><X size={20} /></button>
            </div>
-
-           {/* Central Visualizer */}
-           <div className="flex-1 flex flex-col items-center justify-center w-full">
-              <div className="relative mb-12">
-                  <div className={`absolute inset-0 bg-primary/20 blur-[60px] rounded-full transition-all duration-500 ease-out ${
-                      isUserSpeaking ? 'scale-[2.5] opacity-30' : 'scale-110 opacity-60'
-                  }`}></div>
-                  
-                  <Growbot 
-                      size="xl" 
-                      mood={isUserSpeaking ? 'alert' : 'speaking'} 
-                      className={`transition-transform duration-500 ${isUserSpeaking ? 'scale-110' : 'scale-100'}`} 
-                  />
-              </div>
-
-              <div className="w-full max-w-xs text-center min-h-[4rem]">
-                 <p className="text-xl font-medium text-text-main leading-relaxed transition-all duration-300">
-                    "{liveTranscript || (connectionState === 'connecting' ? "Connecting..." : (selectedVoice === 'Fenrir' ? "System Online. Listening..." : "Listening..."))}"
-                 </p>
-                 {isUserSpeaking && (
-                    <div className="flex gap-1 justify-center mt-4">
-                        <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></div>
-                        <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0.1s]"></div>
-                        <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                    </div>
-                 )}
-              </div>
+           <div className="flex-1 flex flex-col items-center justify-center">
+              <Growbot size="xl" mood={isUserSpeaking ? 'alert' : 'speaking'} />
+              <p className="mt-8 text-xl font-medium text-text-main text-center">"{liveTranscript || "Listening..."}"</p>
            </div>
-
-           <div className="w-full flex justify-center pb-8">
-              <button 
-                 onClick={stopLiveSession} 
-                 className="group relative bg-alert-red text-white p-6 rounded-full hover:scale-105 transition-all shadow-xl"
-              >
-                 <Power size={32} />
-              </button>
-           </div>
+           <button onClick={stopLiveSession} className="bg-alert-red text-white p-6 rounded-full shadow-xl"><Power size={32} /></button>
         </div>
       )}
-
     </div>
   );
 };
@@ -541,16 +387,10 @@ function createBlob(data: Float32Array): Blob {
     return bytes;
   }
   
-  async function decodeAudioData(
-    data: Uint8Array,
-    ctx: AudioContext,
-    sampleRate: number,
-    numChannels: number,
-  ): Promise<AudioBuffer> {
+  async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
     const dataInt16 = new Int16Array(data.buffer);
     const frameCount = dataInt16.length / numChannels;
     const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-  
     for (let channel = 0; channel < numChannels; channel++) {
       const channelData = buffer.getChannelData(channel);
       for (let i = 0; i < frameCount; i++) {

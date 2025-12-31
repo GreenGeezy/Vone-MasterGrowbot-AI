@@ -1,23 +1,32 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
 
-// Hardcoded credentials as requested for sandbox environment
-const supabaseUrl = 'https://vofwdhlwsahwxecewyek.supabase.co';
-const supabaseAnonKey = 'sb_publishable_nVYJrVpgVGW5mSuafXfMRg_Nr_3BKxm';
+// Environment variables are injected via Vite's 'define' block (with fallbacks from vite.config.ts)
+const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
 
-// Initialize Supabase Client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn("Supabase credentials missing. Auth and Database features will be disabled.");
+}
+
+// Defensive initialization: only create the client if credentials exist.
+// This prevents the "supabaseUrl is required" error during the module load.
+export const supabase = (supabaseUrl && supabaseAnonKey) 
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
 
 /**
  * Sign in with Google OAuth.
- * Handles the deep-link redirect back to the app via custom scheme.
  */
 export const signInWithGoogle = async () => {
-  // 'mastergrowbot' is the custom scheme for this application.
-  // We use this explicitly on native platforms to trigger the deep link.
-  // On web, we use window.location.origin to prevent the browser from hanging on an unknown scheme.
+  if (!supabase) {
+    console.error("Supabase client not initialized. Check your VITE_SUPABASE_ANON_KEY.");
+    return { data: null, error: new Error("Supabase configuration missing") };
+  }
+
   const redirectUrl = Capacitor.isNativePlatform() 
-    ? 'mastergrowbot://callback' 
+    ? 'com.mastergrowbot.app://callback' 
     : window.location.origin;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -38,6 +47,8 @@ export const signInWithGoogle = async () => {
  * Fetches the current user's row from the 'profiles' table.
  */
 export const getUserProfile = async () => {
+  if (!supabase) return { data: null, error: new Error("Supabase configuration missing") };
+
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
@@ -55,7 +66,6 @@ export const getUserProfile = async () => {
 
 /**
  * Updates the current user's profile with onboarding data.
- * @param updates Object containing experience, environment, goal, and grow space size.
  */
 export const updateOnboardingProfile = async (updates: {
   experience: string;
@@ -63,13 +73,14 @@ export const updateOnboardingProfile = async (updates: {
   goal: string;
   grow_space_size: string;
 }) => {
+  if (!supabase) return { data: null, error: new Error("Supabase configuration missing") };
+
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
     return { data: null, error: new Error("User is not authenticated") };
   }
 
-  // Uses upsert to create the row if it doesn't exist (e.g. first login)
   const { data, error } = await supabase
     .from('profiles')
     .upsert({

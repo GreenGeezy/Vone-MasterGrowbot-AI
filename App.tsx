@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AppScreen, Plant, Task, PlantStage, UserProfile, OnboardingStep, JournalEntry } from './types';
 import BottomNav from './components/BottomNav';
@@ -59,9 +60,11 @@ const App: React.FC = () => {
           const rcKey = process.env.REVENUECAT_API_KEY || "goog_kqOynvNRCABzUPrpfyFvlMvHUna";
           await Purchases.configure({ apiKey: rcKey });
           
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            await Purchases.logIn({ appUserID: session.user.id });
+          if (supabase) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+              await Purchases.logIn({ appUserID: session.user.id });
+            }
           }
         } catch (e) {
           console.error("RevenueCat Init Error:", e);
@@ -84,52 +87,57 @@ const App: React.FC = () => {
       setOnboardingStatus(OnboardingStep.SPLASH);
     }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        if (Capacitor.isNativePlatform()) {
-          try {
-            await Purchases.logIn({ appUserID: session.user.id });
-          } catch (e) {
-            console.error("RC Sync Error:", e);
-          }
-        }
-
-        if (event === 'SIGNED_IN') {
-          try {
-            const { data: profile } = await getUserProfile();
-            if (profile) {
-              const appProfile: UserProfile = {
-                experience: profile.experience as any,
-                grow_mode: profile.environment as any,
-                goal: profile.goal as any,
-                space: profile.grow_space_size as any
-              };
-              setUserProfile(appProfile);
-              localStorage.setItem('mastergrowbot_profile', JSON.stringify(appProfile));
-              setOnboardingStatus(OnboardingStep.COMPLETED);
+    // Defensive check: Only register the auth listener if Supabase is initialized
+    let authSubscription: any = null;
+    if (supabase) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          if (Capacitor.isNativePlatform()) {
+            try {
+              await Purchases.logIn({ appUserID: session.user.id });
+            } catch (e) {
+              console.error("RC Sync Error:", e);
             }
-          } catch (e) {
-            console.error("Auth hydration error", e);
+          }
+
+          if (event === 'SIGNED_IN') {
+            try {
+              const { data: profile } = await getUserProfile();
+              if (profile) {
+                const appProfile: UserProfile = {
+                  experience: profile.experience as any,
+                  grow_mode: profile.environment as any,
+                  goal: profile.goal as any,
+                  space: profile.grow_space_size as any
+                };
+                setUserProfile(appProfile);
+                localStorage.setItem('mastergrowbot_profile', JSON.stringify(appProfile));
+                setOnboardingStatus(OnboardingStep.COMPLETED);
+              }
+            } catch (e) {
+              console.error("Auth hydration error", e);
+            }
           }
         }
-      }
-    });
+      });
+      authSubscription = subscription;
+    }
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (authSubscription) authSubscription.unsubscribe();
+    };
   }, []);
 
   const checkReviewEligibility = () => {
     const count = parseInt(localStorage.getItem('mgb_scan_count') || '0');
     const lastPrompt = localStorage.getItem('mgb_last_prompt_date');
     
-    // Logic 1: 3rd scan if never prompted
     if (count === 3 && !lastPrompt) {
       setShowReviewModal(true);
       localStorage.setItem('mgb_last_prompt_date', new Date().toISOString());
       return;
     }
 
-    // Logic 2: 10+ scans AND 30 days since last prompt
     if (count >= 10 && lastPrompt) {
       const lastDate = new Date(lastPrompt);
       const now = new Date();
@@ -144,16 +152,17 @@ const App: React.FC = () => {
 
   const submitInternalRating = async (rating: number) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('app_ratings').insert({
-          user_id: user.id,
-          rating: rating,
-          created_at: new Date().toISOString()
-        });
+      if (supabase) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('app_ratings').insert({
+            user_id: user.id,
+            rating: rating,
+            created_at: new Date().toISOString()
+          });
+        }
       }
 
-      // If positive (4 or 5 stars), trigger Native Store Review
       if (rating >= 4 && Capacitor.isNativePlatform()) {
         await InAppReview.requestReview();
       }
@@ -217,13 +226,10 @@ const App: React.FC = () => {
       date: new Date().toLocaleDateString(),
     };
     
-    // Update local scan count if it was a diagnosis
     if (entry.type === 'diagnosis') {
       const currentCount = parseInt(localStorage.getItem('mgb_scan_count') || '0');
       const newCount = currentCount + 1;
       localStorage.setItem('mgb_scan_count', newCount.toString());
-      
-      // Delay eligibility check slightly for better UX after saving
       setTimeout(checkReviewEligibility, 1500);
     }
 
@@ -295,7 +301,6 @@ const App: React.FC = () => {
         <Paywall onClose={() => setShowPaywall(false)} onAuthRedirect={() => setShowPaywall(false)} isMandatory={false} userProfile={userProfile} />
       )}
 
-      {/* 2-STAGE REVIEW MODAL */}
       {showReviewModal && (
         <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl relative text-center overflow-hidden">

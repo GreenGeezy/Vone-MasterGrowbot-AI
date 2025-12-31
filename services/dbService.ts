@@ -1,3 +1,4 @@
+
 import { supabase } from './supabaseClient';
 
 /**
@@ -30,6 +31,7 @@ const base64ToBlob = (base64: string, contentType: string = 'image/jpeg'): Blob 
  * @returns The public URL of the uploaded file.
  */
 export const uploadImage = async (base64: string, path: string): Promise<string | null> => {
+  if (!supabase) return null;
   try {
     const blob = base64ToBlob(base64);
     
@@ -63,11 +65,12 @@ export const uploadImage = async (base64: string, path: string): Promise<string 
  */
 export const saveJournalEntry = async (entry: {
   plant_id: string;
-  entry_type: 'text' | 'photo' | 'draw';
+  entry_type: 'text' | 'photo' | 'draw' | 'diagnosis' | 'chat';
   content: string;
   media_url?: string;
   tags: string[];
 }) => {
+  if (!supabase) throw new Error("Supabase connection unavailable");
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("User not authenticated");
 
@@ -85,41 +88,6 @@ export const saveJournalEntry = async (entry: {
     .select()
     .single();
 
-  if (error) {
-    console.error('Error saving journal entry:', error);
-    throw error;
-  }
-  return data;
-};
-
-/**
- * Saves a new diagnosis report to the diagnosis_reports table.
- */
-export const saveDiagnosis = async (report: {
-  plant_id: string;
-  image_url: string;
-  diagnosis_json: object;
-  confidence_score: number;
-}) => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("User not authenticated");
-
-  const { data, error } = await supabase
-    .from('diagnosis_reports')
-    .insert({
-      user_id: user.id,
-      plant_id: report.plant_id,
-      image_url: report.image_url,
-      diagnosis_json: report.diagnosis_json,
-      confidence_score: report.confidence_score,
-      created_at: new Date().toISOString()
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error saving diagnosis:', error);
-    throw error;
-  }
+  if (error) throw error;
   return data;
 };

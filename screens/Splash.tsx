@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import Growbot from '../components/Growbot';
 import { ArrowRight, ShieldCheck, TrendingUp } from 'lucide-react';
@@ -12,6 +13,12 @@ const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
   
   useEffect(() => {
     const checkUserStatus = async () => {
+      // Defensive check to prevent "reading 'auth' of null"
+      if (!supabase) {
+        console.warn("Supabase not initialized in Splash");
+        return;
+      }
+
       try {
         // 1. Check Session
         const { data: { session } } = await supabase.auth.getSession();
@@ -30,7 +37,6 @@ const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
           }
 
           // 3. Verify Onboarding Fields (experience, environment, goal)
-          // We check if the key fields typically set during onboarding are present.
           const isProfileComplete = 
              profile.experience && 
              profile.environment && 

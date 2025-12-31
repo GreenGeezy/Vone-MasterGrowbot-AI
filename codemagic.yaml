@@ -13,6 +13,8 @@ workflows:
         # Renamed with VITE_ prefix to ensure Vite loadEnv correctly injects into frontend
         VITE_GEMINI_API_KEY: ${GEMINI_API_KEY}
         VITE_REVENUECAT_API_KEY: ${REVENUECAT_API_KEY}
+        VITE_SUPABASE_URL: ${SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
         PACKAGE_NAME: "com.mastergrowbot.app"
         JAVA_HOME: /Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home
         JAVA_TOOL_OPTIONS: "-Xmx6g"
@@ -28,7 +30,7 @@ workflows:
           npm install @capacitor-community/in-app-review @revenuecat/purchases-capacitor --legacy-peer-deps
       - name: Web Build
         script: |
-          # Build frontend assets before native sync
+          # Build frontend assets strictly BEFORE native sync
           npm run build
       - name: Capacitor Sync & Self-Healing File Injection
         script: |
@@ -36,7 +38,7 @@ workflows:
           rm -rf android
           npm install @capacitor/android --legacy-peer-deps
           npx cap add android
-          # Sync runs AFTER npm run build to copy /dist to /android/app/src/main/assets/public
+          # Sync runs strictly AFTER npm run build to copy /dist to /android/app/src/main/assets/public
           npx cap sync android
 
           # 2. Inject variables.gradle with SDK 35 (Android 15)
@@ -130,8 +132,58 @@ workflows:
           }
           EOF
 
-          # 4. Safe Manifest Patch: Uses perl for robust multi-line insertion in YAML
-          perl -i -pe 's/<manifest/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">\n    <uses-permission android:name="android.permission.INTERNET" \/>\n    <uses-permission android:name="com.android.vending.BILLING" \/>/' android/app/src/main/AndroidManifest.xml
+          # 4. Full Manifest Overwrite: Fixes blank screen by ensuring proper intent filters and permissions
+          cat <<EOF > android/app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="com.android.vending.BILLING" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme">
+
+                  <activity
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+                      android:name=".MainActivity"
+                      android:label="@string/title_activity_main"
+                      android:theme="@style/AppTheme.NoActionBarLaunch"
+                      android:launchMode="singleTop"
+                      android:exported="true">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.VIEW" />
+                          <category android:name="android.intent.category.DEFAULT" />
+                          <category android:name="android.intent.category.BROWSABLE" />
+                          <data android:scheme="com.mastergrowbot.app" />
+                      </intent-filter>
+
+                  </activity>
+
+                  <provider
+                      android:name="androidx.core.content.FileProvider"
+                      android:authorities="\${applicationId}.fileprovider"
+                      android:exported="false"
+                      android:grantUriPermissions="true">
+                      <meta-data
+                          android:name="android.support.FILE_PROVIDER_PATHS"
+                          android:resource="@xml/file_paths"></meta-data>
+                  </provider>
+              </application>
+          </manifest>
+          EOF
 
           # 5. Inject strings.xml
           mkdir -p android/app/src/main/res/values
