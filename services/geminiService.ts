@@ -2,14 +2,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DiagnosisResult, LogAnalysis, Plant, UserProfile } from "../types";
 
-// Initialize API Client
+// Initialize API Client using the mandatory process.env.API_KEY variable
 const getClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.error("API Key not found");
+  if (!process.env.API_KEY) {
+    console.error("API Key not found in environment.");
     throw new Error("API Key missing");
   }
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 // Helper to convert File to Base64
@@ -35,7 +34,7 @@ export const diagnosePlant = async (
 ): Promise<DiagnosisResult> => {
   try {
     const ai = getClient();
-    const model = "gemini-3-pro-preview";
+    const model = 'gemini-3-pro-preview';
 
     const contextStr = context 
       ? `\nCONTEXT:\nStrain: ${context.strain || "Unknown"}\nGrow Environment: ${context.environment || "Unknown"}\n` 
@@ -111,20 +110,7 @@ export const diagnosePlant = async (
     const text = response.text;
     if (!text) throw new Error("No response from AI");
     
-    const result = JSON.parse(text) as DiagnosisResult;
-
-    if (result.confidence <= 1) {
-      result.confidence = result.confidence * 100;
-    }
-
-    if (result.confidence < 90) {
-      result.confidence = 91 + Math.floor(Math.random() * 8);
-    }
-    
-    if (result.confidence > 99) result.confidence = 99;
-
-    return result;
-
+    return JSON.parse(text) as DiagnosisResult;
   } catch (error) {
     console.error("Diagnosis failed:", error);
     throw error;
@@ -141,8 +127,9 @@ export const chatWithCoach = async (
 ): Promise<string> => {
   try {
     const ai = getClient();
+    const model = 'gemini-3-flash-preview';
     
-    let systemInstruction = "You are MasterGrowbot, a expert cannabis cultivation AI. You are direct, wisest and encouraging. Use grower terminology. ";
+    let systemInstruction = "You are MasterGrowbot, a expert cannabis cultivation AI. You are direct, wise and encouraging. Use grower terminology. ";
   
     if (context?.userProfile) {
         const p = context.userProfile;
@@ -155,7 +142,7 @@ export const chatWithCoach = async (
     }
 
     const chat = ai.chats.create({
-      model: "gemini-3-flash-preview",
+      model,
       config: {
         systemInstruction: systemInstruction,
       },
@@ -176,6 +163,7 @@ export const chatWithCoach = async (
 export const analyzeGrowLog = async (text: string, tags: string[], imageBase64?: string): Promise<LogAnalysis> => {
   try {
     const ai = getClient();
+    const model = 'gemini-3-flash-preview';
     const prompt = `Analyze this grow log: "${text}" with tags: ${tags.join(', ')}. Summarize, predict yield impact, and state health indicator (good/concern/critical).`;
 
     const parts: any[] = [{ text: prompt }];
@@ -189,7 +177,7 @@ export const analyzeGrowLog = async (text: string, tags: string[], imageBase64?:
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model,
       contents: { parts },
       config: {
         responseMimeType: "application/json",
@@ -205,7 +193,9 @@ export const analyzeGrowLog = async (text: string, tags: string[], imageBase64?:
       }
     });
 
-    return JSON.parse(response.text!) as LogAnalysis;
+    const textResult = response.text;
+    if (!textResult) throw new Error("No analysis generated");
+    return JSON.parse(textResult) as LogAnalysis;
   } catch (error) {
     return {
       summary: "Observation logged.",
@@ -218,8 +208,9 @@ export const analyzeGrowLog = async (text: string, tags: string[], imageBase64?:
 export const getDailyInsight = async (stage: string): Promise<string> => {
    try {
     const ai = getClient();
+    const model = 'gemini-3-flash-preview';
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model,
       contents: `One-sentence actionable tip for a cannabis plant in ${stage}. Pro grower style.`,
     });
     return response.text || "Monitor environmentals daily.";

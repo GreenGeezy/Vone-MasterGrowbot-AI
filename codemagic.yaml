@@ -1,3 +1,4 @@
+
 # MasterGrowbot AI - CI/CD Pipeline Configuration (v1.6.0 - 2026 Edition)
 workflows:
   android-release:
@@ -34,7 +35,8 @@ workflows:
           npx cap add android || true
           npx cap sync android
 
-          # 2. Inject google-services.json
+          # 2. Inject google-services.json from environment variable or direct definition
+          # Defined directly here as per user request for Build #30 fix
           mkdir -p android/app
           cat <<EOF > android/app/google-services.json
           {
@@ -55,7 +57,7 @@ workflows:
                     "client_type": 3
                   }
                 ],
-                "api_key": [ { "current_key": "AIzaSyBRIK10W7TOBUqxe9YjEXlGVkk0V43Nt9o" } ],
+                "api_key": [ { "current_key": "AIzaSyBEmRHHbEqZvbYwgOmuk8THcxuxJSlewlg" } ],
                 "services": {
                   "appinvite_service": {
                     "other_platform_oauth_client": [
@@ -69,18 +71,14 @@ workflows:
           }
           EOF
 
-          # 3. Inject classpath via sed into root build.gradle
-          # Using sed to find the first dependencies block and append the classpath
+          # 3. Inject classpath into root build.gradle using sed (macOS compatibility)
           sed -i '' '/dependencies {/a \        classpath "com.google.gms:google-services:4.4.2"' android/build.gradle
 
-          # 4. Inject Firebase BoM and apply plugin in app/build.gradle
-          # Add dependencies
+          # 4. Inject Firebase dependencies and apply plugin in app/build.gradle
           sed -i '' '/dependencies {/a \    implementation platform("com.google.firebase:firebase-bom:34.7.0")\n    implementation "com.google.firebase:firebase-analytics"' android/app/build.gradle
-          
-          # Append apply plugin to the very bottom
           echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
 
-          # 5. Overwrite AndroidManifest.xml with mandatory permissions
+          # 5. Overwrite AndroidManifest.xml for permissions and auth callback
           cat <<EOF > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
