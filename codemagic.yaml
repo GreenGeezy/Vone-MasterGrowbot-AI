@@ -26,11 +26,7 @@ workflows:
           npm run build
       - name: Capacitor Sync & Self-Healing Config
         script: |
-          # 1. Initialize Structure
-          npx cap add android || true
-          npx cap sync android
-          
-          # 2. Inject Validated google-services.json
+          # 1. Inject Validated google-services.json (Using Key AIzaSyBRIK...)
           mkdir -p android/app
           cat <<EOF > android/app/google-services.json
           {
@@ -44,7 +40,27 @@ workflows:
           }
           EOF
           
-          # 3. Correct settings.gradle linkage (Fixing missing Cordova path)
+          # 2. Generate root build.gradle (FORCING BOUNCY CASTLE FIX)
+          cat <<EOF > android/build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.1'
+                  classpath 'com.google.gms:google-services:4.4.2'
+              }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+              configurations.all {
+                  resolutionStrategy {
+                      force 'org.bouncycastle:bcprov-jdk18on:1.77'
+                  }
+              }
+          }
+          task clean(type: Delete) { delete rootProject.buildDir }
+          EOF
+          
+          # 3. Correct settings.gradle linkage (Fixing missing Cordova and Bridge paths)
           cat <<EOF > android/settings.gradle
           include ':app'
           include ':capacitor-android'
@@ -54,10 +70,10 @@ workflows:
           apply from: 'capacitor.settings.gradle'
           EOF
           
-          # 4. Final sync to bind new settings
+          # 4. Final Sync
           npx cap sync android
 
-          # 5. Root Build Configs
+          # 5. Inject Variables
           cat <<EOF > android/variables.gradle
           ext {
               minSdkVersion = 22
@@ -75,29 +91,7 @@ workflows:
           }
           EOF
 
-          cat <<EOF > android/build.gradle
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.1'
-                  classpath 'com.google.gms:google-services:4.4.2'
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          task clean(type: Delete) {
-              delete rootProject.buildDir
-          }
-          EOF
-
-          # 6. App Level Build Config (Hardcoded SDK 34 + Google Services)
+          # 6. Inject App Build Gradle
           cat <<EOF > android/app/build.gradle
           apply plugin: 'com.android.application'
           apply plugin: 'com.google.gms.google-services'
@@ -141,6 +135,7 @@ workflows:
 
       - name: Build Android App Bundle
         script: |
+          rm -rf ~/.gradle/caches/
           cd android
           chmod +x gradlew
           ./gradlew bundleRelease --no-daemon
