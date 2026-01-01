@@ -1,9 +1,9 @@
-# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.6.0 - 2026 Edition)
+# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.6.1 - 2026 Edition)
 workflows:
   android-release:
     name: Android Release Build 2026
     max_build_duration: 60
-    instance_type: mac_mini_m1
+    instance_type: mac_mini_m2
     environment:
       android_signing:
         - mastergrowbot_keystore
@@ -69,7 +69,7 @@ workflows:
           }
           EOF
 
-          # 3. Complete Root build.gradle replacement (Fixes Bouncy Castle & Google Services)
+          # 3. Root build.gradle replacement (FIXED: Added mandatory ext block)
           cat <<EOF > android/build.gradle
           buildscript {
               repositories {
@@ -81,6 +81,13 @@ workflows:
                   classpath 'com.google.gms:google-services:4.4.2'
               }
           }
+          
+          ext {
+              compileSdkVersion = 34
+              targetSdkVersion = 34
+              minSdkVersion = 22
+          }
+
           allprojects {
               repositories {
                   google()
@@ -97,7 +104,7 @@ workflows:
           }
           EOF
 
-          # 4. Inject Firebase dependencies and apply plugin in app/build.gradle
+          # 4. Inject Firebase dependencies and apply plugin
           sed -i '' '/dependencies {/a \    implementation platform("com.google.firebase:firebase-bom:34.7.0")\n    implementation "com.google.firebase:firebase-analytics"' android/app/build.gradle
           grep -q "com.google.gms.google-services" android/app/build.gradle || echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
 
@@ -159,6 +166,7 @@ workflows:
 
       - name: Build Android App Bundle
         script: |
+          # Absolute Cache Cleanup (fixes Build #32)
           rm -rf ~/.gradle/caches/
           rm -rf android/.gradle
           cd android
