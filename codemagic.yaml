@@ -25,18 +25,36 @@ workflows:
           npm install @capacitor/android@^6.0.0 @revenuecat/purchases-capacitor @capacitor-community/in-app-review --legacy-peer-deps
       - name: Web Build
         script: |
+          # The updated vite.config.ts will bake the vars from the environment into 'dist'
           npm run build
       - name: Capacitor Add & Surgical Patching
         script: |
           # 1. Create Android project
           npx cap add android || true
           
-          # 2. Inject Namespace (The 'Sed' Fix)
-          # Note: macOS sed requires the empty string '' after -i
+          # 2. Create variables.gradle to define SDK versions (Fixes compileSdkVersion error)
+          cat <<EOF > android/variables.gradle
+          ext {
+              minSdkVersion = 22
+              compileSdkVersion = 34
+              targetSdkVersion = 34
+              androidxActivityVersion = '1.8.0'
+              androidxAppCompatVersion = '1.6.1'
+              androidxCoordinatorLayoutVersion = '1.2.0'
+              androidxCoreVersion = '1.12.0'
+              androidxFragmentVersion = '1.6.2'
+              junitVersion = '4.13.2'
+              androidxJunitVersion = '1.1.5'
+              androidxEspressoCoreVersion = '3.5.1'
+              cordovaAndroidVersion = '10.1.1'
+          }
+          EOF
+
+          # 3. Inject Namespace into app build.gradle (Mandatory for Capacitor 6)
+          # Use sed with empty extension for macOS compatibility in Codemagic environment
           sed -i '' 's/android {/android {\n    namespace "com.mastergrowbot.app"/' android/app/build.gradle
           
-          # 3. Force Bouncy Castle 1.77 Resolution Strategy
-          # We overwrite the root build.gradle to ensure the resolutionStrategy is correctly placed
+          # 4. Force Bouncy Castle 1.77 Resolution Strategy in root build.gradle
           cat <<EOF > android/build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -56,7 +74,7 @@ workflows:
           task clean(type: Delete) { delete rootProject.buildDir }
           EOF
 
-          # 4. Inject google-services.json (Required for build)
+          # 5. Inject google-services.json
           mkdir -p android/app
           cat <<EOF > android/app/google-services.json
           {
@@ -70,7 +88,7 @@ workflows:
           }
           EOF
 
-          # 5. Capacitor Sync
+          # 6. Capacitor Sync
           npx cap sync android
 
       - name: Build Android App Bundle
