@@ -16,7 +16,7 @@ workflows:
         VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
         PACKAGE_NAME: "com.mastergrowbot.app"
       node: 20
-      java: 21
+      java: 17
     scripts:
       - name: Install Dependencies
         script: |
@@ -25,14 +25,14 @@ workflows:
           npm install @capacitor/android@^6.0.0 @revenuecat/purchases-capacitor @capacitor-community/in-app-review --legacy-peer-deps
       - name: Web Build
         script: |
-          # The updated vite.config.ts will bake the vars from the environment into 'dist'
+          # Bakes env vars into the JS bundle via updated vite.config.ts
           npm run build
-      - name: Capacitor Add & Surgical Patching
+      - name: Capacitor Add & Environment Creation
         script: |
-          # 1. Create Android project
+          # 1. Create Android platform
           npx cap add android || true
           
-          # 2. Create variables.gradle to define SDK versions (Fixes compileSdkVersion error)
+          # 2. Create variables.gradle (Fixes 'compileSdkVersion not specified' error)
           cat <<EOF > android/variables.gradle
           ext {
               minSdkVersion = 22
@@ -50,12 +50,15 @@ workflows:
           }
           EOF
 
-          # 3. Inject Namespace into app build.gradle (Mandatory for Capacitor 6)
-          # Use sed with empty extension for macOS compatibility in Codemagic environment
+          # 3. Surgical Patching: Link variables and fix namespace
+          # Inject namespace for Capacitor 6 compatibility
           sed -i '' 's/android {/android {\n    namespace "com.mastergrowbot.app"/' android/app/build.gradle
           
-          # 4. Force Bouncy Castle 1.77 Resolution Strategy in root build.gradle
+          # 4. Overwrite root build.gradle with linked variables and Bouncy Castle fix
           cat <<EOF > android/build.gradle
+          // MasterGrowbot Root Build Configuration
+          apply from: "variables.gradle"
+          
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies {
@@ -63,18 +66,23 @@ workflows:
                   classpath 'com.google.gms:google-services:4.4.2'
               }
           }
+
           allprojects {
               repositories { google(); mavenCentral() }
               configurations.all {
                   resolutionStrategy {
+                      // Force 1.77 to prevent the 1.79 JAR execution exception in plugins
                       force 'org.bouncycastle:bcprov-jdk18on:1.77'
                   }
               }
           }
-          task clean(type: Delete) { delete rootProject.buildDir }
+
+          task clean(type: Delete) {
+              delete rootProject.buildDir
+          }
           EOF
 
-          # 5. Inject google-services.json
+          # 5. Inject Google Services
           mkdir -p android/app
           cat <<EOF > android/app/google-services.json
           {
@@ -95,7 +103,7 @@ workflows:
         script: |
           cd android
           chmod +x gradlew
-          # Upgrade Wrapper to 8.5
+          # Upgrade Wrapper for Gradle 8.5 compatibility
           ./gradlew wrapper --gradle-version 8.5 --distribution-type all
           ./gradlew bundleRelease --no-daemon
     artifacts:

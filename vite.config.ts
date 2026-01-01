@@ -4,9 +4,17 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
-    // Load env file based on `mode` in the current working directory.
-    // Set the third parameter to '' to load all env vars regardless of the `VITE_` prefix.
+    // Load environment variables from process.cwd()
     const env = loadEnv(mode, process.cwd(), '');
+
+    // Map env variables into a define block so they are accessible as process.env.VITE_...
+    const envDefinitions: Record<string, string> = {};
+    Object.keys(env).forEach((key) => {
+      envDefinitions[`process.env.${key}`] = JSON.stringify(env[key]);
+    });
+    
+    // Mapping specifically for Gemini SDK expectations
+    envDefinitions['process.env.API_KEY'] = JSON.stringify(env.VITE_GEMINI_API_KEY || '');
 
     return {
       server: {
@@ -15,14 +23,8 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react()],
       define: {
-        // Hard-bake environment variables into the JS bundle
-        'process.env.VITE_GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY || ''),
-        'process.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL || ''),
-        'process.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY || ''),
-        'process.env.VITE_REVENUECAT_API_KEY': JSON.stringify(env.VITE_REVENUECAT_API_KEY || 'goog_kqOynvNRCABzUPrpfyFvlMvHUna'),
-        // Support the Gemini SDK requirement for process.env.API_KEY
-        'process.env.API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY || ''),
-        // Provide a bridge for build tools
+        ...envDefinitions,
+        // Bridge for older libraries or specific build tools
         'process.env': JSON.stringify(env),
       },
       resolve: {
