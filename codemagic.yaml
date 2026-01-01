@@ -18,7 +18,7 @@ workflows:
     scripts:
       - name: Set up Java 21
         script: |
-          # Force Java 21 for Bouncy Castle 1.79+ compatibility
+          # Force Java 21 for Bouncy Castle 1.79+ compatibility and build stability
           jdk_path=$(/usr/libexec/java_home -v 21)
           echo "export JAVA_HOME=$jdk_path" >> $CM_ENV
           export JAVA_HOME=$jdk_path
@@ -31,9 +31,9 @@ workflows:
       - name: Web Build
         script: |
           npm run build
-      - name: Capacitor Sync & Self-Healing Config
+      - name: Capacitor Sync & Build Fixes
         script: |
-          # 1. Force Create Android Project Structure
+          # 1. Add Android platform if folder is missing
           npx cap add android || true
           
           # 2. Inject Validated google-services.json
@@ -50,14 +50,45 @@ workflows:
           }
           EOF
           
-          # 3. Inject gradle.properties for CI
+          # 3. Inject gradle.properties
           cat <<EOF >> android/gradle.properties
           SUPABASE_URL=$VITE_SUPABASE_URL
           SUPABASE_KEY=$VITE_SUPABASE_ANON_KEY
           GEMINI_API_KEY=$VITE_GEMINI_API_KEY
           EOF
 
-          # 4. Correct settings.gradle (Including Cordova bridge)
+          # 4. Generate ROOT build.gradle with FORCED Resolution Strategy
+          cat <<EOF > android/build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.1'
+                  classpath 'com.google.gms:google-services:4.4.2'
+              }
+          }
+
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              configurations.all {
+                  resolutionStrategy {
+                      // FORCE version 1.77 to resolve the 1.79 JAR conflict in plugins
+                      force 'org.bouncycastle:bcprov-jdk18on:1.77'
+                  }
+              }
+          }
+
+          task clean(type: Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+
+          # 5. Correct settings.gradle
           cat <<EOF > android/settings.gradle
           include ':app'
           include ':capacitor-android'
@@ -66,28 +97,8 @@ workflows:
           project(':capacitor-cordova-android-plugins').projectDir = new File('capacitor-cordova-android-plugins')
           apply from: 'capacitor.settings.gradle'
           EOF
-          
-          # 5. Generate root build.gradle (FORCING BOUNCY CASTLE FIX)
-          cat <<EOF > android/build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.1'
-                  classpath 'com.google.gms:google-services:4.4.2'
-              }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
-              configurations.all {
-                  resolutionStrategy {
-                      force 'org.bouncycastle:bcprov-jdk18on:1.77'
-                  }
-              }
-          }
-          task clean(type: Delete) { delete rootProject.buildDir }
-          EOF
 
-          # 6. Inject App build.gradle (Mandatory Capacitor 6 Namespace)
+          # 6. Inject App build.gradle with mandatory namespace
           cat <<EOF > android/app/build.gradle
           apply plugin: 'com.android.application'
           apply plugin: 'com.google.gms.google-services'
@@ -127,10 +138,8 @@ workflows:
 
       - name: Build Android App Bundle
         script: |
-          rm -rf ~/.gradle/caches/
           cd android
           chmod +x gradlew
-          # Upgrade Wrapper to 8.5
           ./gradlew wrapper --gradle-version 8.5 --distribution-type all
           ./gradlew bundleRelease --no-daemon
     artifacts:

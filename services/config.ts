@@ -4,23 +4,35 @@
  * Safely bridges environment variables to the application logic.
  */
 
+// Safely detect environment variables without throwing TypeError if objects are undefined
+const safeGetEnv = (key: string): string => {
+  try {
+    // Check import.meta.env (Vite) first, then fallback to process.env (Vite define block)
+    const value = (import.meta.env && import.meta.env[key]) || (process.env && (process.env as any)[key]);
+    return typeof value === 'string' ? value : '';
+  } catch (e) {
+    return '';
+  }
+};
+
+const GEMINI_KEY = safeGetEnv('VITE_GEMINI_API_KEY');
+
 // Debug logging for build/runtime verification
-console.log('[CONFIG] Build-time VITE_GEMINI_API_KEY detection:', 
-    import.meta.env?.VITE_GEMINI_API_KEY ? 'DETECTED (starts with ' + import.meta.env.VITE_GEMINI_API_KEY.substring(0, 4) + ')' : 'NOT DETECTED'
+console.log('[CONFIG] Gemini API Key detection:', 
+    GEMINI_KEY ? 'DETECTED (starts with ' + GEMINI_KEY.substring(0, 4) + ')' : 'NOT DETECTED'
 );
 
 export const CONFIG = {
-    // Vite environment variables must be accessed statically for build-time replacement.
-    GEMINI_API_KEY: (import.meta.env?.VITE_GEMINI_API_KEY as string) || (process.env?.API_KEY as string) || '',
-    SUPABASE_URL: (import.meta.env?.VITE_SUPABASE_URL as string) || (process.env?.VITE_SUPABASE_URL as string) || '',
-    SUPABASE_ANON_KEY: (import.meta.env?.VITE_SUPABASE_ANON_KEY as string) || (process.env?.VITE_SUPABASE_ANON_KEY as string) || '',
-    REVENUECAT_API_KEY: (import.meta.env?.VITE_REVENUECAT_API_KEY as string) || (process.env?.REVENUECAT_API_KEY as string) || 'goog_kqOynvNRCABzUPrpfyFvlMvHUna',
+    GEMINI_API_KEY: GEMINI_KEY,
+    SUPABASE_URL: safeGetEnv('VITE_SUPABASE_URL'),
+    SUPABASE_ANON_KEY: safeGetEnv('VITE_SUPABASE_ANON_KEY'),
+    REVENUECAT_API_KEY: safeGetEnv('VITE_REVENUECAT_API_KEY') || 'goog_kqOynvNRCABzUPrpfyFvlMvHUna',
     APP_ID: 'com.mastergrowbot.app',
 };
 
 // Second layer of debug for the resolved object
 if (!CONFIG.GEMINI_API_KEY) {
-    console.error('[CONFIG] CRITICAL: Gemini API Key resolved to empty string. Check Codemagic environment variables and vite.config.ts mappings.');
+    console.warn('[CONFIG] Warning: Gemini API Key is empty. Ensure VITE_GEMINI_API_KEY is set in your environment.');
 }
 
 // Runtime validation helper
