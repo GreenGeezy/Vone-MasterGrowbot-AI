@@ -81,11 +81,11 @@ workflows:
 
           android {
               namespace "com.mastergrowbot.app"
-              compileSdk project.ext.compileSdkVersion
+              compileSdk 34
               defaultConfig {
                   applicationId "com.mastergrowbot.app"
-                  minSdkVersion project.ext.minSdkVersion
-                  targetSdkVersion project.ext.targetSdkVersion
+                  minSdkVersion 22
+                  targetSdkVersion 34
                   versionCode 1
                   versionName "1.0"
                   testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -106,7 +106,7 @@ workflows:
 
           dependencies {
               implementation fileTree(dir: 'libs', include: ['*.jar'])
-              implementation "androidx.appcompat:appcompat:\$project.ext.androidxAppCompatVersion"
+              implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation project(':capacitor-android')
               implementation project(':capacitor-cordova-android-plugins')
               implementation platform('com.google.firebase:firebase-bom:34.7.0')
