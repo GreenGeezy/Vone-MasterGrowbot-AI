@@ -1,4 +1,4 @@
-# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.6.2 - 2026 Edition)
+# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.6.4 - 2026 Edition)
 workflows:
   android-release:
     name: Android Release Build 2026
@@ -16,9 +16,6 @@ workflows:
         VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
         PACKAGE_NAME: "com.mastergrowbot.app"
         JAVA_HOME: /Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home
-        JAVA_TOOL_OPTIONS: "-Xmx6g"
-        GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6g"
-      node: latest
     scripts:
       - name: Install Dependencies
         script: |
@@ -26,8 +23,7 @@ workflows:
           npm install --legacy-peer-deps
           npm install @capacitor/android @revenuecat/purchases-capacitor @capacitor-community/in-app-review --legacy-peer-deps
       - name: Web Build
-        script: |
-          npm run build
+        script: npm run build
       - name: Capacitor Sync & Deep Repair
         script: |
           # 1. Force a fresh start to recreate missing gradlew scripts
@@ -38,12 +34,10 @@ workflows:
           # 2. Inject google-services.json
           mkdir -p android/app
           cat <<EOF > android/app/google-services.json
-          $(cat <<'JSON'
           {
             "project_info": {
               "project_number": "360575943200",
-              "project_id": "gen-lang-client-0483274603",
-              "storage_bucket": "gen-lang-client-0483274603.firebasestorage.app"
+              "project_id": "gen-lang-client-0483274603"
             },
             "client": [
               {
@@ -51,22 +45,13 @@ workflows:
                   "mobilesdk_app_id": "1:360575943200:android:9d2fad05b843bffa4d3245",
                   "android_client_info": { "package_name": "com.mastergrowbot.app" }
                 },
-                "oauth_client": [
-                  {
-                    "client_id": "360575943200-mq17ju3a221117rgu96v7as1b4o49rq8.apps.googleusercontent.com",
-                    "client_type": 3
-                  }
-                ],
                 "api_key": [ { "current_key": "AIzaSyBEmRHHbEqZvbYwgOmuk8THcxuxJSlewlg" } ]
               }
-            ],
-            "configuration_version": "1"
+            ]
           }
-          JSON
-          )
           EOF
 
-          # 3. Apply the Bouncy Castle security fix to the fresh build.gradle
+          # 3. Root build.gradle replacement (Fixed SDK & Bouncy Castle)
           cat <<EOF > android/build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -87,16 +72,15 @@ workflows:
               }
           }
           EOF
-          
-          # 4. Inject Firebase dependencies and apply plugin
+
+          # 4. Inject Firebase dependencies
           sed -i '' '/dependencies {/a \    implementation platform("com.google.firebase:firebase-bom:34.7.0")\n    implementation "com.google.firebase:firebase-analytics"' android/app/build.gradle
           grep -q "com.google.gms.google-services" android/app/build.gradle || echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
 
       - name: Build Android App Bundle
         script: |
-          # Absolute Cache Cleanup (fixes Build #32)
+          # Absolute Cache Cleanup
           rm -rf ~/.gradle/caches/
-          rm -rf android/.gradle
           cd android
           chmod +x gradlew
           ./gradlew clean
@@ -107,4 +91,3 @@ workflows:
       google_play:
         credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
         track: internal
-        submit_as_draft: false
