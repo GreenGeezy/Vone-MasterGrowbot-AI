@@ -68,11 +68,11 @@ workflows:
           }
           EOF
 
-          # 3. Create settings.gradle with Capacitor linkages
+          # 3.5. Correct settings.gradle linkage
           cat <<EOF > android/settings.gradle
           include ':app'
-          project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')
           include ':capacitor-android'
+          project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')
           apply from: 'capacitor.settings.gradle'
           EOF
 
