@@ -1,9 +1,9 @@
-# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.6.4 - 2026 Edition)
+# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.6.0 - 2026 Edition)
 workflows:
   android-release:
     name: Android Release Build 2026
     max_build_duration: 60
-    instance_type: mac_mini_m2
+    instance_type: mac_mini_m1
     environment:
       android_signing:
         - mastergrowbot_keystore
@@ -16,6 +16,9 @@ workflows:
         VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
         PACKAGE_NAME: "com.mastergrowbot.app"
         JAVA_HOME: /Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home
+        JAVA_TOOL_OPTIONS: "-Xmx6g"
+        GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6g"
+      node: latest
     scripts:
       - name: Install Dependencies
         script: |
@@ -23,12 +26,12 @@ workflows:
           npm install --legacy-peer-deps
           npm install @capacitor/android @revenuecat/purchases-capacitor @capacitor-community/in-app-review --legacy-peer-deps
       - name: Web Build
-        script: npm run build
-      - name: Capacitor Sync & Deep Repair
         script: |
-          # 1. Force a fresh start to recreate missing gradlew scripts
-          rm -rf android
-          npx cap add android
+          npm run build
+      - name: Capacitor Sync & Self-Healing Config
+        script: |
+          # 1. Ensure android project is present and synced
+          npx cap add android || true
           npx cap sync android
 
           # 2. Inject google-services.json
@@ -37,7 +40,8 @@ workflows:
           {
             "project_info": {
               "project_number": "360575943200",
-              "project_id": "gen-lang-client-0483274603"
+              "project_id": "gen-lang-client-0483274603",
+              "storage_bucket": "gen-lang-client-0483274603.firebasestorage.app"
             },
             "client": [
               {
@@ -45,42 +49,118 @@ workflows:
                   "mobilesdk_app_id": "1:360575943200:android:9d2fad05b843bffa4d3245",
                   "android_client_info": { "package_name": "com.mastergrowbot.app" }
                 },
-                "api_key": [ { "current_key": "AIzaSyBEmRHHbEqZvbYwgOmuk8THcxuxJSlewlg" } ]
+                "oauth_client": [
+                  {
+                    "client_id": "360575943200-mq17ju3a221117rgu96v7as1b4o49rq8.apps.googleusercontent.com",
+                    "client_type": 3
+                  }
+                ],
+                "api_key": [ { "current_key": "AIzaSyBEmRHHbEqZvbYwgOmuk8THcxuxJSlewlg" } ],
+                "services": {
+                  "appinvite_service": {
+                    "other_platform_oauth_client": [
+                      { "client_id": "360575943200-mq17ju3a221117rgu96v7as1b4o49rq8.apps.googleusercontent.com", "client_type": 3 }
+                    ]
+                  }
+                }
               }
-            ]
+            ],
+            "configuration_version": "1"
           }
           EOF
 
-          # 3. Root build.gradle replacement (Fixed SDK & Bouncy Castle)
+          # 3. Complete Root build.gradle replacement (Fixes Bouncy Castle & Google Services)
           cat <<EOF > android/build.gradle
           buildscript {
-              repositories { google(); mavenCentral() }
+              repositories {
+                  google()
+                  mavenCentral()
+              }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.2.1'
                   classpath 'com.google.gms:google-services:4.4.2'
               }
           }
-          ext {
-              compileSdkVersion = 34
-              targetSdkVersion = 34
-              minSdkVersion = 22
-          }
           allprojects {
-              repositories { google(); mavenCentral() }
-              configurations.all {
-                  resolutionStrategy { force 'org.bouncycastle:bcprov-jdk18on:1.77' }
+              repositories {
+                  google()
+                  mavenCentral()
               }
+              configurations.all {
+                  resolutionStrategy {
+                      force 'org.bouncycastle:bcprov-jdk18on:1.77'
+                  }
+              }
+          }
+          task clean(type: Delete) {
+              delete rootProject.buildDir
           }
           EOF
 
-          # 4. Inject Firebase dependencies
+          # 4. Inject Firebase dependencies and apply plugin in app/build.gradle
           sed -i '' '/dependencies {/a \    implementation platform("com.google.firebase:firebase-bom:34.7.0")\n    implementation "com.google.firebase:firebase-analytics"' android/app/build.gradle
           grep -q "com.google.gms.google-services" android/app/build.gradle || echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
 
+          # 5. Overwrite AndroidManifest.xml for permissions
+          cat <<EOF > android/app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="com.android.vending.BILLING" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme">
+                  <activity
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+                      android:name=".MainActivity"
+                      android:label="@string/title_activity_main"
+                      android:theme="@style/AppTheme.NoActionBarLaunch"
+                      android:launchMode="singleTop"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                      <intent-filter>
+                          <action android:name="android.intent.action.VIEW" />
+                          <category android:name="android.intent.category.DEFAULT" />
+                          <category android:name="android.intent.category.BROWSABLE" />
+                          <data android:scheme="mastergrowbot" android:host="callback" />
+                      </intent-filter>
+                  </activity>
+                  <provider
+                      android:name="androidx.core.content.FileProvider"
+                      android:authorities="\${applicationId}.fileprovider"
+                      android:exported="false"
+                      android:grantUriPermissions="true">
+                      <meta-data
+                          android:name="android.support.FILE_PROVIDER_PATHS"
+                          android:resource="@xml/file_paths"></meta-data>
+                  </provider>
+              </application>
+          </manifest>
+          EOF
+
+      - name: Set up KeyStore
+        script: |
+          cat >> android/key.properties <<EOF
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=$CM_KEYSTORE_PATH
+          EOF
+
       - name: Build Android App Bundle
         script: |
-          # Absolute Cache Cleanup
           rm -rf ~/.gradle/caches/
+          rm -rf android/.gradle
           cd android
           chmod +x gradlew
           ./gradlew clean
@@ -91,3 +171,4 @@ workflows:
       google_play:
         credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
         track: internal
+        submit_as_draft: false
