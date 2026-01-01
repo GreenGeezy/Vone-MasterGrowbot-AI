@@ -26,32 +26,38 @@ workflows:
           npm run build
       - name: Capacitor Sync & Self-Healing Config
         script: |
+          # 1. Initialize Structure
           npx cap add android || true
+          npx cap sync android
           
-          # 1. Inject google-services.json (Validated Data)
+          # 2. Inject Validated google-services.json
           mkdir -p android/app
           cat <<EOF > android/app/google-services.json
           {
-            "project_info": {
-              "project_number": "360575943200",
-              "project_id": "gen-lang-client-0483274603",
-              "storage_bucket": "gen-lang-client-0483274603.firebasestorage.app"
-            },
-            "client": [
-              {
-                "client_info": {
-                  "mobilesdk_app_id": "1:360575943200:android:9d2fad05b843bffa4d3245",
-                  "android_client_info": { "package_name": "com.mastergrowbot.app" }
-                },
-                "api_key": [ { "current_key": "AIzaSyBRIK10W7TOBUqxe9YjEXlGVkk0V43Nt9o" } ],
-                "services": { "appinvite_service": { "other_platform_oauth_client": [ { "client_id": "360575943200-mq17ju3a221117rgu96v7as1b4o49rq8.apps.googleusercontent.com", "client_type": 3 } ] } }
-              }
-            ],
+            "project_info": { "project_number": "360575943200", "project_id": "gen-lang-client-0483274603", "storage_bucket": "gen-lang-client-0483274603.firebasestorage.app" },
+            "client": [ {
+              "client_info": { "mobilesdk_app_id": "1:360575943200:android:9d2fad05b843bffa4d3245", "android_client_info": { "package_name": "com.mastergrowbot.app" } },
+              "api_key": [ { "current_key": "AIzaSyBRIK10W7TOBUqxe9YjEXlGVkk0V43Nt9o" } ],
+              "services": { "appinvite_service": { "other_platform_oauth_client": [ { "client_id": "360575943200-mq17ju3a221117rgu96v7as1b4o49rq8.apps.googleusercontent.com", "client_type": 3 } ] } }
+            } ],
             "configuration_version": "1"
           }
           EOF
+          
+          # 3. Correct settings.gradle linkage (Fixing missing Cordova path)
+          cat <<EOF > android/settings.gradle
+          include ':app'
+          include ':capacitor-android'
+          project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')
+          include ':capacitor-cordova-android-plugins'
+          project(':capacitor-cordova-android-plugins').projectDir = new File('capacitor-cordova-android-plugins')
+          apply from: 'capacitor.settings.gradle'
+          EOF
+          
+          # 4. Final sync to bind new settings
+          npx cap sync android
 
-          # 2. Generate root variables.gradle
+          # 5. Root Build Configs
           cat <<EOF > android/variables.gradle
           ext {
               minSdkVersion = 22
@@ -69,7 +75,6 @@ workflows:
           }
           EOF
 
-          # 3. Generate root build.gradle
           cat <<EOF > android/build.gradle
           buildscript {
               repositories {
@@ -92,15 +97,7 @@ workflows:
           }
           EOF
 
-          # 4. Correct settings.gradle linkage
-          cat <<EOF > android/settings.gradle
-          include ':app'
-          include ':capacitor-android'
-          project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')
-          apply from: 'capacitor.settings.gradle'
-          EOF
-
-          # 5. Generate app-level build.gradle
+          # 6. App Level Build Config (Hardcoded SDK 34 + Google Services)
           cat <<EOF > android/app/build.gradle
           apply plugin: 'com.android.application'
           apply plugin: 'com.google.gms.google-services'
@@ -141,8 +138,6 @@ workflows:
 
           apply from: 'capacitor.build.gradle'
           EOF
-          
-          npx cap sync android
 
       - name: Build Android App Bundle
         script: |
