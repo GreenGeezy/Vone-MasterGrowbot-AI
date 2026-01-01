@@ -1,4 +1,4 @@
-# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.6.0 - 2026 Edition)
+# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.6.1 - 2026 Edition)
 workflows:
   android-release:
     name: Android Release Build 2026
@@ -30,7 +30,7 @@ workflows:
           npm run build
       - name: Capacitor Sync & Self-Healing Config
         script: |
-          # 1. Ensure android project is present and synced
+          # 1. Ensure android project structure
           npx cap add android || true
           npx cap sync android
 
@@ -69,7 +69,7 @@ workflows:
           }
           EOF
 
-          # 3. Complete Root build.gradle replacement (Fixes Bouncy Castle & Google Services)
+          # 3. Root build.gradle
           cat <<EOF > android/build.gradle
           buildscript {
               repositories {
@@ -97,9 +97,53 @@ workflows:
           }
           EOF
 
-          # 4. Inject Firebase dependencies and apply plugin in app/build.gradle
-          sed -i '' '/dependencies {/a \    implementation platform("com.google.firebase:firebase-bom:34.7.0")\n    implementation "com.google.firebase:firebase-analytics"' android/app/build.gradle
-          grep -q "com.google.gms.google-services" android/app/build.gradle || echo 'apply plugin: "com.google.gms.google-services"' >> android/app/build.gradle
+          # 4. App-level build.gradle (Self-Healing Full Content)
+          cat <<EOF > android/app/build.gradle
+          apply plugin: 'com.android.application'
+          android {
+              namespace "com.mastergrowbot.app"
+              compileSdk project.ext.compileSdkVersion
+              defaultConfig {
+                  applicationId "com.mastergrowbot.app"
+                  minSdkVersion project.ext.minSdkVersion
+                  targetSdkVersion project.ext.targetSdkVersion
+                  versionCode 1
+                  versionName "1.0"
+                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+                  aaptOptions {
+                      noCompress 'tflite'
+                  }
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+                  }
+              }
+          }
+          repositories {
+              flatDir { dirs 'libs' }
+          }
+          dependencies {
+              implementation fileTree(dir: 'libs', include: ['*.jar'])
+              implementation "androidx.appcompat:appcompat:\$androidxAppCompatVersion"
+              implementation "androidx.coordinatorlayout:coordinatorlayout:\$androidxCoordinatorLayoutVersion"
+              implementation "androidx.core:core-ktx:\$androidxCoreKTXVersion"
+              implementation project(':capacitor-android')
+              implementation project(':capacitor-cordova-android-plugins')
+              implementation platform('com.google.firebase:firebase-bom:34.7.0')
+              implementation 'com.google.firebase:firebase-analytics'
+          }
+          apply from: 'capacitor.build.gradle'
+          try {
+              def servicesJSON = file('google-services.json')
+              if (servicesJSON.exists()) {
+                  apply plugin: 'com.google.gms.google-services'
+              }
+          } catch(Exception e) {
+              logger.info("google-services.json not found")
+          }
+          EOF
 
           # 5. Overwrite AndroidManifest.xml for permissions
           cat <<EOF > android/app/src/main/AndroidManifest.xml
