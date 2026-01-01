@@ -1,91 +1,52 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
+import { CONFIG } from './config';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("Supabase credentials missing. Auth and Database features will be disabled.");
+if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY) {
+  console.warn("Supabase credentials missing. Auth and Database features will be limited.");
 }
 
-export const supabase = (supabaseUrl && supabaseAnonKey) 
-  ? createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = (CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY) 
+  ? createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY)
   : null;
 
-/**
- * Sign in with Google OAuth.
- */
 export const signInWithGoogle = async () => {
-  if (!supabase) {
-    console.error("Supabase client not initialized.");
-    return { data: null, error: new Error("Supabase configuration missing") };
-  }
+  if (!supabase) return { data: null, error: new Error("Supabase missing") };
 
   const redirectUrl = Capacitor.isNativePlatform() 
     ? 'mastergrowbot://callback' 
     : window.location.origin;
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
+  return await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: redirectUrl,
-      queryParams: {
-        access_type: 'offline',
-        prompt: 'consent',
-      },
+      queryParams: { access_type: 'offline', prompt: 'consent' },
     },
   });
-  
-  return { data, error };
 };
 
-/**
- * Fetches the current user's row from the 'profiles' table.
- */
 export const getUserProfile = async () => {
-  if (!supabase) return { data: null, error: new Error("Supabase configuration missing") };
-
+  if (!supabase) return { data: null, error: new Error("Supabase missing") };
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { data: null, error: new Error("No user") };
 
-  if (!user) {
-    return { data: null, error: new Error("User is not authenticated") };
-  }
-
-  const { data, error } = await supabase
+  return await supabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single();
-
-  return { data, error };
 };
 
-/**
- * Updates the current user's profile with onboarding data.
- */
-export const updateOnboardingProfile = async (updates: {
-  experience: string;
-  environment: string;
-  goal: string;
-  grow_space_size: string;
-}) => {
-  if (!supabase) return { data: null, error: new Error("Supabase configuration missing") };
-
+export const updateOnboardingProfile = async (updates: any) => {
+  if (!supabase) return { data: null, error: new Error("Supabase missing") };
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { data: null, error: new Error("No user") };
 
-  if (!user) {
-    return { data: null, error: new Error("User is not authenticated") };
-  }
-
-  const { data, error } = await supabase
+  return await supabase
     .from('profiles')
-    .upsert({
-      id: user.id,
-      ...updates,
-      updated_at: new Date().toISOString(),
-    })
+    .upsert({ id: user.id, ...updates, updated_at: new Date().toISOString() })
     .select()
     .single();
-
-  return { data, error };
 };
