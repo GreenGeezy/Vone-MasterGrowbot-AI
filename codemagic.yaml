@@ -1,4 +1,4 @@
-# MasterGrowbot AI - CI/CD Pipeline Configuration (v1.6.1 - 2026 Edition)
+
 workflows:
   android-release:
     name: Android Release Build 2026
@@ -15,61 +15,38 @@ workflows:
         VITE_SUPABASE_URL: ${SUPABASE_URL}
         VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
         PACKAGE_NAME: "com.mastergrowbot.app"
-        JAVA_HOME: /Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home
-        JAVA_TOOL_OPTIONS: "-Xmx6g"
-        GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6g"
-      node: latest
     scripts:
       - name: Install Dependencies
         script: |
           npm cache clean --force
           npm install --legacy-peer-deps
-          npm install @capacitor/android @revenuecat/purchases-capacitor @capacitor-community/in-app-review --legacy-peer-deps
+          npm install @capacitor/android@^6.0.0 @revenuecat/purchases-capacitor @capacitor-community/in-app-review --legacy-peer-deps
       - name: Web Build
         script: |
           npm run build
       - name: Capacitor Sync & Self-Healing Config
         script: |
-          # 1. Ensure android project structure
           npx cap add android || true
-          npx cap sync android
-
-          # 2. Inject google-services.json
-          mkdir -p android/app
-          cat <<EOF > android/app/google-services.json
-          {
-            "project_info": {
-              "project_number": "360575943200",
-              "project_id": "gen-lang-client-0483274603",
-              "storage_bucket": "gen-lang-client-0483274603.firebasestorage.app"
-            },
-            "client": [
-              {
-                "client_info": {
-                  "mobilesdk_app_id": "1:360575943200:android:9d2fad05b843bffa4d3245",
-                  "android_client_info": { "package_name": "com.mastergrowbot.app" }
-                },
-                "oauth_client": [
-                  {
-                    "client_id": "360575943200-mq17ju3a221117rgu96v7as1b4o49rq8.apps.googleusercontent.com",
-                    "client_type": 3
-                  }
-                ],
-                "api_key": [ { "current_key": "AIzaSyBEmRHHbEqZvbYwgOmuk8THcxuxJSlewlg" } ],
-                "services": {
-                  "appinvite_service": {
-                    "other_platform_oauth_client": [
-                      { "client_id": "360575943200-mq17ju3a221117rgu96v7as1b4o49rq8.apps.googleusercontent.com", "client_type": 3 }
-                    ]
-                  }
-                }
-              }
-            ],
-            "configuration_version": "1"
+          
+          # 1. Generate root variables.gradle
+          cat <<EOF > android/variables.gradle
+          ext {
+              minSdkVersion = 22
+              compileSdkVersion = 34
+              targetSdkVersion = 34
+              androidxActivityVersion = '1.8.0'
+              androidxAppCompatVersion = '1.6.1'
+              androidxCoordinatorLayoutVersion = '1.2.0'
+              androidxCoreVersion = '1.12.0'
+              androidxFragmentVersion = '1.6.2'
+              junitVersion = '4.13.2'
+              androidxJunitVersion = '1.1.5'
+              androidxEspressoCoreVersion = '3.5.1'
+              cordovaAndroidVersion = '10.1.1'
           }
           EOF
 
-          # 3. Root build.gradle
+          # 2. Generate root build.gradle
           cat <<EOF > android/build.gradle
           buildscript {
               repositories {
@@ -78,7 +55,7 @@ workflows:
               }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.2.1'
-                  classpath 'com.google.gms:google-services:4.4.2'
+                  classpath 'com.google.gms:google-services:4.4.0'
               }
           }
           allprojects {
@@ -86,20 +63,22 @@ workflows:
                   google()
                   mavenCentral()
               }
-              configurations.all {
-                  resolutionStrategy {
-                      force 'org.bouncycastle:bcprov-jdk18on:1.77'
-                  }
-              }
           }
           task clean(type: Delete) {
               delete rootProject.buildDir
           }
           EOF
 
-          # 4. App-level build.gradle (Self-Healing Full Content)
+          # 3. Generate settings.gradle
+          cat <<EOF > android/settings.gradle
+          include ':app'
+          EOF
+
+          # 4. Generate app-level build.gradle
           cat <<EOF > android/app/build.gradle
           apply plugin: 'com.android.application'
+          apply plugin: 'com.google.gms.google-services'
+
           android {
               namespace "com.mastergrowbot.app"
               compileSdk project.ext.compileSdkVersion
@@ -110,109 +89,39 @@ workflows:
                   versionCode 1
                   versionName "1.0"
                   testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-                  aaptOptions {
-                      noCompress 'tflite'
-                  }
               }
               buildTypes {
                   release {
                       minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
               }
           }
+
           repositories {
-              flatDir { dirs 'libs' }
+              flatDir {
+                  dirs 'libs'
+              }
           }
+
           dependencies {
               implementation fileTree(dir: 'libs', include: ['*.jar'])
-              implementation "androidx.appcompat:appcompat:\$androidxAppCompatVersion"
-              implementation "androidx.coordinatorlayout:coordinatorlayout:\$androidxCoordinatorLayoutVersion"
-              implementation "androidx.core:core-ktx:\$androidxCoreKTXVersion"
+              implementation "androidx.appcompat:appcompat:\$project.ext.androidxAppCompatVersion"
               implementation project(':capacitor-android')
               implementation project(':capacitor-cordova-android-plugins')
               implementation platform('com.google.firebase:firebase-bom:34.7.0')
               implementation 'com.google.firebase:firebase-analytics'
           }
+
           apply from: 'capacitor.build.gradle'
-          try {
-              def servicesJSON = file('google-services.json')
-              if (servicesJSON.exists()) {
-                  apply plugin: 'com.google.gms.google-services'
-              }
-          } catch(Exception e) {
-              logger.info("google-services.json not found")
-          }
           EOF
-
-          # 5. Overwrite AndroidManifest.xml for permissions
-          cat <<EOF > android/app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="com.android.vending.BILLING" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="@string/app_name"
-                  android:roundIcon="@mipmap/ic_launcher_round"
-                  android:supportsRtl="true"
-                  android:theme="@style/AppTheme">
-                  <activity
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
-                      android:name=".MainActivity"
-                      android:label="@string/title_activity_main"
-                      android:theme="@style/AppTheme.NoActionBarLaunch"
-                      android:launchMode="singleTop"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                      <intent-filter>
-                          <action android:name="android.intent.action.VIEW" />
-                          <category android:name="android.intent.category.DEFAULT" />
-                          <category android:name="android.intent.category.BROWSABLE" />
-                          <data android:scheme="mastergrowbot" android:host="callback" />
-                      </intent-filter>
-                  </activity>
-                  <provider
-                      android:name="androidx.core.content.FileProvider"
-                      android:authorities="\${applicationId}.fileprovider"
-                      android:exported="false"
-                      android:grantUriPermissions="true">
-                      <meta-data
-                          android:name="android.support.FILE_PROVIDER_PATHS"
-                          android:resource="@xml/file_paths"></meta-data>
-                  </provider>
-              </application>
-          </manifest>
-          EOF
-
-      - name: Set up KeyStore
-        script: |
-          cat >> android/key.properties <<EOF
-          storePassword=$CM_KEYSTORE_PASSWORD
-          keyPassword=$CM_KEY_PASSWORD
-          keyAlias=$CM_KEY_ALIAS
-          storeFile=$CM_KEYSTORE_PATH
-          EOF
+          
+          npx cap sync android
 
       - name: Build Android App Bundle
         script: |
-          rm -rf ~/.gradle/caches/
-          rm -rf android/.gradle
           cd android
           chmod +x gradlew
-          ./gradlew clean
           ./gradlew bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
-    publishing:
-      google_play:
-        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal
-        submit_as_draft: false

@@ -1,3 +1,4 @@
+
 {
   "name": "mastergrowbot-ai",
   "private": true,
@@ -15,6 +16,7 @@
     "lucide-react": "^0.554.0",
     "@supabase/supabase-js": "^2.39.0",
     "@capacitor/core": "^6.0.0",
+    "@capacitor/android": "^6.0.0",
     "@revenuecat/purchases-capacitor": "^7.0.0"
   },
   "devDependencies": {
