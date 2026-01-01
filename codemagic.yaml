@@ -16,6 +16,13 @@ workflows:
         VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
         PACKAGE_NAME: "com.mastergrowbot.app"
     scripts:
+      - name: Set up Java 21
+        script: |
+          # Force Java 21 for Bouncy Castle 1.79+ compatibility
+          jdk_path=$(/usr/libexec/java_home -v 21)
+          echo "export JAVA_HOME=$jdk_path" >> $CM_ENV
+          export JAVA_HOME=$jdk_path
+          java -version
       - name: Install Dependencies
         script: |
           npm cache clean --force
@@ -50,7 +57,7 @@ workflows:
           GEMINI_API_KEY=$VITE_GEMINI_API_KEY
           EOF
 
-          # 4. Correct settings.gradle (Including Cordova bridge for RevenueCat)
+          # 4. Correct settings.gradle (Including Cordova bridge)
           cat <<EOF > android/settings.gradle
           include ':app'
           include ':capacitor-android'
@@ -60,7 +67,7 @@ workflows:
           apply from: 'capacitor.settings.gradle'
           EOF
           
-          # 5. Generate root build.gradle (Bouncy Castle Stability Fix)
+          # 5. Generate root build.gradle (FORCING BOUNCY CASTLE FIX)
           cat <<EOF > android/build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -123,6 +130,8 @@ workflows:
           rm -rf ~/.gradle/caches/
           cd android
           chmod +x gradlew
+          # Upgrade Wrapper to 8.5
+          ./gradlew wrapper --gradle-version 8.5 --distribution-type all
           ./gradlew bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
