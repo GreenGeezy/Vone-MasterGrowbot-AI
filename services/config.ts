@@ -4,18 +4,11 @@
  * Safely bridges environment variables to the application logic.
  */
 
-// Safely detect environment variables without throwing TypeError if objects are undefined
-const safeGetEnv = (key: string): string => {
-  try {
-    // Check import.meta.env (Vite) first, then fallback to process.env (Vite define block)
-    const value = (import.meta.env && import.meta.env[key]) || (process.env && (process.env as any)[key]);
-    return typeof value === 'string' ? value : '';
-  } catch (e) {
-    return '';
-  }
-};
-
-const GEMINI_KEY = safeGetEnv('VITE_GEMINI_API_KEY');
+// Safe pattern as requested: defaults to empty string to prevent crashes on undefined
+export const GEMINI_KEY = (import.meta.env?.VITE_GEMINI_API_KEY as string) || '';
+export const SUPABASE_URL = (import.meta.env?.VITE_SUPABASE_URL as string) || '';
+export const SUPABASE_ANON_KEY = (import.meta.env?.VITE_SUPABASE_ANON_KEY as string) || '';
+export const REVENUECAT_KEY = (import.meta.env?.VITE_REVENUECAT_API_KEY as string) || 'goog_kqOynvNRCABzUPrpfyFvlMvHUna';
 
 // Debug logging for build/runtime verification
 console.log('[CONFIG] Gemini API Key detection:', 
@@ -24,16 +17,11 @@ console.log('[CONFIG] Gemini API Key detection:',
 
 export const CONFIG = {
     GEMINI_API_KEY: GEMINI_KEY,
-    SUPABASE_URL: safeGetEnv('VITE_SUPABASE_URL'),
-    SUPABASE_ANON_KEY: safeGetEnv('VITE_SUPABASE_ANON_KEY'),
-    REVENUECAT_API_KEY: safeGetEnv('VITE_REVENUECAT_API_KEY') || 'goog_kqOynvNRCABzUPrpfyFvlMvHUna',
+    SUPABASE_URL: SUPABASE_URL,
+    SUPABASE_ANON_KEY: SUPABASE_ANON_KEY,
+    REVENUECAT_API_KEY: REVENUECAT_KEY,
     APP_ID: 'com.mastergrowbot.app',
 };
-
-// Second layer of debug for the resolved object
-if (!CONFIG.GEMINI_API_KEY) {
-    console.warn('[CONFIG] Warning: Gemini API Key is empty. Ensure VITE_GEMINI_API_KEY is set in your environment.');
-}
 
 // Runtime validation helper
 export const validateConfig = () => {
