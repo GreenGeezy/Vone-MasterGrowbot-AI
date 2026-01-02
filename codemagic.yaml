@@ -5,7 +5,8 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       groups:
-        - production
+        - production    # Loads Keystore
+        - app_config    # Loads API Keys
       node: 20.11.1
       java: 17
     triggering:
