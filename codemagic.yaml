@@ -4,6 +4,8 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m2
     environment:
+      groups:
+        - google_play
       node: 20.11.1
       java: 17
     triggering:
@@ -21,9 +23,7 @@ workflows:
           npm run build
       - name: Sync and Copy Capacitor
         script: |
-          # Ensure Capacitor identifies the Android project
           npx cap sync android
-          npx cap copy android
       - name: Build Android App Bundle (AAB)
         script: |
           cd android
@@ -31,7 +31,6 @@ workflows:
           ./gradlew bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
-      - android/app/build/outputs/apk/release/*.apk
     publishing:
       email:
         recipients:
