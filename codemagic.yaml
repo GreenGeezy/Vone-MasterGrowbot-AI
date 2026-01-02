@@ -5,7 +5,7 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       groups:
-        - google_play
+        - production
       node: 20.11.1
       java: 17
     triggering:
