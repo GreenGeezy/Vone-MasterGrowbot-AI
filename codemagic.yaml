@@ -1,4 +1,3 @@
-
 workflows:
   android-release:
     name: Android Release Build 2026
@@ -19,9 +18,14 @@ workflows:
       node: 20
       java: 17
     scripts:
+      - name: Pre-build Cleanup
+        script: |
+          # Clear Gradle caches to remove corrupted JARs (Bouncy Castle fix)
+          rm -rf ~/.gradle/caches/
+          # Clear npm cache
+          npm cache clean --force
       - name: Install Dependencies
         script: |
-          npm cache clean --force
           npm install --legacy-peer-deps
           npm install @capacitor/android@^6.0.0 @revenuecat/purchases-capacitor @capacitor-community/in-app-review --legacy-peer-deps
       - name: Web Build
@@ -30,10 +34,14 @@ workflows:
           npm run build
       - name: Capacitor Add & Environment Creation
         script: |
-          # 1. Create Android platform
+          # 1. Create Android platform (Required as repo doesn't contain /android)
           npx cap add android || true
           
-          # 2. Create variables.gradle (Fixes 'compileSdkVersion not specified' and missing SplashScreen version)
+          # 2. Copy google-services.json from project root to Android app folder
+          mkdir -p android/app
+          cp google-services.json android/app/google-services.json
+
+          # 3. Create variables.gradle with required Capacitor 6.0+ properties
           cat <<EOF > android/variables.gradle
           ext {
               minSdkVersion = 22
@@ -52,57 +60,48 @@ workflows:
           }
           EOF
 
-          # 3. Surgical Patching: Link variables and fix namespace
-          # Inject namespace for Capacitor 6 compatibility
-          sed -i '' 's/android {/android {\n    namespace "com.mastergrowbot.app"/' android/app/build.gradle
-          
-          # 4. Overwrite root build.gradle with linked variables and Bouncy Castle fix in BOTH blocks
+          # 4. Overwrite Root build.gradle with Google Services 4.4.4 and Bouncy Castle Fix
           cat <<EOF > android/build.gradle
-          // MasterGrowbot Root Build Configuration
           apply from: "variables.gradle"
-          
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.2.1'
-                  classpath 'com.google.gms:google-services:4.4.2'
+                  classpath 'com.google.gms:google-services:4.4.4'
               }
               configurations.all {
                   resolutionStrategy {
-                      // Force 1.77 in buildscript to prevent JAR conflict during plugin resolution
                       force 'org.bouncycastle:bcprov-jdk18on:1.77'
                   }
               }
           }
-
           allprojects {
               repositories { google(); mavenCentral() }
               configurations.all {
                   resolutionStrategy {
-                      // Force 1.77 across all subprojects to prevent the 1.79 JAR execution exception
                       force 'org.bouncycastle:bcprov-jdk18on:1.77'
                   }
               }
           }
-
           task clean(type: Delete) {
               delete rootProject.buildDir
           }
           EOF
 
-          # 5. Inject Google Services using FIREBASE_API_KEY environment variable
-          mkdir -p android/app
-          cat <<EOF > android/app/google-services.json
-          {
-            "project_info": { "project_number": "360575943200", "project_id": "gen-lang-client-0483274603", "storage_bucket": "gen-lang-client-0483274603.firebasestorage.app" },
-            "client": [ {
-              "client_info": { "mobilesdk_app_id": "1:360575943200:android:9d2fad05b843bffa4d3245", "android_client_info": { "package_name": "com.mastergrowbot.app" } },
-              "api_key": [ { "current_key": "${FIREBASE_API_KEY}" } ],
-              "services": { "appinvite_service": { "other_platform_oauth_client": [ { "client_id": "360575943200-mq17ju3a221117rgu96v7as1b4o49rq8.apps.googleusercontent.com", "client_type": 3 } ] } }
-            } ],
-            "configuration_version": "1"
-          }
-          EOF
+          # 5. Inject Namespace, Firebase BoM 34.7.0, and Google Services Plugin into app/build.gradle
+          # Using sed to inject into the freshly generated build file
+          
+          # Add Namespace (Fixes build failure for missing package name)
+          sed -i '' 's/android {/android {\n    namespace "com.mastergrowbot.app"/' android/app/build.gradle
+          
+          # Add Firebase BoM and Analytics to dependencies
+          sed -i '' '/dependencies {/a\
+              implementation platform("com.google.firebase:firebase-bom:34.7.0")\
+              implementation "com.google.firebase:firebase-analytics"\
+          ' android/app/build.gradle
+
+          # Apply Google Services plugin at the end of the file
+          echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
 
           # 6. Capacitor Sync
           npx cap sync android
@@ -111,8 +110,6 @@ workflows:
         script: |
           cd android
           chmod +x gradlew
-          # Upgrade Wrapper for Gradle 8.5 compatibility
-          ./gradlew wrapper --gradle-version 8.5 --distribution-type all
           ./gradlew bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
