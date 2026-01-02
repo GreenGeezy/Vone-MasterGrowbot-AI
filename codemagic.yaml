@@ -1,43 +1,35 @@
 workflows:
   android-release:
-    name: Android Release Build 2026
-    max_build_duration: 60
-    instance_type: mac_mini_m1
+    name: MasterGrowbot Android Release
+    max_build_duration: 120
+    instance_type: mac_mini_m2
     environment:
-      android_signing:
-        - mastergrowbot_keystore
       groups:
-        - Production
-      vars:
-        VITE_GEMINI_API_KEY: ${VITE_GEMINI_API_KEY}
-        VITE_REVENUECAT_API_KEY: ${VITE_REVENUECAT_API_KEY}
-        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
-        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
-        FIREBASE_API_KEY: ${FIREBASE_API_KEY}
-        PACKAGE_NAME: "com.mastergrowbot.app"
-      node: 20
-      java: 21
+        - google_play # Ensure this group exists in Codemagic with your keystore variables
+      node: 20.11.1
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
     scripts:
-      - name: Pre-build Cleanup
+      - name: Install dependencies
         script: |
-          rm -rf ~/.gradle/caches/
-          npm cache clean --force
-      - name: Install Dependencies
+          npm install
+      - name: Sync Capacitor
         script: |
-          npm install --legacy-peer-deps
-          npm install @capacitor/android@^6.0.0 @revenuecat/purchases-capacitor @capacitor-community/in-app-review --legacy-peer-deps
-      - name: Web Build
-        script: |
-          npm run build
-      - name: Capacitor Sync
-        script: |
-          # Ensure google-services.json is in place
-          cp google-services.json android/app/google-services.json || true
           npx cap sync android
       - name: Build Android App Bundle
         script: |
           cd android
           chmod +x gradlew
-          ./gradlew bundleRelease --no-daemon --stacktrace
+          # Build signed release bundle
+          ./gradlew bundleRelease --no-daemon
     artifacts:
+      # This path tells Codemagic where to find the file to display for download
       - android/app/build/outputs/bundle/release/*.aab
+    publishing:
+      email:
+        recipients:
+          - Agcomsol@gmail.com
