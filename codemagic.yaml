@@ -4,9 +4,8 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m2
     environment:
-      groups:
-        - google_play # Ensure this group exists in Codemagic with your keystore variables
       node: 20.11.1
+      java: 17
     triggering:
       events:
         - push
@@ -17,18 +16,22 @@ workflows:
       - name: Install dependencies
         script: |
           npm install
-      - name: Sync Capacitor
+      - name: Build Web Assets
         script: |
+          npm run build
+      - name: Sync and Copy Capacitor
+        script: |
+          # Ensure Capacitor identifies the Android project
           npx cap sync android
-      - name: Build Android App Bundle
+          npx cap copy android
+      - name: Build Android App Bundle (AAB)
         script: |
           cd android
           chmod +x gradlew
-          # Build signed release bundle
           ./gradlew bundleRelease --no-daemon
     artifacts:
-      # This path tells Codemagic where to find the file to display for download
       - android/app/build/outputs/bundle/release/*.aab
+      - android/app/build/outputs/apk/release/*.apk
     publishing:
       email:
         recipients:
