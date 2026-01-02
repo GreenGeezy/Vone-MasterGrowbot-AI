@@ -20,9 +20,7 @@ workflows:
     scripts:
       - name: Pre-build Cleanup
         script: |
-          # Clear caches to remove problematic 1.79 JARs
           rm -rf ~/.gradle/caches/
-          rm -rf android/.gradle || true
           npm cache clean --force
       - name: Install Dependencies
         script: |
@@ -31,99 +29,11 @@ workflows:
       - name: Web Build
         script: |
           npm run build
-      - name: Capacitor Add & Environment Creation
+      - name: Capacitor Sync
         script: |
-          # 1. Initialize Android project
-          npx cap add android || true
-          
-          # 2. Deploy Firebase configuration
-          mkdir -p android/app
-          cp google-services.json android/app/google-services.json
-
-          # 3. Create gradle.properties
-          cat <<EOF > android/gradle.properties
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          android.useAndroidX=true
-          android.enableJetifier=true
-          EOF
-
-          # 4. Create variables.gradle
-          cat <<EOF > android/variables.gradle
-          ext {
-              minSdkVersion = 22
-              compileSdkVersion = 34
-              targetSdkVersion = 34
-              androidxActivityVersion = '1.8.0'
-              androidxAppCompatVersion = '1.6.1'
-              androidxCoordinatorLayoutVersion = '1.2.0'
-              androidxCoreVersion = '1.12.0'
-              androidxFragmentVersion = '1.6.2'
-              coreSplashScreenVersion = '1.0.1'
-              junitVersion = '4.13.2'
-              androidxJunitVersion = '1.1.5'
-              androidxEspressoCoreVersion = '3.5.1'
-              cordovaAndroidVersion = '10.1.1'
-          }
-          EOF
-
-          # 5. Root build.gradle with Corrected Bouncy Castle mapping
-          # We force 1.70 for jdk15on and 1.78.1 for jdk18on to satisfy AGP while avoiding the 1.79 bug.
-          cat <<EOF > android/build.gradle
-          apply from: "variables.gradle"
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.1'
-                  classpath 'com.google.gms:google-services:4.4.4'
-              }
-              configurations.all {
-                  resolutionStrategy.eachDependency { details ->
-                      if (details.requested.group == 'org.bouncycastle') {
-                          if (details.requested.name.contains('jdk15on')) {
-                              details.useVersion '1.70'
-                          } else if (details.requested.name.contains('jdk18on')) {
-                              details.useVersion '1.78.1'
-                          }
-                      }
-                  }
-              }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
-              configurations.all {
-                  resolutionStrategy.eachDependency { details ->
-                      if (details.requested.group == 'org.bouncycastle') {
-                          if (details.requested.name.contains('jdk15on')) {
-                              details.useVersion '1.70'
-                          } else if (details.requested.name.contains('jdk18on')) {
-                              details.useVersion '1.78.1'
-                          }
-                      }
-                  }
-              }
-          }
-          task clean(type: Delete) {
-              delete rootProject.buildDir
-          }
-          EOF
-
-          # 6. Patch app/build.gradle for Namespace and Firebase
-          sed -i '' 's/android {/android {\n    namespace "com.mastergrowbot.app"/' android/app/build.gradle
-          sed -i '' '/dependencies {/a\
-              implementation platform("com.google.firebase:firebase-bom:34.7.0")\
-              implementation "com.google.firebase:firebase-analytics"\
-          ' android/app/build.gradle
-          echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
-
-          # 7. Update Wrapper to 8.10.2 FIRST
-          cd android
-          chmod +x gradlew
-          ./gradlew wrapper --gradle-version 8.10.2 --distribution-type all
-          cd ..
-
-          # 8. Sync Capacitor
+          # Ensure google-services.json is in place
+          cp google-services.json android/app/google-services.json || true
           npx cap sync android
-
       - name: Build Android App Bundle
         script: |
           cd android

@@ -36,5 +36,5 @@ key.properties
 *.sw?
 
 # Capacitor / Mobile
-/android
+# Removed /android to allow stable build configs in CI/CD
 /ios
