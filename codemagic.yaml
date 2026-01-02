@@ -20,9 +20,9 @@ workflows:
     scripts:
       - name: Pre-build Cleanup
         script: |
-          # Clear Gradle caches to remove corrupted JARs (Bouncy Castle fix)
+          # Aggressive cleanup to remove corrupted dependency JARs and stale caches
           rm -rf ~/.gradle/caches/
-          # Clear npm cache
+          rm -rf android/.gradle || true
           npm cache clean --force
       - name: Install Dependencies
         script: |
@@ -30,18 +30,18 @@ workflows:
           npm install @capacitor/android@^6.0.0 @revenuecat/purchases-capacitor @capacitor-community/in-app-review --legacy-peer-deps
       - name: Web Build
         script: |
-          # Bakes env vars into the JS bundle via updated vite.config.ts
+          # Build the production web assets
           npm run build
       - name: Capacitor Add & Environment Creation
         script: |
-          # 1. Create Android platform (Required as repo doesn't contain /android)
+          # 1. Initialize Android project
           npx cap add android || true
           
-          # 2. Copy google-services.json from project root to Android app folder
+          # 2. Deploy Firebase configuration
           mkdir -p android/app
           cp google-services.json android/app/google-services.json
 
-          # 3. Create variables.gradle with required Capacitor 6.0+ properties
+          # 3. Define project variables
           cat <<EOF > android/variables.gradle
           ext {
               minSdkVersion = 22
@@ -60,7 +60,7 @@ workflows:
           }
           EOF
 
-          # 4. Overwrite Root build.gradle with Google Services 4.4.4 and Bouncy Castle Fix
+          # 4. Overwrite Root build.gradle with aggressive Bouncy Castle version forcing (Fixes 1.79 JAR error)
           cat <<EOF > android/build.gradle
           apply from: "variables.gradle"
           buildscript {
@@ -71,7 +71,9 @@ workflows:
               }
               configurations.all {
                   resolutionStrategy {
+                      // Force stable Bouncy Castle versions in the buildscript context
                       force 'org.bouncycastle:bcprov-jdk18on:1.77'
+                      force 'org.bouncycastle:bcpkix-jdk18on:1.77'
                   }
               }
           }
@@ -79,7 +81,9 @@ workflows:
               repositories { google(); mavenCentral() }
               configurations.all {
                   resolutionStrategy {
+                      // Force stable Bouncy Castle versions across all subprojects and plugins
                       force 'org.bouncycastle:bcprov-jdk18on:1.77'
+                      force 'org.bouncycastle:bcpkix-jdk18on:1.77'
                   }
               }
           }
@@ -88,28 +92,28 @@ workflows:
           }
           EOF
 
-          # 5. Inject Namespace, Firebase BoM 34.7.0, and Google Services Plugin into app/build.gradle
-          # Using sed to inject into the freshly generated build file
-          
-          # Add Namespace (Fixes build failure for missing package name)
+          # 5. Patch app/build.gradle for Firebase and Namespace compatibility
+          # Inject namespace for Android Gradle Plugin 8.0+
           sed -i '' 's/android {/android {\n    namespace "com.mastergrowbot.app"/' android/app/build.gradle
           
-          # Add Firebase BoM and Analytics to dependencies
+          # Inject Firebase dependencies
           sed -i '' '/dependencies {/a\
               implementation platform("com.google.firebase:firebase-bom:34.7.0")\
               implementation "com.google.firebase:firebase-analytics"\
           ' android/app/build.gradle
 
-          # Apply Google Services plugin at the end of the file
+          # Append Google Services plugin application
           echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
 
-          # 6. Capacitor Sync
+          # 6. Synchronize Capacitor plugins
           npx cap sync android
 
       - name: Build Android App Bundle
         script: |
           cd android
           chmod +x gradlew
-          ./gradlew bundleRelease --no-daemon
+          # Update to Gradle 8.5 for better compatibility with current dependency metadata
+          ./gradlew wrapper --gradle-version 8.5 --distribution-type all
+          ./gradlew bundleRelease --no-daemon --stacktrace
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
