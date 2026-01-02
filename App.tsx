@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AppScreen, Plant, Task, PlantStage, UserProfile, OnboardingStep, JournalEntry } from './types';
 import BottomNav from './components/BottomNav';
@@ -57,7 +56,8 @@ const App: React.FC = () => {
       if (Capacitor.isNativePlatform()) {
         try {
           await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
-          const rcKey = process.env.REVENUECAT_API_KEY || "goog_kqOynvNRCABzUPrpfyFvlMvHUna";
+          // FIXED: Use import.meta.env for Vite instead of process.env
+          const rcKey = import.meta.env.VITE_REVENUECAT_API_KEY || "goog_kqOynvNRCABzUPrpfyFvlMvHUna";
           await Purchases.configure({ apiKey: rcKey });
           
           if (supabase) {
@@ -294,7 +294,7 @@ const App: React.FC = () => {
       </div>
 
       {onboardingStatus === OnboardingStep.COMPLETED && !showPaywall && (
-        <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} />
+        <BottomNav currentScreen={currentScreen} onNavigateTo={(screen) => setCurrentScreen(screen)} />
       )}
 
       {showPaywall && (
