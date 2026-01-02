@@ -1,13 +1,13 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { DiagnosisResult, LogAnalysis, Plant, UserProfile } from "../types";
+import { CONFIG } from "./config";
 
 const getClient = () => {
-  // Use process.env.API_KEY directly as required by the system instructions
-  // This value is replaced at build time by Vite's define configuration
-  const apiKey = process.env.API_KEY;
+  // Uses the safe configuration object instead of process.env
+  const apiKey = CONFIG.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("Gemini API Key missing in process.env.API_KEY");
+    console.error("Gemini API Key missing. Check VITE_GEMINI_API_KEY in Codemagic.");
+    throw new Error("Gemini API Key missing");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -32,7 +32,7 @@ export const diagnosePlant = async (
   const contextStr = context ? `\nCONTEXT: Strain: ${context.strain}, Env: ${context.environment}` : "";
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-1.5-flash',
     contents: {
       parts: [
         ...base64Images.map(img => ({ inlineData: { mimeType: "image/jpeg", data: img } })),
@@ -74,7 +74,7 @@ export const chatWithCoach = async (
   if (context?.userProfile) systemInstruction += ` User Level: ${context.userProfile.experience}.`;
 
   const chat = ai.chats.create({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-1.5-flash',
     config: { systemInstruction },
     history
   });
@@ -90,7 +90,7 @@ export const analyzeGrowLog = async (text: string, tags: string[], imageBase64?:
     if (imageBase64) parts.push({ inlineData: { mimeType: "image/jpeg", data: imageBase64 } });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-1.5-flash',
       contents: { parts },
       config: {
         responseMimeType: "application/json",
@@ -115,7 +115,7 @@ export const getDailyInsight = async (stage: string): Promise<string> => {
   try {
     const ai = getClient();
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-1.5-flash',
       contents: `Pro actionable tip for cannabis ${stage} stage. One sentence.`,
     });
     return response.text || "Maintain consistent environmentals.";
