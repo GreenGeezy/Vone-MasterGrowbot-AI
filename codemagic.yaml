@@ -29,8 +29,8 @@ workflows:
       - name: Build Android App Bundle (AAB)
         script: |
           cd android
-          chmod +x gradlew
-          ./gradlew bundleRelease --no-daemon
+          # FIXED: Use global gradle command because gradlew is missing
+          gradle bundleRelease
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
     publishing:
