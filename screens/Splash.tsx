@@ -13,14 +13,16 @@ const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
   
   useEffect(() => {
     const checkUserStatus = async () => {
-      // Defensive check to prevent "reading 'auth' of null"
+      // If Supabase is not initialized, we cannot check auth. 
+      // Proceed to the onboarding flow immediately.
       if (!supabase) {
-        console.warn("Supabase not initialized in Splash");
+        console.warn("Supabase not initialized in Splash. Proceeding to onboarding.");
+        onGetStarted();
         return;
       }
 
       try {
-        // 1. Check Session
+        // 1. Check for an active session
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session) {
@@ -30,13 +32,13 @@ const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
           const { data: profile, error } = await getUserProfile();
           
           if (error || !profile) {
-             // Session valid but profile fetch failed or empty -> Go to Quiz
-             console.log("Profile missing or error. Redirecting to Quiz.");
+             // Session valid but profile fetch failed or empty -> Start onboarding
+             console.log("Profile missing or error. Redirecting to onboarding.");
              onGetStarted();
              return;
           }
 
-          // 3. Verify Onboarding Fields (experience, environment, goal)
+          // 3. Verify Onboarding Fields are present
           const isProfileComplete = 
              profile.experience && 
              profile.environment && 
@@ -46,15 +48,22 @@ const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
             console.log("Profile complete. Redirecting to Home.");
             if (onSessionActive) onSessionActive();
           } else {
-            console.log("Profile incomplete. Redirecting to Quiz.");
+            console.log("Profile incomplete. Redirecting to onboarding.");
             onGetStarted();
           }
+        } else {
+          // No active session found
+          console.log("No active session. Redirecting to onboarding.");
+          onGetStarted();
         }
       } catch (error) {
-        console.error("User status check failed", error);
+        // On any error (network, auth, etc.), fall back to onboarding
+        console.error("User status check failed. Falling back to onboarding.", error);
+        onGetStarted();
       }
     };
     
+    // Check status on mount
     checkUserStatus();
   }, [onGetStarted, onSessionActive]);
 

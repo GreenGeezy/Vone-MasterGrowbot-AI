@@ -5,7 +5,8 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
     // Load environment variables from process.cwd()
-    const env = loadEnv(mode, process.cwd(), '');
+    // Cast process to any to resolve 'Property cwd does not exist on type Process' error in some IDE/TS configurations
+    const env = loadEnv(mode, (process as any).cwd(), '');
 
     // Map env variables into a define block so they are accessible as process.env.VITE_...
     const envDefinitions: Record<string, string> = {};

@@ -5,10 +5,11 @@
  */
 
 // Fail-safe initialization: ensures app doesn't crash if env vars are missing
-export const GEMINI_KEY = (import.meta.env?.VITE_GEMINI_API_KEY as string) || (process.env?.VITE_GEMINI_API_KEY as string) || '';
-export const SUPABASE_URL = (import.meta.env?.VITE_SUPABASE_URL as string) || (process.env?.VITE_SUPABASE_URL as string) || '';
-export const SUPABASE_ANON_KEY = (import.meta.env?.VITE_SUPABASE_ANON_KEY as string) || (process.env?.VITE_SUPABASE_ANON_KEY as string) || '';
-export const REVENUECAT_KEY = (import.meta.env?.VITE_REVENUECAT_API_KEY as string) || (process.env?.VITE_REVENUECAT_API_KEY as string) || 'goog_kqOynvNRCABzUPrpfyFvlMvHUna';
+// Cast import.meta to any to resolve 'Property env does not exist on type ImportMeta' errors
+export const GEMINI_KEY = ((import.meta as any).env?.VITE_GEMINI_API_KEY as string) || (process.env?.VITE_GEMINI_API_KEY as string) || '';
+export const SUPABASE_URL = ((import.meta as any).env?.VITE_SUPABASE_URL as string) || (process.env?.VITE_SUPABASE_URL as string) || '';
+export const SUPABASE_ANON_KEY = ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string) || (process.env?.VITE_SUPABASE_ANON_KEY as string) || '';
+export const REVENUECAT_KEY = ((import.meta as any).env?.VITE_REVENUECAT_API_KEY as string) || (process.env?.VITE_REVENUECAT_API_KEY as string) || 'goog_kqOynvNRCABzUPrpfyFvlMvHUna';
 
 export const CONFIG = {
     GEMINI_API_KEY: GEMINI_KEY,
