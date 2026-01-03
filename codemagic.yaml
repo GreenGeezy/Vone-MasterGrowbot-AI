@@ -29,7 +29,10 @@ workflows:
       - name: Build Android App Bundle (AAB)
         script: |
           cd android
-          gradle bundleRelease
+          # FIXED: Generate a fresh wrapper to ensure version compatibility
+          gradle wrapper
+          chmod +x gradlew
+          ./gradlew bundleRelease --stacktrace
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
     publishing:
