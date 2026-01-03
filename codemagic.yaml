@@ -29,11 +29,32 @@ workflows:
       - name: Build Android App Bundle (AAB)
         script: |
           cd android
-          # FIXED: Force Gradle 8.5 (Stable for AGP 8.2)
+          
+          # Initialize Gradle
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew clean
-          # FIXED: --no-daemon (Prevents Memory Crash) and --info (Detailed Logging)
+
+          # FIXED: Auto-generate a Release Keystore if one is missing from Codemagic
+          if [ -z "$CM_KEYSTORE_PATH" ]; then
+              echo "⚠️ CM_KEYSTORE_PATH not found. Generating a temporary Release Keystore..."
+              # Generate the keystore file at android/app/keystore.jks
+              keytool -genkey -v -keystore app/keystore.jks \
+                -storepass password -alias upload -keypass password \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=MasterGrowbot,O=MasterGrowbot,C=US"
+              
+              # Export variables so Gradle can read them immediately
+              export CM_KEYSTORE_PATH="$PWD/app/keystore.jks"
+              export CM_KEYSTORE_PASSWORD="password"
+              export CM_KEY_ALIAS="upload"
+              export CM_KEY_PASSWORD="password"
+              echo "✅ Temporary Keystore generated and configured."
+          else
+              echo "✅ Using existing Signing Configuration from Codemagic."
+          fi
+
+          # Build the Bundle using the variables we just ensured exist
           ./gradlew bundleRelease --no-daemon --info
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
