@@ -35,26 +35,21 @@ workflows:
           chmod +x gradlew
           ./gradlew clean
 
-          # FIXED: Auto-generate a Release Keystore if one is missing from Codemagic
-          if [ -z "$CM_KEYSTORE_PATH" ]; then
-              echo "⚠️ CM_KEYSTORE_PATH not found. Generating a temporary Release Keystore..."
-              # Generate the keystore file at android/app/keystore.jks
-              keytool -genkey -v -keystore app/keystore.jks \
-                -storepass password -alias upload -keypass password \
-                -keyalg RSA -keysize 2048 -validity 10000 \
-                -dname "CN=MasterGrowbot,O=MasterGrowbot,C=US"
+          # FIXED: Decode the REAL keystore from Codemagic Environment Variables
+          if [ -n "$CM_KEYSTORE_ENCODED" ]; then
+              echo "🔐 Decoding secure keystore from environment variables..."
+              # Decode to the standard path expected by build.gradle
+              echo $CM_KEYSTORE_ENCODED | base64 --decode > app/keystore.jks
               
-              # Export variables so Gradle can read them immediately
+              # Set the path variable so build.gradle can find it
               export CM_KEYSTORE_PATH="$PWD/app/keystore.jks"
-              export CM_KEYSTORE_PASSWORD="password"
-              export CM_KEY_ALIAS="upload"
-              export CM_KEY_PASSWORD="password"
-              echo "✅ Temporary Keystore generated and configured."
+              echo "✅ Keystore restored successfully."
           else
-              echo "✅ Using existing Signing Configuration from Codemagic."
+              echo "❌ ERROR: CM_KEYSTORE_ENCODED variable is missing in Codemagic!"
+              exit 1
           fi
 
-          # Build the Bundle using the variables we just ensured exist
+          # Build the Bundle
           ./gradlew bundleRelease --no-daemon --info
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
