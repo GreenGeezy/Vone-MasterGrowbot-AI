@@ -29,9 +29,10 @@ workflows:
       - name: Build Android App Bundle (AAB)
         script: |
           cd android
-          # FIXED: Generate a fresh wrapper to ensure version compatibility
-          gradle wrapper
+          # FIXED: Force Gradle 8.2.1 (Matches AGP 8.2.1) to prevent "Silent Crash"
+          gradle wrapper --gradle-version 8.2.1
           chmod +x gradlew
+          ./gradlew clean
           ./gradlew bundleRelease --stacktrace
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
