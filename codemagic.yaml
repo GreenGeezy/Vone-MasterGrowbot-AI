@@ -29,11 +29,12 @@ workflows:
       - name: Build Android App Bundle (AAB)
         script: |
           cd android
-          # FIXED: Upgrade to Gradle 8.5 to fix "DefaultTransform" crash in 8.2.1
+          # FIXED: Force Gradle 8.5 (Stable for AGP 8.2)
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew clean
-          ./gradlew bundleRelease --stacktrace
+          # FIXED: --no-daemon (Prevents Memory Crash) and --info (Detailed Logging)
+          ./gradlew bundleRelease --no-daemon --info
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
     publishing:
