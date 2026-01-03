@@ -29,8 +29,8 @@ workflows:
       - name: Build Android App Bundle (AAB)
         script: |
           cd android
-          # FIXED: Force Gradle 8.2.1 (Matches AGP 8.2.1) to prevent "Silent Crash"
-          gradle wrapper --gradle-version 8.2.1
+          # FIXED: Upgrade to Gradle 8.5 to fix "DefaultTransform" crash in 8.2.1
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew clean
           ./gradlew bundleRelease --stacktrace
