@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Image as ImageIcon, Sparkles, AudioLines, X, Activity, Power, BookmarkPlus, Settings2, Check } from 'lucide-react';
+import { Send, AudioLines, X, Power, Settings2, Check } from 'lucide-react';
 import { chatWithCoach } from '../services/geminiService';
 import { ChatMessage, JournalEntry, Plant, UserProfile } from '../types';
 import Growbot from '../components/Growbot';
-import { GoogleGenAI, LiveServerMessage, Modality, Blob } from "@google/genai";
+import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
+import { CONFIG } from '../services/config';
 
 interface ChatProps {
     onSaveToJournal?: (entry: Omit<JournalEntry, 'id' | 'date'>) => void;
@@ -21,7 +21,6 @@ const SUGGESTED_PROMPTS = [
 
 const VOICE_OPTIONS = [
   { id: 'Kore', label: 'Coach Kore', type: 'Calm' },
-  { id: 'Charon', label: 'Coach Mike', type: 'Bold' },
   { id: 'Fenrir', label: 'MasterGrowbot', type: 'Synthetic' },
   { id: 'Puck', label: 'Coach Puck', type: 'Energetic' },
 ];
@@ -33,17 +32,18 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   
+  // Live Voice State
   const [isLive, setIsLive] = useState(false);
   const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
   const [liveTranscript, setLiveTranscript] = useState("");
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
-  
-  const [selectedVoice, setSelectedVoice] = useState('Kore');
+  const [selectedVoice, setSelectedVoice] = useState('Fenrir');
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   
   const endRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<ChatMessage[]>(messages); 
 
+  // Audio Refs
   const audioContextRef = useRef<AudioContext | null>(null);
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const sessionRef = useRef<any>(null);
@@ -53,23 +53,14 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   
   const nextStartTimeRef = useRef<number>(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
-  const currentInputIdRef = useRef<string | null>(null);
-  const currentOutputIdRef = useRef<string | null>(null);
   const currentInputTextRef = useRef<string>("");
   const currentOutputTextRef = useRef<string>("");
 
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading, isLive, liveTranscript]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading, isLive, connectionState]);
-
-  useEffect(() => {
-    return () => {
-      stopLiveSession();
-    };
+    return () => { stopLiveSession(); };
   }, []);
 
   const handleSend = async (text: string) => {
@@ -85,83 +76,57 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       parts: [{ text: m.text }]
     }));
     
-    const context = {
-        plant: plant,
-        userProfile: userProfile || undefined
-    };
-
-    const response = await chatWithCoach(text, history, context);
-    
-    const botMsg: ChatMessage = { id: (Date.now() + 1).toString(), text: response, isUser: false, timestamp: Date.now() };
-    setMessages(prev => [...prev, botMsg]);
-    setLoading(false);
-  };
-
-  const saveMessageToJournal = (text: string) => {
-      if (onSaveToJournal) {
-          const contextMsg = messages[messages.length - 2]?.isUser ? messages[messages.length - 2].text : "AI Chat Advice";
-          onSaveToJournal({
-              type: 'chat',
-              title: "Coach Advice",
-              originalQuestion: contextMsg,
-              notes: text
-          });
-      }
+    try {
+        const response = await chatWithCoach(text, history);
+        const botMsg: ChatMessage = { id: (Date.now() + 1).toString(), text: response, isUser: false, timestamp: Date.now() };
+        setMessages(prev => [...prev, botMsg]);
+    } catch (e) {
+        setMessages(prev => [...prev, { id: Date.now().toString(), text: "I'm having trouble connecting to the network.", isUser: false, timestamp: Date.now() }]);
+    } finally {
+        setLoading(false);
+    }
   };
 
   const startLiveSession = async () => {
     try {
       setConnectionState('connecting');
-      const apiKey = process.env.API_KEY;
-      if (!apiKey) throw new Error("API Key missing");
-
-      const ai = new GoogleGenAI({ apiKey });
       
+      // Initialize Gemini Client with Config Key
+      const ai = new GoogleGenAI({ apiKey: CONFIG.GEMINI_API_KEY });
+      
+      // Setup Audio Contexts
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       const outputCtx = new AudioContextClass({ sampleRate: 24000 });
       audioContextRef.current = outputCtx;
-      
-      if (outputCtx.state === 'suspended') {
-        await outputCtx.resume();
-      }
+      if (outputCtx.state === 'suspended') await outputCtx.resume();
       nextStartTimeRef.current = outputCtx.currentTime;
 
       const inputCtx = new AudioContextClass({ sampleRate: 16000 });
       inputAudioContextRef.current = inputCtx;
-      if (inputCtx.state === 'suspended') {
-          await inputCtx.resume();
-      }
+      if (inputCtx.state === 'suspended') await inputCtx.resume();
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      }});
+      // Get Microphone
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
       streamRef.current = stream;
       
-      let baseInstruction = `You are MasterGrowbot, a expert cultivation assistant. You are helping a user with their garden. `;
-      if (selectedVoice === 'Fenrir') {
-         baseInstruction += "Speak in a slightly technical, precise manner. Affirmative protocols active. ";
-      } else {
-         baseInstruction += "Be friendly and encouraging. ";
-      }
+      // Voice System Instruction
+      const systemInstruction = `
+      You are MasterGrowbot Live. 
+      The user is currently working in their garden (hands-free). 
+      Keep responses SHORT, ENCOURAGING, and ACTION-ORIENTED. 
+      Focus on numbers (pH, PPM, Temp). Do not lecture.`;
 
-      if (userProfile) {
-          baseInstruction += `User is growing ${userProfile.grow_mode} with ${userProfile.experience} experience. `;
-      }
-      
-      const fullSystemInstruction = `${baseInstruction} Be concise for voice chat.`;
-
+      // Connect to Gemini Live API
       const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        model: CONFIG.MODELS.CHAT_LIVE,
         config: {
           responseModalities: [Modality.AUDIO],
-          inputAudioTranscription: {},
-          outputAudioTranscription: {},
+          systemInstruction: systemInstruction,
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: selectedVoice } }
           },
-          systemInstruction: fullSystemInstruction,
         },
         callbacks: {
           onopen: () => {
@@ -169,6 +134,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
             setConnectionState('connected');
             setLiveTranscript("Listening...");
             
+            // Setup Input Stream Processing
             const source = inputCtx.createMediaStreamSource(stream);
             sourceRef.current = source;
             const processor = inputCtx.createScriptProcessor(4096, 1, 1);
@@ -178,7 +144,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
               const inputData = e.inputBuffer.getChannelData(0);
               const pcmBlob = createBlob(inputData);
               sessionPromise.then(session => {
-                session.sendRealtimeInput({ media: pcmBlob });
+                session.sendRealtimeInput([{ mimeType: "audio/pcm;rate=16000", data: pcmBlob }]);
               });
             };
 
@@ -194,6 +160,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       });
       sessionRef.current = sessionPromise;
     } catch (err) {
+      console.error(err);
       stopLiveSession();
     }
   };
@@ -204,6 +171,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
     setLiveTranscript("");
     setIsUserSpeaking(false);
     
+    // Cleanup Audio
     if (sourcesRef.current) {
         sourcesRef.current.forEach(s => { try { s.stop(); } catch (e) {} });
         sourcesRef.current.clear();
@@ -221,8 +189,6 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
     if (inputAudioContextRef.current) { inputAudioContextRef.current.close(); inputAudioContextRef.current = null; }
     if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
     
-    currentInputIdRef.current = null;
-    currentOutputIdRef.current = null;
     currentInputTextRef.current = "";
     currentOutputTextRef.current = "";
   };
@@ -238,8 +204,6 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
     }
 
     if (serverContent.turnComplete) {
-       currentInputIdRef.current = null;
-       currentOutputIdRef.current = null;
        currentInputTextRef.current = "";
        currentOutputTextRef.current = "";
     }
@@ -265,28 +229,53 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
        currentInputTextRef.current += serverContent.inputTranscription.text;
        setIsUserSpeaking(true);
        setLiveTranscript(currentInputTextRef.current);
-       updateOrAddMessage(true, currentInputTextRef.current);
     }
 
     if (serverContent.outputTranscription?.text) {
         currentOutputTextRef.current += serverContent.outputTranscription.text;
         setIsUserSpeaking(false);
         setLiveTranscript(currentOutputTextRef.current);
-        updateOrAddMessage(false, currentOutputTextRef.current);
     }
   };
 
-  const updateOrAddMessage = (isUser: boolean, text: string) => {
-     const idRef = isUser ? currentInputIdRef : currentOutputIdRef;
-     if (!idRef.current) {
-        const newId = Date.now().toString() + (isUser ? '-user' : '-ai');
-        idRef.current = newId;
-        const newMsg: ChatMessage = { id: newId, text, isUser, timestamp: Date.now() };
-        setMessages(prev => [...prev, newMsg]);
-     } else {
-        setMessages(prev => prev.map(m => m.id === idRef.current ? { ...m, text } : m));
-     }
-  };
+  // UI Helper to create PCM Blob
+  function createBlob(data: Float32Array): string {
+    const l = data.length;
+    const int16 = new Int16Array(l);
+    for (let i = 0; i < l; i++) {
+      int16[i] = data[i] * 32768;
+    }
+    let binary = "";
+    const len = int16.buffer.byteLength;
+    const bytes = new Uint8Array(int16.buffer);
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+  
+  function decode(base64: string) {
+    const binaryString = atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  }
+  
+  async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
+    const dataInt16 = new Int16Array(data.buffer);
+    const frameCount = dataInt16.length / numChannels;
+    const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+    for (let channel = 0; channel < numChannels; channel++) {
+      const channelData = buffer.getChannelData(channel);
+      for (let i = 0; i < frameCount; i++) {
+        channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      }
+    }
+    return buffer;
+  }
 
   return (
     <div className="flex flex-col h-full bg-surface pb-24 relative overflow-hidden font-sans">
@@ -358,46 +347,5 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
     </div>
   );
 };
-
-function createBlob(data: Float32Array): Blob {
-    const l = data.length;
-    const int16 = new Int16Array(l);
-    for (let i = 0; i < l; i++) {
-      int16[i] = data[i] * 32768;
-    }
-    let binary = "";
-    const len = int16.buffer.byteLength;
-    const bytes = new Uint8Array(int16.buffer);
-    for (let i = 0; i < len; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return {
-      data: btoa(binary),
-      mimeType: "audio/pcm;rate=16000",
-    };
-  }
-  
-  function decode(base64: string) {
-    const binaryString = atob(base64);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
-  }
-  
-  async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-    const dataInt16 = new Int16Array(data.buffer);
-    const frameCount = dataInt16.length / numChannels;
-    const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-    for (let channel = 0; channel < numChannels; channel++) {
-      const channelData = buffer.getChannelData(channel);
-      for (let i = 0; i < frameCount; i++) {
-        channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-      }
-    }
-    return buffer;
-  }
 
 export default Chat;
