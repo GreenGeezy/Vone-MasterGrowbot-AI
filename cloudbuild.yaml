@@ -1,26 +1,30 @@
 steps:
-  # 1. Build the Container Image using your Dockerfile
+  # 1. Build the Container Image
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/mastergrowbot-web', '.']
 
-  # 2. Push the Image to the Google Container Registry
+  # 2. Push the Image to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/mastergrowbot-web']
 
-  # 3. Deploy the Image to Cloud Run (This updates your Site URL)
+  # 3. Deploy to Cloud Run (Updates your specific site URL)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
       - 'run'
       - 'deploy'
-      - 'mastergrowbot-web'   # Name of your Cloud Run Service
+      - 'mastergrowbot-web'
       - '--image'
       - 'gcr.io/$PROJECT_ID/mastergrowbot-web'
       - '--region'
-      - 'us-central1'         # Standard region (adjust if yours is different)
+      - 'us-west1'            # FIXED: Matches your site URL (was us-central1)
       - '--platform'
       - 'managed'
-      - '--allow-unauthenticated' # Makes the site public
+      - '--allow-unauthenticated'
 
 images:
   - 'gcr.io/$PROJECT_ID/mastergrowbot-web'
+
+# FIXED: Solves the "logs bucket" error
+options:
+  logging: CLOUD_LOGGING_ONLY
