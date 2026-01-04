@@ -13,11 +13,11 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'mastergrowbot-web'
+      - 'vone-mastergrowbot-ai'  # UPDATED: This specific name preserves your Supabase URL
       - '--image'
       - 'gcr.io/$PROJECT_ID/mastergrowbot-web'
       - '--region'
-      - 'us-west1'            # FIXED: Matches your site URL (was us-central1)
+      - 'us-west1'            # Correct region for your specific URL
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
@@ -25,6 +25,6 @@ steps:
 images:
   - 'gcr.io/$PROJECT_ID/mastergrowbot-web'
 
-# FIXED: Solves the "logs bucket" error
+# Solves the "logs bucket" error
 options:
   logging: CLOUD_LOGGING_ONLY
