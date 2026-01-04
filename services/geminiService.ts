@@ -1,22 +1,40 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { DiagnosisResult, LogAnalysis, Plant, UserProfile } from "../types";
+import { GoogleGenAI, SchemaType } from "@google/genai";
+import { DiagnosisResult, LogAnalysis } from "../types";
 import { CONFIG } from "./config";
 
-const getClient = () => {
-  // Uses the safe configuration object instead of process.env
-  const apiKey = CONFIG.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.error("Gemini API Key missing. Check VITE_GEMINI_API_KEY in Codemagic.");
-    throw new Error("Gemini API Key missing");
-  }
-  return new GoogleGenAI({ apiKey });
-};
+// Initialize the Client with your Key
+const genAI = new GoogleGenAI({ apiKey: CONFIG.GEMINI_API_KEY });
 
+/**
+ * EXPERT KNOWLEDGE BASE
+ * This system instruction forces the AI to act as a Cannabis Expert.
+ */
+const SYSTEM_CORE = `
+You are MasterGrowbot, a PhD-level cannabis cultivation expert. 
+Your goal is to maximize yield and quality (terpenes/THC) for the user.
+
+CRITICAL PARAMETERS:
+- Soil pH: 6.0 - 6.8
+- Hydro/Coco pH: 5.5 - 6.1
+- Temp: 70-85°F (Lights On), 65-75°F (Lights Off)
+- Humidity: Seedling (65-70%), Veg (50-60%), Flower (40-50%)
+
+RULES:
+1. Be concise. Mobile users need quick answers.
+2. Prioritize "Fix Steps". Give actionable advice (e.g., "Flush with pH 6.0 water").
+3. Distinguish carefully between "Calcium Deficiency" (brown spots) and "Septoria" (yellow halos).
+4. If unsure, recommend a slurry test or runoff test.
+`;
+
+/**
+ * Utility: Convert File to Base64 for Gemini
+ */
 export const fileToGenerativePart = async (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64String = reader.result as string;
+      // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
       resolve(base64String.split(',')[1]);
     };
     reader.onerror = reject;
@@ -24,102 +42,115 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
   });
 };
 
-export const diagnosePlant = async (
-  base64Images: string[], 
-  context?: { strain?: string, environment?: string }
-): Promise<DiagnosisResult> => {
-  const ai = getClient();
-  const contextStr = context ? `\nCONTEXT: Strain: ${context.strain}, Env: ${context.environment}` : "";
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-1.5-flash',
-    contents: {
-      parts: [
-        ...base64Images.map(img => ({ inlineData: { mimeType: "image/jpeg", data: img } })),
-        { text: `Analyze these cannabis plant images.${contextStr}` }
-      ]
-    },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          diagnosis: { type: Type.STRING },
-          issues: { type: Type.ARRAY, items: { type: Type.STRING } },
-          confidence: { type: Type.NUMBER },
-          severity: { type: Type.STRING, enum: ["low", "medium", "high"] },
-          health: { type: Type.STRING, enum: ["Poor", "Fair", "Good", "Great", "Excellent"] },
-          stage: { type: Type.STRING },
-          topAction: { type: Type.STRING },
-          fixSteps: { type: Type.ARRAY, items: { type: Type.STRING } },
-          yieldTips: { type: Type.ARRAY, items: { type: Type.STRING } },
-          qualityTips: { type: Type.ARRAY, items: { type: Type.STRING } },
-          generalAdvice: { type: Type.STRING }
-        },
-        required: ["diagnosis", "issues", "confidence", "severity", "health", "stage", "topAction", "fixSteps", "yieldTips", "qualityTips", "generalAdvice"]
-      }
-    }
-  });
-
-  return JSON.parse(response.text || '{}') as DiagnosisResult;
-};
-
-export const chatWithCoach = async (
-  message: string, 
-  history: any[],
-  context?: { plant?: Plant, userProfile?: UserProfile }
-): Promise<string> => {
-  const ai = getClient();
-  let systemInstruction = "You are MasterGrowbot, a wise expert coach.";
-  if (context?.userProfile) systemInstruction += ` User Level: ${context.userProfile.experience}.`;
-
-  const chat = ai.chats.create({
-    model: 'gemini-1.5-flash',
-    config: { systemInstruction },
-    history
-  });
-
-  const result = await chat.sendMessage({ message });
-  return result.text || "I'm processing. Please try again.";
-};
-
-export const analyzeGrowLog = async (text: string, tags: string[], imageBase64?: string): Promise<LogAnalysis> => {
+/**
+ * Feature: Plant Diagnosis (Visual Analysis)
+ * Uses PRO model for high accuracy.
+ */
+export const diagnosePlant = async (base64Images: string[]): Promise<DiagnosisResult> => {
   try {
-    const ai = getClient();
-    const parts: any[] = [{ text: `Analyze log: ${text} [${tags.join(',')}]` }];
-    if (imageBase64) parts.push({ inlineData: { mimeType: "image/jpeg", data: imageBase64 } });
+    // Use the PRO model for visual reasoning
+    const model = genAI.getGenerativeModel({ 
+      model: CONFIG.MODELS.DIAGNOSIS,
+      systemInstruction: `${SYSTEM_CORE} MODE: CRISIS DIAGNOSIS. Analyze the image for pests, disease, or deficiencies.`
+    });
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: { parts },
+    const prompt = "Diagnose this cannabis plant. Identify the issue, severity, and provide a checklist of fixes.";
+
+    const result = await model.generateContent({
+      contents: [{ 
+        role: "user", 
+        parts: [
+          ...base64Images.map(img => ({ inlineData: { mimeType: "image/jpeg", data: img } })),
+          { text: prompt }
+        ]
+      }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {
-          type: Type.OBJECT,
+          type: SchemaType.OBJECT,
           properties: {
-            summary: { type: Type.STRING },
-            yieldPrediction: { type: Type.STRING },
-            healthIndicator: { type: Type.STRING, enum: ["good", "concern", "critical"] },
+            diagnosis: { type: SchemaType.STRING },
+            severity: { type: SchemaType.STRING, enum: ["low", "medium", "high"] },
+            health: { type: SchemaType.STRING }, // e.g. "Poor", "Fair", "Good"
+            fixSteps: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+            confidence: { type: SchemaType.NUMBER }
           },
-          required: ["summary", "yieldPrediction", "healthIndicator"]
+          required: ["diagnosis", "severity", "health", "fixSteps", "confidence"]
         }
       }
     });
-    return JSON.parse(response.text || '{}') as LogAnalysis;
-  } catch {
-    return { summary: "Logged.", healthIndicator: "good", yieldPrediction: "Stable." };
+
+    return JSON.parse(result.response.text()) as DiagnosisResult;
+  } catch (error) {
+    console.error("Diagnosis Error:", error);
+    // Fallback if AI fails
+    return {
+      diagnosis: "Analysis Failed",
+      severity: "low",
+      health: "Unknown",
+      fixSteps: ["Check internet connection", "Try taking a clearer photo"],
+      confidence: 0
+    };
   }
 };
 
+/**
+ * Feature: Chat Coach (Text)
+ * Uses FLASH model for speed.
+ */
+export const chatWithCoach = async (message: string, history: any[]): Promise<string> => {
+  const model = genAI.getGenerativeModel({ 
+    model: CONFIG.MODELS.INSIGHTS,
+    systemInstruction: SYSTEM_CORE 
+  });
+
+  const chat = model.startChat({ history });
+  const result = await chat.sendMessage(message);
+  return result.response.text();
+};
+
+/**
+ * Feature: Daily Insight
+ * Uses FLASH model for low cost.
+ */
 export const getDailyInsight = async (stage: string): Promise<string> => {
+  const model = genAI.getGenerativeModel({ 
+    model: CONFIG.MODELS.INSIGHTS,
+    systemInstruction: SYSTEM_CORE 
+  });
+  
+  const result = await model.generateContent(`Provide one single, high-impact pro tip for the ${stage} stage of cannabis growth.`);
+  return result.response.text();
+};
+
+/**
+ * Feature: Journal Log Analysis
+ * Uses FLASH model to predict yield/health.
+ */
+export const analyzeGrowLog = async (text: string): Promise<LogAnalysis> => {
   try {
-    const ai = getClient();
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: `Pro actionable tip for cannabis ${stage} stage. One sentence.`,
+    const model = genAI.getGenerativeModel({ 
+      model: CONFIG.MODELS.INSIGHTS,
+      systemInstruction: `${SYSTEM_CORE} Analyze this log entry. Predict yield impact and overall health.`
     });
-    return response.text || "Maintain consistent environmentals.";
-  } catch {
-    return "Check your pH levels regularly.";
+
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: `Log: ${text}` }] }],
+      config: { 
+        responseMimeType: "application/json",
+        responseSchema: {
+            type: SchemaType.OBJECT,
+            properties: {
+                summary: { type: SchemaType.STRING },
+                yieldPrediction: { type: SchemaType.STRING }, // e.g. "Stable", "Increasing"
+                healthIndicator: { type: SchemaType.STRING, enum: ["good", "concern", "critical"] }
+            },
+            required: ["summary", "yieldPrediction", "healthIndicator"]
+        }
+      }
+    });
+    return JSON.parse(result.response.text()) as LogAnalysis;
+  } catch (error) {
+    return { summary: "Log saved.", healthIndicator: "good", yieldPrediction: "Stable" };
   }
 };
