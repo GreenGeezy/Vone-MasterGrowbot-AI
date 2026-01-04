@@ -1,4 +1,4 @@
-import { GoogleGenAI, SchemaType } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { DiagnosisResult, LogAnalysis } from "../types";
 import { CONFIG } from "./config";
 
@@ -67,13 +67,13 @@ export const diagnosePlant = async (base64Images: string[]): Promise<DiagnosisRe
       config: {
         responseMimeType: "application/json",
         responseSchema: {
-          type: SchemaType.OBJECT,
+          type: Type.OBJECT,
           properties: {
-            diagnosis: { type: SchemaType.STRING },
-            severity: { type: SchemaType.STRING, enum: ["low", "medium", "high"] },
-            health: { type: SchemaType.STRING }, // e.g. "Poor", "Fair", "Good"
-            fixSteps: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-            confidence: { type: SchemaType.NUMBER }
+            diagnosis: { type: Type.STRING },
+            severity: { type: Type.STRING, enum: ["low", "medium", "high"] },
+            health: { type: Type.STRING }, // e.g. "Poor", "Fair", "Good"
+            fixSteps: { type: Type.ARRAY, items: { type: Type.STRING } },
+            confidence: { type: Type.NUMBER }
           },
           required: ["diagnosis", "severity", "health", "fixSteps", "confidence"]
         }
@@ -139,11 +139,11 @@ export const analyzeGrowLog = async (text: string): Promise<LogAnalysis> => {
       config: { 
         responseMimeType: "application/json",
         responseSchema: {
-            type: SchemaType.OBJECT,
+            type: Type.OBJECT,
             properties: {
-                summary: { type: SchemaType.STRING },
-                yieldPrediction: { type: SchemaType.STRING }, // e.g. "Stable", "Increasing"
-                healthIndicator: { type: SchemaType.STRING, enum: ["good", "concern", "critical"] }
+                summary: { type: Type.STRING },
+                yieldPrediction: { type: Type.STRING }, // e.g. "Stable", "Increasing"
+                healthIndicator: { type: Type.STRING, enum: ["good", "concern", "critical"] }
             },
             required: ["summary", "yieldPrediction", "healthIndicator"]
         }
