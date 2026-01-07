@@ -2,13 +2,16 @@ ext {
     minSdkVersion = 23
     compileSdkVersion = 35
     targetSdkVersion = 35
-    androidxActivityVersion = '1.9.0'       // Updated for API 35
-    androidxAppCompatVersion = '1.7.0'      // Updated for API 35
+    androidxActivityVersion = '1.9.0'
+    androidxAppCompatVersion = '1.7.0'
     androidxCoordinatorLayoutVersion = '1.2.0'
-    androidxCoreVersion = '1.13.1'          // Updated for API 35 stability
-    androidxFragmentVersion = '1.8.1'       // Updated
+    androidxCoreVersion = '1.13.1'
+    androidxFragmentVersion = '1.8.1'
     junitVersion = '4.13.2'
     androidxJunitVersion = '1.2.1'
     androidxEspressoCoreVersion = '3.6.1'
     cordovaAndroidVersion = '10.1.1'
+    // FIXED: Force newer Play libraries to prevent Android 15 crash
+    playReviewVersion = '2.0.2'
+    coreSplashScreenVersion = '1.0.1'
 }
