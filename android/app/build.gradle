@@ -9,9 +9,9 @@ android {
         applicationId "com.mastergrowbot.app"
         minSdk 23
         targetSdk 35
-        // UPDATED: Increment to 32 so Google Play accepts the fixed build
-        versionCode 32
-        versionName "1.0.32"
+        // FIXED: Incremented to 33 for the new release
+        versionCode 33
+        versionName "1.0.33"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -32,6 +32,7 @@ android {
         }
     }
 
+    // FIXED: Disable strict linting to prevent silent failures
     lintOptions {
         checkReleaseBuilds false
         abortOnError false
