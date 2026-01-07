@@ -9,9 +9,9 @@ android {
         applicationId "com.mastergrowbot.app"
         minSdk 23
         targetSdk 35
-        // FIXED: Incremented to 31 to solve the "Version code used" error
-        versionCode 31
-        versionName "1.0.31"
+        // UPDATED: Increment to 32 so Google Play accepts the fixed build
+        versionCode 32
+        versionName "1.0.32"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -32,7 +32,6 @@ android {
         }
     }
 
-    // FIXED: Disable strict linting to prevent silent failures
     lintOptions {
         checkReleaseBuilds false
         abortOnError false
