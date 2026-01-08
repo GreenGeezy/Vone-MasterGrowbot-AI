@@ -9,9 +9,9 @@ android {
         applicationId "com.mastergrowbot.app"
         minSdk 23
         targetSdk 35
-        // FIXED: Incremented to 34 for a fresh, clean release
-        versionCode 34
-        versionName "1.0.34"
+        // CRITICAL: Set to 37 to ensure a fresh upload
+        versionCode 37
+        versionName "1.0.37"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -43,10 +43,8 @@ dependencies {
     implementation 'com.google.firebase:firebase-analytics'
     implementation project(':capacitor-android')
     
-    // CRITICAL FIXES FOR "APP HAS A BUG" CRASH:
-    // 1. Force the Android 15 compatible Splash Screen
+    // THESE ARE THE CRITICAL FIXES YOU HAVE (KEEP THEM!)
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
-    // 2. Force the Android 15 compatible In-App Review (Fixes Play Core crash)
     implementation "com.google.android.play:review:$playReviewVersion"
 
     testImplementation "junit:junit:4.13.2"
