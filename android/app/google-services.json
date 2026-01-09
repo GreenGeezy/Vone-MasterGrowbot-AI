@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "360575943200-b552sd180jjgovuf3iv6aodofg2qe2oq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mastergrowbot.app",
+            "certificate_hash": "850a1ea3032b94ef40ba3bc8e2115827c6a38a67"
+          }
+        },
+        {
           "client_id": "360575943200-mq17ju3a221117rgu96v7as1b4o49rq8.apps.googleusercontent.com",
           "client_type": 3
         }
