@@ -26,31 +26,35 @@ workflows:
       - name: Sync and Copy Capacitor
         script: |
           npx cap sync android
-      - name: Build Android App Bundle (AAB)
+      - name: Decode Security Files
         script: |
           cd android
           
-          # Initialize Gradle
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
-          ./gradlew clean
-
-          # FIXED: Decode the REAL keystore from Codemagic Environment Variables
+          # 1. DECODE KEYSTORE
           if [ -n "$CM_KEYSTORE_ENCODED" ]; then
-              echo "🔐 Decoding secure keystore from environment variables..."
-              # Decode to the standard path expected by build.gradle
+              echo "🔐 Decoding keystore..."
               echo $CM_KEYSTORE_ENCODED | base64 --decode > app/keystore.jks
-              
-              # Set the path variable so build.gradle can find it
               export CM_KEYSTORE_PATH="$PWD/app/keystore.jks"
-              echo "✅ Keystore restored successfully."
           else
-              echo "❌ ERROR: CM_KEYSTORE_ENCODED variable is missing in Codemagic!"
+              echo "❌ ERROR: CM_KEYSTORE_ENCODED is missing!"
               exit 1
           fi
 
-          # Build the Bundle
-          ./gradlew bundleRelease --no-daemon --info
+          # 2. DECODE GOOGLE SERVICES JSON
+          if [ -n "$ANDROID_GOOGLE_SERVICES_JSON" ]; then
+              echo "🔥 Decoding google-services.json..."
+              echo $ANDROID_GOOGLE_SERVICES_JSON | base64 --decode > app/google-services.json
+              echo "✅ google-services.json injected successfully."
+          else
+              echo "❌ ERROR: ANDROID_GOOGLE_SERVICES_JSON is missing! App will crash."
+              exit 1
+          fi
+      - name: Build Android App Bundle
+        script: |
+          cd android
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+          ./gradlew clean bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
     publishing:
