@@ -9,9 +9,9 @@ android {
         applicationId "com.mastergrowbot.app"
         minSdk 23
         targetSdk 35
-        // FIXED: Incremented to 43 for a fresh, conflict-free release
-        versionCode 43
-        versionName "1.0.43"
+        // FIXED: Incremented to 45
+        versionCode 45
+        versionName "1.0.45"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -26,7 +26,6 @@ android {
 
     buildTypes {
         release {
-            // Keep false to prevent over-aggressive code stripping for now
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
@@ -43,8 +42,8 @@ dependencies {
     implementation platform('com.google.firebase:firebase-bom:34.7.0')
     implementation 'com.google.firebase:firebase-analytics'
     implementation project(':capacitor-android')
-
-    // CRITICAL FIXES FOR STARTUP CRASH ON ANDROID 15:
+    
+    // CRITICAL FIXES:
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "com.google.android.play:review:$playReviewVersion"
 
