@@ -38,7 +38,12 @@ const App: React.FC = () => {
       } else {
           // Allow splash to run for 2.5 seconds then move to Onboarding
           setTimeout(() => {
-             setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE);
+             // If we already have a profile but haven't finished, go to summary, otherwise quiz
+             if (savedProfile && !hasCompletedOnboarding) {
+                 setOnboardingStatus(OnboardingStep.SUMMARY);
+             } else {
+                 setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE);
+             }
           }, 2500);
       }
     };
@@ -74,11 +79,18 @@ const App: React.FC = () => {
       setOnboardingStatus(OnboardingStep.SUMMARY);
   };
 
+  // FIXED: Transition from Summary -> Paywall
+  const handleSummaryContinue = () => {
+      // Mark onboarding mostly done, but show paywall before Home
+      setOnboardingStatus(OnboardingStep.COMPLETED);
+      setShowPaywall(true); 
+  };
+
   const handleStartTrial = () => {
       setIsTrialActive(true);
       localStorage.setItem('mastergrowbot_trial_active', 'true');
       localStorage.setItem('mastergrowbot_onboarding_complete', 'true');
-      setOnboardingStatus(OnboardingStep.COMPLETED);
+      setShowPaywall(false); // Close paywall
       loadUserData();
   };
 
@@ -112,15 +124,21 @@ const App: React.FC = () => {
       setPlants(prev => prev.map(p => p.id === plantId ? { ...p, ...updates } : p));
   };
 
-  // Render Logic
+  // --- RENDER LOGIC ---
+
   if (onboardingStatus === OnboardingStep.SPLASH) return <Splash />;
   
+  // Render Quiz
   if (onboardingStatus !== OnboardingStep.COMPLETED && onboardingStatus !== OnboardingStep.SUMMARY) {
-      return <Onboarding currentStep={onboardingStatus} onNext={(step) => setOnboardingStatus(step)} onComplete={handleOnboardingComplete} />;
+      // FIXED: Removed extra props 'currentStep' and 'onNext' which were not needed by Onboarding component
+      return <Onboarding onComplete={handleOnboardingComplete} />;
   }
 
+  // Render Summary
   if (onboardingStatus === OnboardingStep.SUMMARY) {
-      return <OnboardingSummary userProfile={userProfile!} onStartTrial={handleStartTrial} />;
+      // FIXED: Passed 'profile' instead of 'userProfile' to match OnboardingSummary props
+      // FIXED: Passed 'onContinue' instead of 'onStartTrial' to match OnboardingSummary props
+      return <OnboardingSummary profile={userProfile!} onContinue={handleSummaryContinue} />;
   }
 
   return (
@@ -132,7 +150,9 @@ const App: React.FC = () => {
           {currentTab === 'journal' && <Journal plants={plants} onAddEntry={handleAddJournalEntry} onUpdatePlant={handleUpdatePlant} />}
       </div>
 
-      {showPaywall && <Paywall onClose={() => setShowPaywall(false)} onPurchase={() => { setShowPaywall(false); handleStartTrial(); }} />}
+      {/* Paywall Overlay */}
+      {showPaywall && <Paywall onClose={() => setShowPaywall(false)} onPurchase={handleStartTrial} />}
+      
       <BottomNav currentTab={currentTab} onChange={handleTabChange} />
 
       {/* DEV TOOLS for Testing */}
@@ -141,13 +161,9 @@ const App: React.FC = () => {
         onInjectProfile={() => {
             const mockProfile = { experience: 'Intermediate', grow_mode: 'Indoor', goal: 'Yield', space: 'Tent' };
             setUserProfile(mockProfile as any);
-            
-            // Force save everything to Bypass Splash/Onboarding
             localStorage.setItem('mastergrowbot_profile', JSON.stringify(mockProfile));
             localStorage.setItem('mastergrowbot_trial_active', 'true');
             localStorage.setItem('mastergrowbot_onboarding_complete', 'true');
-            
-            // Force Reload to trigger initApp check
             window.location.reload(); 
         }} 
         onToggleTrial={() => {
