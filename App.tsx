@@ -12,6 +12,7 @@ import PostPaymentAuth from './screens/PostPaymentAuth';
 import BottomNav from './components/BottomNav';
 import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app'; // REQUIRED FOR DEEP LINKS
 import { supabase } from './services/supabaseClient';
 
 const App: React.FC = () => {
@@ -27,8 +28,22 @@ const App: React.FC = () => {
   
   useEffect(() => {
     const initApp = async () => {
+      // 1. Handle Deep Links (Google/Apple Sign In Return)
+      CapacitorApp.addListener('appUrlOpen', async (data) => {
+          console.log('App opened with URL:', data.url);
+          if (data.url.includes('access_token') || data.url.includes('refresh_token') || data.url.includes('login-callback')) {
+              // Let Supabase handle the URL fragment automatically or force re-check
+              setTimeout(async () => {
+                  const { data: { session } } = await supabase.auth.getSession();
+                  if (session) {
+                      handleAuthSuccess();
+                  }
+              }, 500);
+          }
+      });
+
+      // 2. RevenueCat Init
       if (Capacitor.isNativePlatform()) {
-          // Initialize RevenueCat with your keys
           const apiKey = Capacitor.getPlatform() === 'android' 
               ? 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' 
               : 'appl_ihDRwAcLuSWmrxGSiVxrurApZwF';
@@ -37,6 +52,7 @@ const App: React.FC = () => {
           await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
       }
 
+      // 3. Check Existing Session
       const { data: { session } } = await supabase.auth.getSession();
       const savedProfile = localStorage.getItem('mastergrowbot_profile');
       const hasCompletedOnboarding = localStorage.getItem('mastergrowbot_onboarding_complete');
@@ -48,9 +64,10 @@ const App: React.FC = () => {
           setOnboardingStatus(OnboardingStep.COMPLETED);
           loadUserData();
       } else {
-          // New Users: Do NOTHING here. Splash.tsx handles the waiting.
-          // Returning users: check local storage
+          // New User Logic: Stay on SPLASH until interaction
+          // Returning User Logic:
           if (hasCompletedOnboarding === 'true') {
+             // If they finished before but aren't logged in, send to Auth
              setOnboardingStatus(OnboardingStep.COMPLETED);
              setShowAuth(true);
           } else if (savedProfile) {
@@ -95,12 +112,14 @@ const App: React.FC = () => {
 
   const handleAuthSuccess = () => {
       setShowAuth(false);
+      setShowPaywall(false);
       setIsTrialActive(true);
       localStorage.setItem('mastergrowbot_onboarding_complete', 'true');
       loadUserData();
   };
 
   const handleTabChange = (tab: any) => {
+      // On Native, block features if not authenticated/paid
       if (!isTrialActive && Capacitor.isNativePlatform()) {
           setShowPaywall(true);
       } else {
@@ -112,6 +131,7 @@ const App: React.FC = () => {
   const handleAddJournalEntry = (entry: any) => console.log(entry);
   const handleUpdatePlant = (id: string, updates: any) => console.log(updates);
 
+  // RENDER LOGIC
   if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={handleGetStarted} />;
   if (onboardingStatus !== OnboardingStep.COMPLETED && onboardingStatus !== OnboardingStep.SUMMARY) return <Onboarding onComplete={handleOnboardingComplete} />;
   if (onboardingStatus === OnboardingStep.SUMMARY) return <OnboardingSummary profile={userProfile!} onContinue={handleSummaryContinue} />;
