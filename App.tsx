@@ -22,51 +22,40 @@ const App: React.FC = () => {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   
-  // Flow States
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   
   useEffect(() => {
     const initApp = async () => {
-      // 1. REVENUECAT CONFIGURATION
       if (Capacitor.isNativePlatform()) {
-          let apiKey = '';
-          if (Capacitor.getPlatform() === 'android') {
-              apiKey = 'goog_kqOynvNRCABzUPrpfyFvlMvHUna'; // Android Key
-          } else if (Capacitor.getPlatform() === 'ios') {
-              apiKey = 'appl_ihDRwAcLuSWmrxGSiVxrurApZwF'; // iOS Key
-          }
+          // Initialize RevenueCat with your keys
+          const apiKey = Capacitor.getPlatform() === 'android' 
+              ? 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' 
+              : 'appl_ihDRwAcLuSWmrxGSiVxrurApZwF';
           
-          if (apiKey) {
-              await Purchases.configure({ apiKey });
-              await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
-          }
+          await Purchases.configure({ apiKey });
+          await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
       }
 
-      // 2. CHECK SESSION & STATE
       const { data: { session } } = await supabase.auth.getSession();
       const savedProfile = localStorage.getItem('mastergrowbot_profile');
       const hasCompletedOnboarding = localStorage.getItem('mastergrowbot_onboarding_complete');
 
       if (savedProfile) setUserProfile(JSON.parse(savedProfile));
 
-      // If logged in, they have full access
       if (session) {
           setIsTrialActive(true);
           setOnboardingStatus(OnboardingStep.COMPLETED);
           loadUserData();
       } else {
-          // Logic: Only auto-advance if they have data. 
-          // If they are a NEW user, we STAY on Splash until they click "Start".
-          setTimeout(() => {
-             if (hasCompletedOnboarding === 'true') {
-                 setOnboardingStatus(OnboardingStep.COMPLETED);
-                 setShowAuth(true);
-             } else if (savedProfile) {
-                 setOnboardingStatus(OnboardingStep.SUMMARY);
-             } 
-             // REMOVED the 'else' block that forced auto-transition to Quiz
-          }, 2500);
+          // New Users: Do NOTHING here. Splash.tsx handles the waiting.
+          // Returning users: check local storage
+          if (hasCompletedOnboarding === 'true') {
+             setOnboardingStatus(OnboardingStep.COMPLETED);
+             setShowAuth(true);
+          } else if (savedProfile) {
+             setOnboardingStatus(OnboardingStep.SUMMARY);
+          }
       }
     };
     initApp();
@@ -95,7 +84,6 @@ const App: React.FC = () => {
       setShowPaywall(true); 
   };
 
-  // FIXED: Triggered by Splash Screen Button
   const handleGetStarted = () => {
       setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE);
   };
@@ -124,18 +112,9 @@ const App: React.FC = () => {
   const handleAddJournalEntry = (entry: any) => console.log(entry);
   const handleUpdatePlant = (id: string, updates: any) => console.log(updates);
 
-  // --- RENDER ---
-  
-  // FIXED: Passed onGetStarted prop so the button works
   if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={handleGetStarted} />;
-  
-  if (onboardingStatus !== OnboardingStep.COMPLETED && onboardingStatus !== OnboardingStep.SUMMARY) {
-      return <Onboarding onComplete={handleOnboardingComplete} />;
-  }
-
-  if (onboardingStatus === OnboardingStep.SUMMARY) {
-      return <OnboardingSummary profile={userProfile!} onContinue={handleSummaryContinue} />;
-  }
+  if (onboardingStatus !== OnboardingStep.COMPLETED && onboardingStatus !== OnboardingStep.SUMMARY) return <Onboarding onComplete={handleOnboardingComplete} />;
+  if (onboardingStatus === OnboardingStep.SUMMARY) return <OnboardingSummary profile={userProfile!} onContinue={handleSummaryContinue} />;
 
   return (
     <div className="h-screen w-screen bg-surface overflow-hidden relative">
