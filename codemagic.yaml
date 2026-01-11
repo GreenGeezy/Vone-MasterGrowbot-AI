@@ -8,7 +8,7 @@ workflows:
         - google_play # keystore credentials
       vars:
         CM_KEYSTORE_PATH: /tmp/keystore.jks
-      node: 20.10.0
+      node: 20
     scripts:
       - name: Install dependencies
         script: |
