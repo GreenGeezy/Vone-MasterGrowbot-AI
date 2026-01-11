@@ -1,34 +1,41 @@
+import { Capacitor } from '@capacitor/core';
+
 /**
- * MasterGrowbot Centralized Configuration
- * Tailored for Cannabis Cultivation AI (Jan 2026)
+ * MasterGrowbot Configuration
+ * Handles "Dual Key" logic for Web vs. Mobile
  */
 
-export const CONFIG = {
-    // Your MasterGrowbot Mobile Key
-    GEMINI_API_KEY: 'AIzaSyBEmRHHbEqZvbYwgOmuk8THcxuxJSlewlg',
+const KEYS = {
+    // 1. YOUR MOBILE KEY (Restricted to com.mastergrowbot.app)
+    MOBILE: 'AIzaSyBEmRHHbEqZvbYwgOmuk8THcxuxJSlewlg', 
     
-    // Model Mapping (Cost & Intelligence Optimized)
-    // We map your requested "Gemini 3" requirements to the current stable equivalents to ensure the build works.
+    // 2. YOUR WEB KEY (Restricted to your Website Domain)
+    WEB: 'AIzaSyCvPh_xKte7vpoWO6Ur-MQiD4n3EHlUD-s',
+};
+
+// Logic: If on a phone, use Mobile Key. If on a website, use Web Key.
+const getApiKey = () => {
+    if (Capacitor.isNativePlatform()) {
+        return KEYS.MOBILE;
+    }
+    return KEYS.WEB;
+};
+
+export const CONFIG = {
+    // Automatically selects the correct key
+    GEMINI_API_KEY: getApiKey(),
+    
+    // AI Models
     MODELS: {
-        // High Intelligence for Crisis Diagnosis (Visual Reasoning)
-        DIAGNOSIS: 'gemini-1.5-pro',        
-        
-        // Low Latency for Live Voice
+        DIAGNOSIS: 'gemini-1.5-pro',
         CHAT_LIVE: 'gemini-2.0-flash-exp', 
-        
-        // High Speed / Low Cost for Daily Tips & Logs
         INSIGHTS: 'gemini-1.5-flash',       
     },
 
-    // Standard Project Keys (Fallbacks to ensure no crashes)
+    // Supabase & App Config
     SUPABASE_URL: (import.meta as any).env?.VITE_SUPABASE_URL || '',
     SUPABASE_ANON_KEY: (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '',
-    REVENUECAT_API_KEY: 'goog_kqOynvNRCABzUPrpfyFvlMvHUna',
     APP_ID: 'com.mastergrowbot.app',
 };
 
-// Validation check to help debug in console
-console.log('[CONFIG] Status:', { 
-    Gemini: CONFIG.GEMINI_API_KEY ? 'OK' : 'MISSING',
-    Mode: import.meta.env.MODE
-});
+console.log(`[CONFIG] Platform: ${Capacitor.getPlatform()} | Mode: ${Capacitor.isNativePlatform() ? 'Native' : 'Web'}`);
