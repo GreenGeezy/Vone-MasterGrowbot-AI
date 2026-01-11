@@ -5,37 +5,61 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       groups:
-        - production
-        - app_config
+        - production    # FIXED: Matches your actual Codemagic group
+        - app_config    # FIXED: Matches your actual Codemagic group
       vars:
-        CM_KEYSTORE_PATH: /tmp/keystore.jks
-      node: 20
+        CM_KEYSTORE_PATH: /tmp/keystore.jks # Global path for Gradle to find the key
+      node: 20.11.1
+      java: 17
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
     scripts:
       - name: Install dependencies
         script: |
+          rm -f package-lock.json
           npm install
       
       - name: Build Web Assets
         script: |
           npm run build
       
-      - name: Sync Capacitor Plugins (CRITICAL FIX)
+      - name: Sync and Copy Capacitor
         script: |
           npx cap sync android
       
       - name: Decode Security Files
         script: |
-          echo $CM_KEYSTORE | base64 --decode > /tmp/keystore.jks
+          # 1. DECODE KEYSTORE (From CM_KEYSTORE_ENCODED to /tmp/keystore.jks)
+          if [ -n "$CM_KEYSTORE_ENCODED" ]; then
+              echo "🔐 Decoding keystore..."
+              echo $CM_KEYSTORE_ENCODED | base64 --decode > /tmp/keystore.jks
+          else
+              echo "❌ ERROR: CM_KEYSTORE_ENCODED is missing!"
+              exit 1
+          fi
+
+          # 2. WRITE GOOGLE SERVICES JSON (From ANDROID_GOOGLE_SERVICES_JSON to app folder)
+          # We echo this directly because the Publishing block expects Raw JSON.
+          if [ -n "$ANDROID_GOOGLE_SERVICES_JSON" ]; then
+              echo "🔥 Writing google-services.json..."
+              echo $ANDROID_GOOGLE_SERVICES_JSON > android/app/google-services.json
+          else
+              echo "❌ ERROR: ANDROID_GOOGLE_SERVICES_JSON is missing!"
+              exit 1
+          fi
       
       - name: Build Android App Bundle
         script: |
           cd android
           chmod +x gradlew
-          ./gradlew clean bundleRelease
+          ./gradlew clean bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
     publishing:
       google_play:
-        # FIXED: Pointing to the variable you actually have defined
         credentials: $ANDROID_GOOGLE_SERVICES_JSON
         track: internal
