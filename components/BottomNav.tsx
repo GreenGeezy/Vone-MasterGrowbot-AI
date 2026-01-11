@@ -17,8 +17,8 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate }) => {
   ];
 
   return (
-    <div className="absolute bottom-6 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
-      <div className="glass-panel pointer-events-auto rounded-[32px] px-6 py-3.5 flex items-center gap-2 sm:gap-4 shadow-glass bg-white/90 border border-white/60">
+    <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-auto">
+      <div className="glass-panel rounded-[32px] px-6 py-3.5 flex items-center gap-4 shadow-glass bg-white/95 border border-white/60 backdrop-blur-md">
         {navItems.map((item) => {
           const isActive = currentScreen === item.id;
           const Icon = item.icon;
@@ -28,11 +28,10 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate }) => {
               <button
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
-                className="group relative -mt-10 mx-2"
+                className="group relative -mt-10 mx-1"
               >
-                <div className="absolute inset-0 bg-primary blur-[20px] opacity-20 group-hover:opacity-40 transition-opacity duration-500 rounded-full"></div>
-                <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-500 active:scale-95 bg-text-main text-white border border-white/20 relative overflow-hidden group-hover:-translate-y-1`}>
-                    <Icon size={24} className="text-primary-light relative z-10" strokeWidth={2.5} />
+                <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-xl bg-text-main text-white`}>
+                    <Icon size={24} />
                 </div>
               </button>
             );
@@ -42,18 +41,9 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate }) => {
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className={`flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 group relative ${
-                isActive ? 'bg-primary/5' : 'hover:bg-gray-50'
-              }`}
+              className={`p-2 rounded-xl transition-all ${isActive ? 'text-primary' : 'text-gray-400'}`}
             >
-              <Icon 
-                size={22} 
-                strokeWidth={isActive ? 2.5 : 2} 
-                className={`transition-colors duration-300 ${isActive ? 'text-primary' : 'text-text-sub group-hover:text-text-main'}`} 
-              />
-              {isActive && (
-                 <div className="absolute bottom-1 w-1 h-1 rounded-full bg-primary" />
-              )}
+              <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
             </button>
           );
         })}
