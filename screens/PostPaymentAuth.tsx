@@ -21,20 +21,31 @@ const PostPaymentAuth: React.FC<AuthProps> = ({ onComplete, onSkip }) => {
         const { error } = mode === 'signup' 
             ? await supabase.auth.signUp({ email, password })
             : await supabase.auth.signInWithPassword({ email, password });
+        
         if (error) throw error;
+        
+        // If login successful, trigger completion
         onComplete();
     } catch (err: any) {
-        alert(err.message);
+        alert(err.message || "Authentication failed.");
     } finally {
         setLoading(false);
     }
   };
 
   const handleSocialLogin = async (provider: 'google' | 'apple') => {
-      await supabase.auth.signInWithOAuth({ 
-          provider: provider, 
-          options: { redirectTo: 'com.mastergrowbot.app://login-callback' } 
-      });
+      try {
+          const { error } = await supabase.auth.signInWithOAuth({ 
+              provider: provider, 
+              options: { 
+                  // This matches the intent filter in AndroidManifest.xml
+                  redirectTo: 'com.mastergrowbot.app://login-callback' 
+              } 
+          });
+          if (error) throw error;
+      } catch (e: any) {
+          alert("Social login failed: " + e.message);
+      }
   };
 
   return (
@@ -45,14 +56,28 @@ const PostPaymentAuth: React.FC<AuthProps> = ({ onComplete, onSkip }) => {
             {mode === 'signup' ? "Save Your Progress" : "Welcome Back"}
         </h2>
         <p className="text-center text-text-sub mb-8">
-            Create an account to sync your garden across devices.
+            {mode === 'signup' ? "Create an account to save your garden." : "Log in to restore your purchases."}
         </p>
 
         <form onSubmit={handleAuth} className="space-y-4">
-            <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" required />
-            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" required />
+            <input 
+                type="email" 
+                placeholder="Email" 
+                value={email} 
+                onChange={e => setEmail(e.target.value)} 
+                className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" 
+                required 
+            />
+            <input 
+                type="password" 
+                placeholder="Password" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 outline-none" 
+                required 
+            />
             <button disabled={loading} className="w-full bg-primary text-white font-bold py-4 rounded-2xl shadow-lg">
-                {loading ? "Please wait..." : (mode === 'signup' ? "Create Account" : "Log In")}
+                {loading ? "Processing..." : (mode === 'signup' ? "Create Account" : "Log In")}
             </button>
         </form>
 
@@ -73,6 +98,11 @@ const PostPaymentAuth: React.FC<AuthProps> = ({ onComplete, onSkip }) => {
                 {mode === 'signup' ? "Have an account? Log In" : "Need an account? Sign Up"}
             </span>
         </p>
+        
+        {/* Skip button for testing if you get stuck */}
+        <button onClick={onSkip} className="mt-8 text-xs text-text-sub w-full text-center">
+            Skip for now (Progress won't sync)
+        </button>
       </div>
     </div>
   );
