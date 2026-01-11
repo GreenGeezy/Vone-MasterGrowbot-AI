@@ -5,59 +5,35 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       groups:
-        - production    # Loads Keystore
-        - app_config    # Loads API Keys
-      node: 20.11.1
-      java: 17
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: main
-          include: true
+        - google_play # keystore credentials
+      vars:
+        CM_KEYSTORE_PATH: /tmp/keystore.jks
+      node: 20.10.0
     scripts:
       - name: Install dependencies
         script: |
-          rm -f package-lock.json
           npm install
+      
       - name: Build Web Assets
         script: |
           npm run build
-      - name: Sync and Copy Capacitor
+      
+      - name: Sync Capacitor Plugins (CRITICAL FIX)
         script: |
           npx cap sync android
+      
       - name: Decode Security Files
         script: |
-          cd android
-          
-          # 1. DECODE KEYSTORE
-          if [ -n "$CM_KEYSTORE_ENCODED" ]; then
-              echo "🔐 Decoding keystore..."
-              echo $CM_KEYSTORE_ENCODED | base64 --decode > app/keystore.jks
-              export CM_KEYSTORE_PATH="$PWD/app/keystore.jks"
-          else
-              echo "❌ ERROR: CM_KEYSTORE_ENCODED is missing!"
-              exit 1
-          fi
-
-          # 2. DECODE GOOGLE SERVICES JSON
-          if [ -n "$ANDROID_GOOGLE_SERVICES_JSON" ]; then
-              echo "🔥 Decoding google-services.json..."
-              echo $ANDROID_GOOGLE_SERVICES_JSON | base64 --decode > app/google-services.json
-              echo "✅ google-services.json injected successfully."
-          else
-              echo "❌ ERROR: ANDROID_GOOGLE_SERVICES_JSON is missing! App will crash."
-              exit 1
-          fi
+          echo $CM_KEYSTORE | base64 --decode > /tmp/keystore.jks
+      
       - name: Build Android App Bundle
         script: |
           cd android
-          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew clean bundleRelease --no-daemon
+          ./gradlew clean bundleRelease
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
     publishing:
-      email:
-        recipients:
-          - Agcomsol@gmail.com
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
