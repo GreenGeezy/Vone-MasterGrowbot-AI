@@ -28,7 +28,7 @@ const App: React.FC = () => {
   
   useEffect(() => {
     const initApp = async () => {
-      // 1. REVENUECAT CONFIGURATION (Mobile Only)
+      // 1. REVENUECAT CONFIGURATION
       if (Capacitor.isNativePlatform()) {
           let apiKey = '';
           if (Capacitor.getPlatform() === 'android') {
@@ -56,20 +56,16 @@ const App: React.FC = () => {
           setOnboardingStatus(OnboardingStep.COMPLETED);
           loadUserData();
       } else {
-          // If not logged in, wait 2.5s then check local state
+          // Logic: Only auto-advance if they have data. 
+          // If they are a NEW user, we STAY on Splash until they click "Start".
           setTimeout(() => {
              if (hasCompletedOnboarding === 'true') {
-                 // Finished onboarding but not logged in -> Auth
                  setOnboardingStatus(OnboardingStep.COMPLETED);
                  setShowAuth(true);
              } else if (savedProfile) {
-                 // Has profile but didn't finish -> Summary
                  setOnboardingStatus(OnboardingStep.SUMMARY);
-             } else {
-                 // New user -> Splash/Quiz (handled by Splash component logic usually, 
-                 // but we ensure transition happens if Splash calls back)
-                 // We don't force transition here to let Splash run its animation/button logic
-             }
+             } 
+             // REMOVED the 'else' block that forced auto-transition to Quiz
           }, 2500);
       }
     };
@@ -77,7 +73,6 @@ const App: React.FC = () => {
   }, []);
 
   const loadUserData = async () => {
-      // Mock data for immediate feature testing
       setPlants([{ 
           id: '1', name: 'Project Alpha', strain: 'Blue Dream', stage: 'Veg', health: 92, 
           imageUri: 'https://images.unsplash.com/photo-1603796846097-b36976ea2851?auto=format&fit=crop&q=80&w=1000', 
@@ -100,7 +95,7 @@ const App: React.FC = () => {
       setShowPaywall(true); 
   };
 
-  // FIXED: Missing Handler for Splash Screen
+  // FIXED: Triggered by Splash Screen Button
   const handleGetStarted = () => {
       setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE);
   };
@@ -118,7 +113,6 @@ const App: React.FC = () => {
   };
 
   const handleTabChange = (tab: any) => {
-      // Logic: Native apps require trial. Web apps allow testing.
       if (!isTrialActive && Capacitor.isNativePlatform()) {
           setShowPaywall(true);
       } else {
@@ -132,10 +126,8 @@ const App: React.FC = () => {
 
   // --- RENDER ---
   
-  // FIXED: Passed handleGetStarted prop to Splash
-  if (onboardingStatus === OnboardingStep.SPLASH) {
-      return <Splash onGetStarted={handleGetStarted} />;
-  }
+  // FIXED: Passed onGetStarted prop so the button works
+  if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={handleGetStarted} />;
   
   if (onboardingStatus !== OnboardingStep.COMPLETED && onboardingStatus !== OnboardingStep.SUMMARY) {
       return <Onboarding onComplete={handleOnboardingComplete} />;
@@ -156,7 +148,6 @@ const App: React.FC = () => {
 
       {showPaywall && <Paywall onClose={() => setShowPaywall(false)} onPurchase={handlePaymentSuccess} onAuthRedirect={() => { setShowPaywall(false); setShowAuth(true); }} />}
       {showAuth && <PostPaymentAuth onComplete={handleAuthSuccess} onSkip={() => { setShowAuth(false); setIsTrialActive(true); loadUserData(); }} />}
-      
       <BottomNav currentScreen={currentTab} onNavigate={handleTabChange} />
     </div>
   );
