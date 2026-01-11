@@ -34,13 +34,11 @@ workflows:
       
       - name: Decode Security Files
         script: |
-          cd android
-          
           # 1. DECODE KEYSTORE
           if [ -n "$CM_KEYSTORE_ENCODED" ]; then
               echo "🔐 Decoding keystore..."
-              echo $CM_KEYSTORE_ENCODED | base64 --decode > app/keystore.jks
-              export CM_KEYSTORE_PATH="$PWD/app/keystore.jks"
+              # FIXED: Output directly to /tmp/keystore.jks to match the global CM_KEYSTORE_PATH variable
+              echo $CM_KEYSTORE_ENCODED | base64 --decode > /tmp/keystore.jks
           else
               echo "❌ ERROR: CM_KEYSTORE_ENCODED is missing!"
               exit 1
@@ -49,10 +47,8 @@ workflows:
           # 2. DECODE GOOGLE SERVICES JSON
           if [ -n "$ANDROID_GOOGLE_SERVICES_JSON" ]; then
               echo "🔥 Decoding google-services.json..."
-              # Note: If your variable is raw JSON, use 'echo ... >'
-              # If it is Base64 encoded, use 'echo ... | base64 --decode >'
-              # Based on your previous working setup, we assume Base64:
-              echo $ANDROID_GOOGLE_SERVICES_JSON | base64 --decode > app/google-services.json
+              # FIXED: Use absolute path to ensure it lands in the right place regardless of 'cd'
+              echo $ANDROID_GOOGLE_SERVICES_JSON | base64 --decode > android/app/google-services.json
               echo "✅ google-services.json injected successfully."
           else
               echo "❌ ERROR: ANDROID_GOOGLE_SERVICES_JSON is missing! App will crash."
