@@ -5,8 +5,8 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       groups:
-        - production  # FIXED: Changed from 'google_play' to your actual group name
-        - app_config  # Added to ensure your config variables are also loaded
+        - production
+        - app_config
       vars:
         CM_KEYSTORE_PATH: /tmp/keystore.jks
       node: 20
@@ -36,5 +36,6 @@ workflows:
       - android/app/build/outputs/bundle/release/*.aab
     publishing:
       google_play:
-        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        # FIXED: Pointing to the variable you actually have defined
+        credentials: $ANDROID_GOOGLE_SERVICES_JSON
         track: internal
