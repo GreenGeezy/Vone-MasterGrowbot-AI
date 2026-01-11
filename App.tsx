@@ -56,7 +56,7 @@ const App: React.FC = () => {
           setOnboardingStatus(OnboardingStep.COMPLETED);
           loadUserData();
       } else {
-          // If not logged in, determine where they left off
+          // If not logged in, wait 2.5s then check local state
           setTimeout(() => {
              if (hasCompletedOnboarding === 'true') {
                  // Finished onboarding but not logged in -> Auth
@@ -66,8 +66,9 @@ const App: React.FC = () => {
                  // Has profile but didn't finish -> Summary
                  setOnboardingStatus(OnboardingStep.SUMMARY);
              } else {
-                 // New user -> Splash/Quiz
-                 setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE);
+                 // New user -> Splash/Quiz (handled by Splash component logic usually, 
+                 // but we ensure transition happens if Splash calls back)
+                 // We don't force transition here to let Splash run its animation/button logic
              }
           }, 2500);
       }
@@ -99,6 +100,11 @@ const App: React.FC = () => {
       setShowPaywall(true); 
   };
 
+  // FIXED: Missing Handler for Splash Screen
+  const handleGetStarted = () => {
+      setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE);
+  };
+
   const handlePaymentSuccess = () => {
       setShowPaywall(false);
       setShowAuth(true); 
@@ -125,9 +131,19 @@ const App: React.FC = () => {
   const handleUpdatePlant = (id: string, updates: any) => console.log(updates);
 
   // --- RENDER ---
-  if (onboardingStatus === OnboardingStep.SPLASH) return <Splash />;
-  if (onboardingStatus !== OnboardingStep.COMPLETED && onboardingStatus !== OnboardingStep.SUMMARY) return <Onboarding onComplete={handleOnboardingComplete} />;
-  if (onboardingStatus === OnboardingStep.SUMMARY) return <OnboardingSummary profile={userProfile!} onContinue={handleSummaryContinue} />;
+  
+  // FIXED: Passed handleGetStarted prop to Splash
+  if (onboardingStatus === OnboardingStep.SPLASH) {
+      return <Splash onGetStarted={handleGetStarted} />;
+  }
+  
+  if (onboardingStatus !== OnboardingStep.COMPLETED && onboardingStatus !== OnboardingStep.SUMMARY) {
+      return <Onboarding onComplete={handleOnboardingComplete} />;
+  }
+
+  if (onboardingStatus === OnboardingStep.SUMMARY) {
+      return <OnboardingSummary profile={userProfile!} onContinue={handleSummaryContinue} />;
+  }
 
   return (
     <div className="h-screen w-screen bg-surface overflow-hidden relative">
