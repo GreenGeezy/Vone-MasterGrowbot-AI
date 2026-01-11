@@ -5,10 +5,10 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       groups:
-        - production    # FIXED: Matches your actual Codemagic group
-        - app_config    # FIXED: Matches your actual Codemagic group
+        - production    # Loads Keystore
+        - app_config    # Loads API Keys
       vars:
-        CM_KEYSTORE_PATH: /tmp/keystore.jks # Global path for Gradle to find the key
+        CM_KEYSTORE_PATH: /tmp/keystore.jks
       node: 20.11.1
       java: 17
     triggering:
@@ -27,39 +27,47 @@ workflows:
         script: |
           npm run build
       
-      - name: Sync and Copy Capacitor
+      - name: Sync Capacitor Plugins (THE FIX)
         script: |
+          # This links the RevenueCat plugin to the Android project
           npx cap sync android
       
       - name: Decode Security Files
         script: |
-          # 1. DECODE KEYSTORE (From CM_KEYSTORE_ENCODED to /tmp/keystore.jks)
+          cd android
+          
+          # 1. DECODE KEYSTORE
           if [ -n "$CM_KEYSTORE_ENCODED" ]; then
               echo "🔐 Decoding keystore..."
-              echo $CM_KEYSTORE_ENCODED | base64 --decode > /tmp/keystore.jks
+              echo $CM_KEYSTORE_ENCODED | base64 --decode > app/keystore.jks
+              export CM_KEYSTORE_PATH="$PWD/app/keystore.jks"
           else
               echo "❌ ERROR: CM_KEYSTORE_ENCODED is missing!"
               exit 1
           fi
 
-          # 2. WRITE GOOGLE SERVICES JSON (From ANDROID_GOOGLE_SERVICES_JSON to app folder)
-          # We echo this directly because the Publishing block expects Raw JSON.
+          # 2. DECODE GOOGLE SERVICES JSON
           if [ -n "$ANDROID_GOOGLE_SERVICES_JSON" ]; then
-              echo "🔥 Writing google-services.json..."
-              echo $ANDROID_GOOGLE_SERVICES_JSON > android/app/google-services.json
+              echo "🔥 Decoding google-services.json..."
+              # Note: If your variable is raw JSON, use 'echo ... >'
+              # If it is Base64 encoded, use 'echo ... | base64 --decode >'
+              # Based on your previous working setup, we assume Base64:
+              echo $ANDROID_GOOGLE_SERVICES_JSON | base64 --decode > app/google-services.json
+              echo "✅ google-services.json injected successfully."
           else
-              echo "❌ ERROR: ANDROID_GOOGLE_SERVICES_JSON is missing!"
+              echo "❌ ERROR: ANDROID_GOOGLE_SERVICES_JSON is missing! App will crash."
               exit 1
           fi
       
       - name: Build Android App Bundle
         script: |
           cd android
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew clean bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
     publishing:
-      google_play:
-        credentials: $ANDROID_GOOGLE_SERVICES_JSON
-        track: internal
+      email:
+        recipients:
+          - Agcomsol@gmail.com
