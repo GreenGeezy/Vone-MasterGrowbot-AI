@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import Growbot from '../components/Growbot';
 import { ArrowRight, ShieldCheck, TrendingUp } from 'lucide-react';
@@ -13,11 +12,8 @@ const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
   
   useEffect(() => {
     const checkUserStatus = async () => {
-      // If Supabase is not initialized, we cannot check auth. 
-      // Proceed to the onboarding flow immediately.
       if (!supabase) {
-        console.warn("Supabase not initialized in Splash. Proceeding to onboarding.");
-        onGetStarted();
+        console.warn("Supabase not initialized.");
         return;
       }
 
@@ -26,19 +22,17 @@ const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session) {
-          console.log("Active session found. Verifying profile status...");
-          
+          console.log("Active session found. Checking profile...");
           // 2. Check Profile Data
           const { data: profile, error } = await getUserProfile();
           
           if (error || !profile) {
-             // Session valid but profile fetch failed or empty -> Start onboarding
-             console.log("Profile missing or error. Redirecting to onboarding.");
-             onGetStarted();
-             return;
+             // Session valid but profile missing -> Wait for user to start
+             console.log("Profile missing. Staying on Splash.");
+             return; 
           }
 
-          // 3. Verify Onboarding Fields are present
+          // 3. Verify Onboarding Fields
           const isProfileComplete = 
              profile.experience && 
              profile.environment && 
@@ -48,22 +42,19 @@ const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
             console.log("Profile complete. Redirecting to Home.");
             if (onSessionActive) onSessionActive();
           } else {
-            console.log("Profile incomplete. Redirecting to onboarding.");
-            onGetStarted();
+            console.log("Profile incomplete. Wait for user.");
+            // Do not auto-redirect; let them click "Start" to fix profile
           }
         } else {
-          // No active session found
-          console.log("No active session. Redirecting to onboarding.");
-          onGetStarted();
+          // No active session -> New User
+          // FIXED: Do NOT auto-redirect. Wait for button click.
+          console.log("No session. Waiting for user interaction.");
         }
       } catch (error) {
-        // On any error (network, auth, etc.), fall back to onboarding
-        console.error("User status check failed. Falling back to onboarding.", error);
-        onGetStarted();
+        console.error("User status check failed.", error);
       }
     };
     
-    // Check status on mount
     checkUserStatus();
   }, [onGetStarted, onSessionActive]);
 
