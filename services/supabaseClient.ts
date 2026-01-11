@@ -1,21 +1,26 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
 import { CONFIG } from './config';
+import { UserProfile } from '../types';
 
+// Check for missing credentials to warn the developer
 if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY) {
   console.warn("Supabase credentials missing. Auth and Database features will be limited.");
 }
 
+// Initialize Supabase Client
 export const supabase = (CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY) 
   ? createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY)
   : null;
 
+/**
+ * Handle Google Sign-In (Works on Web & Mobile)
+ */
 export const signInWithGoogle = async () => {
   if (!supabase) return { data: null, error: new Error("Supabase missing") };
 
   const redirectUrl = Capacitor.isNativePlatform() 
-    ? 'mastergrowbot://callback' 
+    ? 'com.mastergrowbot.app://login-callback' 
     : window.location.origin;
 
   return await supabase.auth.signInWithOAuth({
@@ -27,20 +32,31 @@ export const signInWithGoogle = async () => {
   });
 };
 
+/**
+ * Fetch the current user's profile with strict typing
+ */
 export const getUserProfile = async () => {
-  if (!supabase) return { data: null, error: new Error("Supabase missing") };
+  if (!supabase) return { data: null, error: { message: "Supabase not initialized" } };
+  
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { data: null, error: new Error("No user") };
+  if (!user) return { data: null, error: { message: "No active user" } };
 
-  return await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single();
+
+  // FIXED: Explicitly cast data to UserProfile to prevent build errors
+  return { data: data as UserProfile | null, error };
 };
 
-export const updateOnboardingProfile = async (updates: any) => {
+/**
+ * Update the user's profile during onboarding
+ */
+export const updateOnboardingProfile = async (updates: Partial<UserProfile>) => {
   if (!supabase) return { data: null, error: new Error("Supabase missing") };
+  
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { data: null, error: new Error("No user") };
 
