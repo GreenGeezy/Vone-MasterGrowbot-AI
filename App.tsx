@@ -13,6 +13,7 @@ import BottomNav from './components/BottomNav';
 import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
+import { SplashScreen } from '@capacitor/splash-screen'; // Added Import
 import { supabase } from './services/supabaseClient';
 
 const App: React.FC = () => {
@@ -29,6 +30,9 @@ const App: React.FC = () => {
   
   useEffect(() => {
     const initApp = async () => {
+      // 1. FAST LAUNCH: Hide native splash immediately so React UI is visible
+      await SplashScreen.hide();
+
       CapacitorApp.addListener('appUrlOpen', async (data) => {
           if (data.url.includes('access_token') || data.url.includes('refresh_token') || data.url.includes('login-callback')) {
               setTimeout(async () => {
@@ -59,10 +63,7 @@ const App: React.FC = () => {
           loadUserData();
       } else {
           if (hasCompletedOnboarding === 'true') {
-             // User finished onboarding before but isn't logged in. 
-             // We can check if they have a local subscription via RevenueCat here if we wanted.
              setOnboardingStatus(OnboardingStep.COMPLETED);
-             // Don't force auth yet, wait for them to hit a paid feature
           } else if (savedProfile) {
              setOnboardingStatus(OnboardingStep.SUMMARY);
           }
@@ -98,24 +99,20 @@ const App: React.FC = () => {
       setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE);
   };
 
-  // Step 1: Payment Succeeded (Anonymous) -> Move to Auth
   const handlePaymentSuccess = () => {
       setShowPaywall(false);
       setShowAuth(true); 
   };
 
-  // Step 2: Auth Succeeded (Linked) -> Enter App
   const handleAuthSuccess = async (userId?: string) => {
       setShowAuth(false);
       setShowPaywall(false);
       setIsTrialActive(true);
       localStorage.setItem('mastergrowbot_onboarding_complete', 'true');
       
-      // Ensure RevenueCat is linked if we have the ID
       if (userId && Capacitor.isNativePlatform()) {
           await Purchases.logIn({ appUserID: userId });
       }
-      
       loadUserData();
   };
 
@@ -148,7 +145,6 @@ const App: React.FC = () => {
         <Paywall 
             onClose={() => setShowPaywall(false)} 
             onPurchase={handlePaymentSuccess} 
-            // If they skip paywall, we keep them anonymous for now
             onSkip={() => setShowPaywall(false)} 
         />
       )}
@@ -156,7 +152,6 @@ const App: React.FC = () => {
       {showAuth && (
         <PostPaymentAuth 
             onComplete={() => handleAuthSuccess()} 
-            // If they skip auth, they enter app but purchase isn't linked to an email yet (risky for them, good for conversion)
             onSkip={() => handleAuthSuccess()} 
             userProfile={userProfile}
         />
