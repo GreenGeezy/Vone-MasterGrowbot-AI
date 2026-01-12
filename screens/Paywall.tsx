@@ -25,7 +25,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
       } catch (e) {
         console.error("Failed to load offerings", e);
       } finally {
-        // FIXED: Always allow the UI to render, even if background fetch fails
         setOfferingsLoaded(true);
       }
     };
@@ -58,18 +57,22 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
                   if (weekly) packageToBuy = weekly;
              }
 
+             // ATTEMPT PURCHASE
              const { customerInfo } = await Purchases.purchasePackage({ aPackage: packageToBuy });
              
              if (customerInfo.activeSubscriptions.length > 0 || customerInfo.entitlements.active['pro']) {
                  onPurchase(); 
              }
         } else {
-            alert("No subscription info available. Please check your internet.");
+            alert("No offerings found. Please check RevenueCat configuration.");
         }
     } catch (error: any) {
         if (!error.userCancelled) {
-            console.error("Purchase Error:", error);
-            alert("We couldn't connect to the store. Please try again.");
+            console.error("Purchase Error Full Object:", JSON.stringify(error));
+            
+            // FIXED: Show the ACTUAL error message to help debug
+            // Common errors: "Billing unavailable", "This version of the application is not configured for billing"
+            alert(`Store Error: ${error.message || error.code || "Unknown error"}`);
         }
     } finally {
         setIsPurchasing(false);
