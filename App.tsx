@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { OnboardingStep, UserProfile, Plant, JournalEntry, Task } from './types';
+import { OnboardingStep, UserProfile, Plant, Task } from './types';
 import Splash from './screens/Splash';
 import Onboarding from './screens/Onboarding';
 import OnboardingSummary from './screens/OnboardingSummary';
@@ -12,7 +12,7 @@ import PostPaymentAuth from './screens/PostPaymentAuth';
 import BottomNav from './components/BottomNav';
 import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
-import { App as CapacitorApp } from '@capacitor/app'; // REQUIRED FOR DEEP LINKS
+import { App as CapacitorApp } from '@capacitor/app';
 import { supabase } from './services/supabaseClient';
 
 const App: React.FC = () => {
@@ -23,26 +23,21 @@ const App: React.FC = () => {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   
+  // Flow States
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   
   useEffect(() => {
     const initApp = async () => {
-      // 1. Handle Deep Links (Google/Apple Sign In Return)
       CapacitorApp.addListener('appUrlOpen', async (data) => {
-          console.log('App opened with URL:', data.url);
           if (data.url.includes('access_token') || data.url.includes('refresh_token') || data.url.includes('login-callback')) {
-              // Let Supabase handle the URL fragment automatically or force re-check
               setTimeout(async () => {
                   const { data: { session } } = await supabase.auth.getSession();
-                  if (session) {
-                      handleAuthSuccess();
-                  }
+                  if (session) handleAuthSuccess(session.user.id);
               }, 500);
           }
       });
 
-      // 2. RevenueCat Init
       if (Capacitor.isNativePlatform()) {
           const apiKey = Capacitor.getPlatform() === 'android' 
               ? 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' 
@@ -52,7 +47,6 @@ const App: React.FC = () => {
           await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
       }
 
-      // 3. Check Existing Session
       const { data: { session } } = await supabase.auth.getSession();
       const savedProfile = localStorage.getItem('mastergrowbot_profile');
       const hasCompletedOnboarding = localStorage.getItem('mastergrowbot_onboarding_complete');
@@ -64,12 +58,11 @@ const App: React.FC = () => {
           setOnboardingStatus(OnboardingStep.COMPLETED);
           loadUserData();
       } else {
-          // New User Logic: Stay on SPLASH until interaction
-          // Returning User Logic:
           if (hasCompletedOnboarding === 'true') {
-             // If they finished before but aren't logged in, send to Auth
+             // User finished onboarding before but isn't logged in. 
+             // We can check if they have a local subscription via RevenueCat here if we wanted.
              setOnboardingStatus(OnboardingStep.COMPLETED);
-             setShowAuth(true);
+             // Don't force auth yet, wait for them to hit a paid feature
           } else if (savedProfile) {
              setOnboardingStatus(OnboardingStep.SUMMARY);
           }
@@ -105,21 +98,28 @@ const App: React.FC = () => {
       setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE);
   };
 
+  // Step 1: Payment Succeeded (Anonymous) -> Move to Auth
   const handlePaymentSuccess = () => {
       setShowPaywall(false);
       setShowAuth(true); 
   };
 
-  const handleAuthSuccess = () => {
+  // Step 2: Auth Succeeded (Linked) -> Enter App
+  const handleAuthSuccess = async (userId?: string) => {
       setShowAuth(false);
       setShowPaywall(false);
       setIsTrialActive(true);
       localStorage.setItem('mastergrowbot_onboarding_complete', 'true');
+      
+      // Ensure RevenueCat is linked if we have the ID
+      if (userId && Capacitor.isNativePlatform()) {
+          await Purchases.logIn({ appUserID: userId });
+      }
+      
       loadUserData();
   };
 
   const handleTabChange = (tab: any) => {
-      // On Native, block features if not authenticated/paid
       if (!isTrialActive && Capacitor.isNativePlatform()) {
           setShowPaywall(true);
       } else {
@@ -131,7 +131,6 @@ const App: React.FC = () => {
   const handleAddJournalEntry = (entry: any) => console.log(entry);
   const handleUpdatePlant = (id: string, updates: any) => console.log(updates);
 
-  // RENDER LOGIC
   if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={handleGetStarted} />;
   if (onboardingStatus !== OnboardingStep.COMPLETED && onboardingStatus !== OnboardingStep.SUMMARY) return <Onboarding onComplete={handleOnboardingComplete} />;
   if (onboardingStatus === OnboardingStep.SUMMARY) return <OnboardingSummary profile={userProfile!} onContinue={handleSummaryContinue} />;
@@ -145,8 +144,24 @@ const App: React.FC = () => {
           {currentTab === 'journal' && <Journal plants={plants} onAddEntry={handleAddJournalEntry} onUpdatePlant={handleUpdatePlant} />}
       </div>
 
-      {showPaywall && <Paywall onClose={() => setShowPaywall(false)} onPurchase={handlePaymentSuccess} onAuthRedirect={() => { setShowPaywall(false); setShowAuth(true); }} />}
-      {showAuth && <PostPaymentAuth onComplete={handleAuthSuccess} onSkip={() => { setShowAuth(false); setIsTrialActive(true); loadUserData(); }} />}
+      {showPaywall && (
+        <Paywall 
+            onClose={() => setShowPaywall(false)} 
+            onPurchase={handlePaymentSuccess} 
+            // If they skip paywall, we keep them anonymous for now
+            onSkip={() => setShowPaywall(false)} 
+        />
+      )}
+      
+      {showAuth && (
+        <PostPaymentAuth 
+            onComplete={() => handleAuthSuccess()} 
+            // If they skip auth, they enter app but purchase isn't linked to an email yet (risky for them, good for conversion)
+            onSkip={() => handleAuthSuccess()} 
+            userProfile={userProfile}
+        />
+      )}
+      
       <BottomNav currentScreen={currentTab} onNavigate={handleTabChange} />
     </div>
   );
