@@ -7,7 +7,7 @@ import { Capacitor } from '@capacitor/core';
 interface PaywallProps {
   onClose: () => void;
   onSkip?: () => void; 
-  onPurchase: () => void; // Triggered after successful payment
+  onPurchase: () => void;
   isMandatory?: boolean;
 }
 
@@ -21,12 +21,12 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
       try {
         if (Capacitor.isNativePlatform()) {
            await Purchases.getOfferings();
-           setOfferingsLoaded(true);
-        } else {
-           setOfferingsLoaded(true); // Web mock
         }
       } catch (e) {
         console.error("Failed to load offerings", e);
+      } finally {
+        // FIXED: Always allow the UI to render, even if background fetch fails
+        setOfferingsLoaded(true);
       }
     };
     loadOfferings();
@@ -37,14 +37,12 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
     
     try {
         if (!Capacitor.isNativePlatform()) {
-            // Web Mock
             console.log("Web Mode: Simulating Purchase");
             await new Promise<void>((resolve) => setTimeout(resolve, 1500));
-            onPurchase(); // Success -> Go to Auth
+            onPurchase();
             return;
         } 
         
-        // 1. PAYMENT FIRST (Anonymous User)
         const offerings = await Purchases.getOfferings();
         if (offerings.current && offerings.current.availablePackages.length > 0) {
              let packageToBuy = offerings.current.availablePackages[0];
@@ -60,12 +58,9 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
                   if (weekly) packageToBuy = weekly;
              }
 
-             // Trigger Google Play Sheet
              const { customerInfo } = await Purchases.purchasePackage({ aPackage: packageToBuy });
              
-             // 2. CHECK SUCCESS
              if (customerInfo.activeSubscriptions.length > 0 || customerInfo.entitlements.active['pro']) {
-                 // Payment Successful! Now we move to Auth to "save" this purchase.
                  onPurchase(); 
              }
         } else {
@@ -74,7 +69,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
     } catch (error: any) {
         if (!error.userCancelled) {
             console.error("Purchase Error:", error);
-            // Don't show technical errors to users, just a friendly message
             alert("We couldn't connect to the store. Please try again.");
         }
     } finally {
@@ -94,7 +88,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col overflow-hidden font-sans text-text-main bg-surface w-full max-w-[768px] mx-auto shadow-2xl border-x border-gray-100">
-      {/* Background Effects */}
       <div className="absolute top-[-20%] right-[-20%] w-[600px] h-[600px] bg-primary/10 rounded-full blur-[120px] pointer-events-none"></div>
       
       {!isMandatory && (
@@ -103,7 +96,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
         </button>
       )}
 
-      {/* Header */}
       <div className="flex-shrink-0 flex flex-col items-center justify-center text-center px-6 pt-2 pb-1 z-10 mt-6">
         <div className="relative mb-0 animate-float scale-[0.6] origin-center -mt-2">
             <div className="absolute inset-0 bg-primary/20 blur-3xl opacity-30 animate-pulse"></div>
@@ -123,7 +115,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
         </p>
       </div>
 
-      {/* Plans & Benefits */}
       <div className="flex-1 bg-white border-t border-gray-100 rounded-t-[1.5rem] relative shadow-[0_-10px_60px_rgba(0,0,0,0.05)] overflow-y-auto no-scrollbar flex flex-col">
         <div className="px-6 pt-5 pb-8 flex-1 flex flex-col">
             <div className="mb-5">
@@ -141,7 +132,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
             </div>
 
             <div className="space-y-3 mb-4">
-            {/* Monthly */}
             <div onClick={() => setSelectedPlan('month')} className={`relative border-[3px] p-4 rounded-2xl flex flex-col justify-center cursor-pointer overflow-hidden transition-all active:scale-[0.99] ${selectedPlan === 'month' ? 'border-primary bg-primary/5 shadow-card scale-[1.02]' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
                 <div className="flex justify-between items-center w-full">
                     <div>
@@ -156,7 +146,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
                 <div className={`w-5 h-5 rounded-full border-2 absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center ${selectedPlan === 'month' ? 'border-primary bg-primary text-white' : 'border-gray-200'}`}>{selectedPlan === 'month' && <Check size={12} />}</div>
             </div>
 
-            {/* Yearly */}
             <div onClick={() => setSelectedPlan('year')} className={`relative border-2 p-3 rounded-2xl flex flex-col justify-center cursor-pointer overflow-hidden transition-all active:scale-[0.99] ${selectedPlan === 'year' ? 'border-primary bg-primary/5 shadow-card' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
                 <div className="bg-primary text-white text-[9px] font-black px-2 py-0.5 absolute top-0 left-0 rounded-br-lg shadow-sm tracking-wider z-10">BEST VALUE</div>
                 <div className="flex justify-between items-center w-full mb-1">
@@ -172,7 +161,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
                 <div className={`w-5 h-5 rounded-full border-2 absolute right-4 top-[35%] -translate-y-1/2 flex items-center justify-center ${selectedPlan === 'year' ? 'border-primary bg-primary text-white' : 'border-gray-200'}`}>{selectedPlan === 'year' && <Check size={12} />}</div>
             </div>
 
-            {/* Weekly */}
             <div onClick={() => setSelectedPlan('week')} className={`relative border-2 p-3 rounded-2xl flex justify-between items-center cursor-pointer transition-all active:scale-[0.99] ${selectedPlan === 'week' ? 'border-primary bg-primary/5 shadow-md' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
                 <div><span className="block font-bold text-text-main text-sm">Weekly Access</span></div>
                 <div className="text-base font-bold text-text-main pr-8">$7.99<span className="text-[10px] text-text-sub font-medium">/wk</span></div>
@@ -181,7 +169,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
             </div>
         </div>
         
-        {/* Footer Actions */}
         <div className="px-6 pb-6 bg-white z-20 mt-auto">
             <div className="space-y-3">
                 <div className="w-full relative group">
