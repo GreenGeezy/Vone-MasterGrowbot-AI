@@ -1,6 +1,9 @@
 apply plugin: 'com.android.application'
 apply plugin: 'com.google.gms.google-services'
 
+// THIS WAS MISSING. It tells the app to compile your Capacitor plugins (like RevenueCat).
+apply from: 'capacitor.build.gradle'
+
 android {
     namespace "com.mastergrowbot.app"
     compileSdk 35
@@ -9,9 +12,9 @@ android {
         applicationId "com.mastergrowbot.app"
         minSdk 23
         targetSdk 35
-        // FIXED: Incremented to 57
-        versionCode 57
-        versionName "1.0.57"
+        // FIXED: Incremented to 58 for the new release
+        versionCode 58
+        versionName "1.0.58"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
