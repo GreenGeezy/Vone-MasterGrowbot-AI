@@ -1,4 +1,5 @@
-import { GoogleGenerativeAI } from "@google/genai";
+// FIXED IMPORT: Use @google/generative-ai instead of @google/genai
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { CONFIG } from './config';
 
 // Initialize Gemini
@@ -9,7 +10,6 @@ export async function fileToGenerativePart(file: File): Promise<{ inlineData: { 
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64String = reader.result as string;
-      // Remove data url prefix (e.g. "data:image/jpeg;base64,")
       const base64Data = base64String.split(',')[1]; 
       resolve({
         inlineData: {
@@ -27,7 +27,6 @@ export async function diagnosePlant(images: any[]) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
-    // CRITICAL: We ask for JSON specifically to power the UI
     const prompt = `
       Analyze this cannabis plant image. Return ONLY a JSON object. Do not use Markdown formatting.
       Structure:
@@ -44,13 +43,11 @@ export async function diagnosePlant(images: any[]) {
     const response = await result.response;
     const text = response.text();
     
-    // Clean up if Gemini accidentally adds markdown code blocks
     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     
     return JSON.parse(cleanText);
   } catch (error) {
     console.error("Diagnosis Error:", error);
-    // Fallback if AI fails so app doesn't crash
     return {
         diagnosis: "Analysis Failed",
         severity: "low",
@@ -66,16 +63,20 @@ export async function chatWithCoach(message: string, history: any[], persona: st
     
     let systemInstruction = "You are MasterGrowbot, an expert cannabis cultivation AI.";
     
-    // PERSONA LOGIC
     if (persona === 'Kore') systemInstruction += " You are Coach Kore. You are calm, scientific, and focus on soil biology.";
     if (persona === 'Charon') systemInstruction += " You are Coach Mike. You are bold, direct, and focus on high-yield crop steering.";
     if (persona === 'Puck') systemInstruction += " You are Coach Puck. You are energetic, funny, and use emojis.";
 
+    // Convert history to Gemini format (user/model roles)
+    const chatHistory = history
+        .filter(msg => msg.role !== 'system') // Filter out system messages if you store them
+        .map(msg => ({
+            role: msg.role === 'assistant' ? 'model' : 'user', // Map 'assistant' to 'model'
+            parts: [{ text: msg.content }]
+        }));
+
     const chat = model.startChat({
-      history: history.map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.content }]
-      })),
+      history: chatHistory,
     });
 
     const result = await chat.sendMessage(`${systemInstruction} User asks: ${message}`);
@@ -88,6 +89,5 @@ export async function chatWithCoach(message: string, history: any[], persona: st
 }
 
 export async function getDailyInsight(stage: string) {
-    // keeping this simple to save tokens
     return `Tip for ${stage}: Ensure consistent airflow today to prevent micro-climates.`;
 }
