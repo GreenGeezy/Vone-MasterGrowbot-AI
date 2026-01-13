@@ -1,4 +1,3 @@
-
 export enum PlantStage {
   SEEDLING = 'Seedling',
   VEG = 'Vegetative',
@@ -26,7 +25,7 @@ export type JournalEntryType = 'note' | 'diagnosis' | 'chat';
 
 export interface LogAnalysis {
   summary: string;
-  yieldPrediction?: string; // e.g. "Yield on track (+5%)"
+  yieldPrediction?: string; 
   healthIndicator?: 'good' | 'concern' | 'critical';
   detectedValues?: {
     ph?: number;
@@ -35,21 +34,35 @@ export interface LogAnalysis {
   }
 }
 
+export interface DiagnosisResult {
+  diagnosis: string;
+  severity: 'low' | 'medium' | 'high';
+  health: number; // Changed from String to Number (0-100) for the new UI
+  confidence: number;
+  fixSteps: string[];
+  // Optional fields for backward compatibility or future expansion
+  issues?: string[];
+  stage?: string;
+  topAction?: string;
+  yieldTips?: string[];
+  qualityTips?: string[];
+  generalAdvice?: string;
+}
+
 export interface JournalEntry {
   id: string;
   date: string;
   type: JournalEntryType;
   title: string;
-  notes?: string; // User notes or Chat answer
-  originalQuestion?: string; // For chat logs
-  imageUri?: string; // For photos
-  drawingUri?: string; // For user sketches
-  diagnosisData?: DiagnosisResult; // For diagnosis logs
+  notes?: string;
+  originalQuestion?: string;
+  imageUri?: string;
+  drawingUri?: string;
+  diagnosisData?: DiagnosisResult;
   envTemp?: number;
   envHumidity?: number;
   tags?: ('water' | 'feed' | 'prune' | 'env' | 'photo')[];
   aiAnalysis?: LogAnalysis;
-  // Sharing properties
   isPublic?: boolean;
   publicUrl?: string;
 }
@@ -59,7 +72,7 @@ export interface WeeklySummary {
   weekNumber: number;
   imageUri: string;
   healthScore: number;
-  aiNotes: string; // The AI generated summary for that week
+  aiNotes: string;
   date: string;
 }
 
@@ -67,7 +80,7 @@ export interface Plant {
   id: string;
   name: string;
   strain: string; 
-  strainDetails?: Strain; // Populated from strain database
+  strainDetails?: Strain;
   stage: PlantStage;
   daysInStage: number;
   totalDays: number;
@@ -77,22 +90,8 @@ export interface Plant {
   streak: number;
   tasks: Task[];
   journal: JournalEntry[];
-  weeklySummaries: WeeklySummary[]; // History for the cards
-  activeAlerts?: ('thirsty' | 'pest' | 'nutrient' | 'env')[]; // Indicators for the dashboard
-}
-
-export interface DiagnosisResult {
-  issues: string[];
-  confidence: number;
-  severity: 'low' | 'medium' | 'high';
-  health: 'Poor' | 'Fair' | 'Good' | 'Great' | 'Excellent';
-  stage: string;
-  topAction: string;
-  fixSteps: string[];
-  diagnosis: string;
-  yieldTips: string[];
-  qualityTips: string[];
-  generalAdvice: string;
+  weeklySummaries: WeeklySummary[];
+  activeAlerts?: ('thirsty' | 'pest' | 'nutrient' | 'env')[];
 }
 
 export enum AppScreen {
@@ -104,11 +103,12 @@ export enum AppScreen {
   ACCOUNT = 'account'
 }
 
+// UPDATED: Matches the new Chat.tsx structure
 export interface ChatMessage {
   id: string;
-  text: string;
-  isUser: boolean;
-  timestamp: number;
+  role: 'user' | 'assistant' | 'system'; // Changed from isUser boolean
+  content: string; // Changed from text
+  timestamp: Date | number;
 }
 
 // --- Onboarding & User Profile ---
