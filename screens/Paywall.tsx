@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check, ArrowRight, Infinity, Headphones, Sprout, ShieldCheck } from 'lucide-react';
 import Growbot from '../components/Growbot';
-import { Purchases, PACKAGE_TYPE } from '@revenuecat/purchases-capacitor';
+import { Purchases, PACKAGE_TYPE, PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 
 interface PaywallProps {
@@ -15,12 +15,17 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
   const [selectedPlan, setSelectedPlan] = useState<'week' | 'month' | 'year'>('month');
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [offeringsLoaded, setOfferingsLoaded] = useState(false);
+  const [packages, setPackages] = useState<PurchasesPackage[]>([]);
 
   useEffect(() => {
     const loadOfferings = async () => {
       try {
         if (Capacitor.isNativePlatform()) {
-           await Purchases.getOfferings();
+           const offerings = await Purchases.getOfferings();
+           // Load the 'Default' offering configured in RevenueCat
+           if (offerings.current && offerings.current.availablePackages.length > 0) {
+               setPackages(offerings.current.availablePackages);
+           }
         }
       } catch (e) {
         console.error("Failed to load offerings", e);
@@ -33,57 +38,46 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
 
   const handleStartTrial = async () => {
     setIsPurchasing(true);
-    
     try {
         if (!Capacitor.isNativePlatform()) {
-            console.log("Web Mode: Simulating Purchase");
-            await new Promise<void>((resolve) => setTimeout(resolve, 1500));
+            await new Promise((r) => setTimeout(r, 1000));
             onPurchase();
             return;
         } 
         
-        const offerings = await Purchases.getOfferings();
-        if (offerings.current && offerings.current.availablePackages.length > 0) {
-             let packageToBuy = offerings.current.availablePackages[0];
+        if (packages.length > 0) {
+             let packageToBuy: PurchasesPackage | undefined;
              
              if (selectedPlan === 'month') {
-                const monthly = offerings.current.availablePackages.find(p => p.packageType === PACKAGE_TYPE.MONTHLY);
-                if (monthly) packageToBuy = monthly;
+                packageToBuy = packages.find(p => p.packageType === PACKAGE_TYPE.MONTHLY || p.identifier === 'Monthly');
              } else if (selectedPlan === 'year') {
-                const annual = offerings.current.availablePackages.find(p => p.packageType === PACKAGE_TYPE.ANNUAL);
-                if (annual) packageToBuy = annual;
+                packageToBuy = packages.find(p => p.packageType === PACKAGE_TYPE.ANNUAL || p.identifier === 'Annual');
              } else if (selectedPlan === 'week') {
-                  const weekly = offerings.current.availablePackages.find(p => p.packageType === PACKAGE_TYPE.WEEKLY);
-                  if (weekly) packageToBuy = weekly;
+                packageToBuy = packages.find(p => p.packageType === PACKAGE_TYPE.WEEKLY || p.identifier === 'Weekly');
              }
 
-             // ATTEMPT PURCHASE
+             if (!packageToBuy) packageToBuy = packages[0];
+
              const { customerInfo } = await Purchases.purchasePackage({ aPackage: packageToBuy });
              
-             if (customerInfo.activeSubscriptions.length > 0 || customerInfo.entitlements.active['pro']) {
+             // Check if 'pro' entitlement is active OR any active subscription exists
+             if (customerInfo.entitlements.active['pro'] || customerInfo.activeSubscriptions.length > 0) {
                  onPurchase(); 
              }
         } else {
-            alert("No offerings found. Please check RevenueCat configuration.");
+            alert("No products found. Ensure you attached Google Play products to your Default Offering in RevenueCat.");
         }
     } catch (error: any) {
         if (!error.userCancelled) {
-            console.error("Purchase Error Full Object:", JSON.stringify(error));
-            
-            // FIXED: Show the ACTUAL error message to help debug
-            // Common errors: "Billing unavailable", "This version of the application is not configured for billing"
-            alert(`Store Error: ${error.message || error.code || "Unknown error"}`);
+            console.error("Purchase Error:", JSON.stringify(error));
+            let msg = error.message;
+            if (error.code === 23) msg = "Merchant Setup Incomplete. Check tax forms in Google Play Console.";
+            alert(`Store Error: ${msg}`);
         }
     } finally {
         setIsPurchasing(false);
     }
   };
-
-  const benefits = [
-    { icon: Infinity, text: "Perfect Plant Health", sub: "Unlimited AI scans & fast diagnoses." },
-    { icon: Headphones, text: "24/7 Grow Coach", sub: "On-demand help and strain-specific tips." },
-    { icon: Sprout, text: "Data-Driven Decisions", sub: "Strain database, grow logs, and alerts." },
-  ];
 
   if (!offeringsLoaded) {
       return <div className="fixed inset-0 bg-surface z-[60] flex items-center justify-center"><Growbot size="lg" mood="neutral" /></div>;
@@ -104,83 +98,58 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onSkip, onPurchase, isMandat
             <div className="absolute inset-0 bg-primary/20 blur-3xl opacity-30 animate-pulse"></div>
             <div className="relative"><Growbot size="lg" mood="happy" /></div>
         </div>
-
         <div className="flex items-center gap-1.5 bg-white/60 backdrop-blur-sm border border-gray-200 px-3 py-0.5 rounded-full mb-1 shadow-sm -mt-2">
            <ShieldCheck size={10} className="text-primary fill-current bg-white rounded-full" />
            <span className="text-[8px] font-bold uppercase tracking-wider text-text-sub">Trusted by Elite Growers Worldwide</span>
         </div>
-        
         <h1 className="text-xl font-extrabold mb-1 tracking-tight leading-tight text-text-main">
         Upgrade to <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-neon-blue">Pro</span>
         </h1>
-        <p className="text-text-sub text-xs font-medium leading-relaxed px-4 mb-3 max-w-xs mx-auto">
-        Grow healthier, bigger plants with your personal AI grow coach. Zero guesswork. Zero stress.
-        </p>
       </div>
 
       <div className="flex-1 bg-white border-t border-gray-100 rounded-t-[1.5rem] relative shadow-[0_-10px_60px_rgba(0,0,0,0.05)] overflow-y-auto no-scrollbar flex flex-col">
         <div className="px-6 pt-5 pb-8 flex-1 flex flex-col">
-            <div className="mb-5">
-            <div className="grid grid-cols-1 gap-3">
-                {benefits.map((benefit, idx) => (
-                <div key={idx} className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0"><benefit.icon size={16} /></div>
-                    <div className="pt-0.5">
-                        <span className="block text-sm font-bold text-text-main leading-tight">{benefit.text}</span>
-                        <span className="text-xs text-text-sub leading-snug">{benefit.sub}</span>
-                    </div>
-                </div>
-                ))}
-            </div>
-            </div>
-
             <div className="space-y-3 mb-4">
-            <div onClick={() => setSelectedPlan('month')} className={`relative border-[3px] p-4 rounded-2xl flex flex-col justify-center cursor-pointer overflow-hidden transition-all active:scale-[0.99] ${selectedPlan === 'month' ? 'border-primary bg-primary/5 shadow-card scale-[1.02]' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
-                <div className="flex justify-between items-center w-full">
-                    <div>
-                    <div className="flex items-center gap-2 mb-0.5"><span className="block font-bold text-text-main text-lg">Monthly Access</span></div>
-                    <span className="text-xs text-text-sub">Flexible billing.</span>
+                <div onClick={() => setSelectedPlan('month')} className={`relative border-[3px] p-4 rounded-2xl flex flex-col justify-center cursor-pointer transition-all active:scale-[0.99] ${selectedPlan === 'month' ? 'border-primary bg-primary/5 scale-[1.02]' : 'border-gray-100 bg-white'}`}>
+                    <div className="flex justify-between items-center w-full">
+                        <div>
+                            <span className="block font-bold text-text-main text-lg">Monthly</span>
+                            <span className="text-xs text-text-sub">Flexible billing.</span>
+                        </div>
+                        <div className="text-right pr-8">
+                            <div className="text-xl font-black text-text-main">$29.99<span className="text-xs text-text-sub">/mo</span></div>
+                        </div>
                     </div>
-                    <div className="text-right z-10 pr-8">
-                        <div className="text-xl font-black text-text-main">$29.99<span className="text-xs text-text-sub font-medium">/mo</span></div>
-                        <div className="text-[9px] text-primary font-bold">Save $5 per Month</div>
-                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center ${selectedPlan === 'month' ? 'border-primary bg-primary text-white' : 'border-gray-200'}`}>{selectedPlan === 'month' && <Check size={12} />}</div>
                 </div>
-                <div className={`w-5 h-5 rounded-full border-2 absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center ${selectedPlan === 'month' ? 'border-primary bg-primary text-white' : 'border-gray-200'}`}>{selectedPlan === 'month' && <Check size={12} />}</div>
-            </div>
 
-            <div onClick={() => setSelectedPlan('year')} className={`relative border-2 p-3 rounded-2xl flex flex-col justify-center cursor-pointer overflow-hidden transition-all active:scale-[0.99] ${selectedPlan === 'year' ? 'border-primary bg-primary/5 shadow-card' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
-                <div className="bg-primary text-white text-[9px] font-black px-2 py-0.5 absolute top-0 left-0 rounded-br-lg shadow-sm tracking-wider z-10">BEST VALUE</div>
-                <div className="flex justify-between items-center w-full mb-1">
-                    <div className="pl-1 mt-1">
-                        <div className="flex items-center gap-2 mb-0.5"><span className="block font-bold text-text-main text-base">Yearly Access</span></div>
-                        <span className="text-[10px] text-text-sub line-through">$350/yr</span>
+                <div onClick={() => setSelectedPlan('year')} className={`relative border-2 p-3 rounded-2xl flex flex-col justify-center cursor-pointer transition-all active:scale-[0.99] ${selectedPlan === 'year' ? 'border-primary bg-primary/5' : 'border-gray-100 bg-white'}`}>
+                    <div className="bg-primary text-white text-[9px] font-black px-2 py-0.5 absolute top-0 left-0 rounded-br-lg z-10">BEST VALUE</div>
+                    <div className="flex justify-between items-center w-full">
+                        <div className="mt-1">
+                            <span className="block font-bold text-text-main text-base">Yearly Access</span>
+                        </div>
+                        <div className="text-right">
+                            <div className="text-lg font-bold text-text-main">$199.99<span className="text-xs text-text-sub">/yr</span></div>
+                        </div>
                     </div>
-                    <div className="text-right z-10">
-                        <div className="text-lg font-bold text-text-main">$199.99<span className="text-xs text-text-sub font-medium">/yr</span></div>
-                        <div className="text-[10px] text-primary font-black uppercase tracking-wide">Save Over $150/year</div>
-                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 absolute right-4 top-[35%] -translate-y-1/2 flex items-center justify-center ${selectedPlan === 'year' ? 'border-primary bg-primary text-white' : 'border-gray-200'}`}>{selectedPlan === 'year' && <Check size={12} />}</div>
                 </div>
-                <div className={`w-5 h-5 rounded-full border-2 absolute right-4 top-[35%] -translate-y-1/2 flex items-center justify-center ${selectedPlan === 'year' ? 'border-primary bg-primary text-white' : 'border-gray-200'}`}>{selectedPlan === 'year' && <Check size={12} />}</div>
-            </div>
 
-            <div onClick={() => setSelectedPlan('week')} className={`relative border-2 p-3 rounded-2xl flex justify-between items-center cursor-pointer transition-all active:scale-[0.99] ${selectedPlan === 'week' ? 'border-primary bg-primary/5 shadow-md' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
-                <div><span className="block font-bold text-text-main text-sm">Weekly Access</span></div>
-                <div className="text-base font-bold text-text-main pr-8">$7.99<span className="text-[10px] text-text-sub font-medium">/wk</span></div>
-                <div className={`w-5 h-5 rounded-full border-2 absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center ${selectedPlan === 'week' ? 'border-primary bg-primary text-white' : 'border-gray-200'}`}>{selectedPlan === 'week' && <Check size={12} />}</div>
-            </div>
+                <div onClick={() => setSelectedPlan('week')} className={`relative border-2 p-3 rounded-2xl flex justify-between items-center cursor-pointer transition-all active:scale-[0.99] ${selectedPlan === 'week' ? 'border-primary bg-primary/5' : 'border-gray-100 bg-white'}`}>
+                    <div><span className="block font-bold text-text-main text-sm">Weekly Access</span></div>
+                    <div className="text-base font-bold text-text-main pr-8">$7.99<span className="text-[10px] text-text-sub">/wk</span></div>
+                    <div className={`w-5 h-5 rounded-full border-2 absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center ${selectedPlan === 'week' ? 'border-primary bg-primary text-white' : 'border-gray-200'}`}>{selectedPlan === 'week' && <Check size={12} />}</div>
+                </div>
             </div>
         </div>
         
         <div className="px-6 pb-6 bg-white z-20 mt-auto">
             <div className="space-y-3">
-                <div className="w-full relative group">
-                    <div className="absolute -inset-0.5 bg-primary/30 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-pulse motion-reduce:animate-none"></div>
-                    <button onClick={handleStartTrial} disabled={isPurchasing} className="relative w-full bg-text-main text-white font-black text-lg py-3 rounded-2xl shadow-xl active:scale-[0.98] transition-transform overflow-hidden z-10 group disabled:opacity-80">
-                        {isPurchasing ? <span className="relative flex items-center justify-center gap-2 tracking-wide">Processing...</span> : <span className="relative flex items-center justify-center gap-2 tracking-wide">Start Free Trial <ArrowRight size={20} /></span>}
-                    </button>
-                    <p className="text-center text-[10px] text-text-sub mt-2 font-medium">Cancel anytime. No risk — 3-day free trial.</p>
-                </div>
+                <button onClick={handleStartTrial} disabled={isPurchasing} className="relative w-full bg-text-main text-white font-black text-lg py-3 rounded-2xl shadow-xl active:scale-[0.98] transition-transform group disabled:opacity-80">
+                    {isPurchasing ? "Processing..." : <span className="flex items-center justify-center gap-2">Start Free Trial <ArrowRight size={20} /></span>}
+                </button>
+                <p className="text-center text-[10px] text-text-sub font-medium">Cancel anytime. 3-day free trial.</p>
                 {(onSkip || !isMandatory) && (
                     <button onClick={onSkip || onClose} className="w-full py-2 text-sm font-bold text-text-sub hover:text-text-main transition-colors">Maybe Later</button>
                 )}
