@@ -1,15 +1,13 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Mic, PenTool, Check, Eraser, Droplets, Utensils, Scissors, Thermometer, Camera } from 'lucide-react';
+import { X, PenTool, Check, Eraser, Droplets, Utensils, Scissors, Thermometer, Camera } from 'lucide-react';
 import { JournalEntry } from '../types';
-import { fileToGenerativePart } from '../services/geminiService';
 
 interface NoteCreatorProps {
   onSave: (entry: Omit<JournalEntry, 'id' | 'date'>) => void;
   onClose: () => void;
 }
 
-type Mode = 'text' | 'draw' | 'voice';
+type Mode = 'text' | 'draw';
 type Tag = 'water' | 'feed' | 'prune' | 'env';
 
 const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
@@ -19,7 +17,6 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
   const [tags, setTags] = useState<Tag[]>([]);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isListening, setIsListening] = useState(false);
   
   // Drawing Refs & State
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -47,7 +44,6 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
         ctx.strokeStyle = drawingColor;
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
   useEffect(() => {
@@ -114,33 +110,6 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
     setHasDrawing(false);
   };
 
-  // Voice Handler
-  const toggleListening = () => {
-    if (isListening) {
-      setIsListening(false);
-    } else {
-      setIsListening(true);
-      if ('webkitSpeechRecognition' in window) {
-        // @ts-ignore
-        const recognition = new window.webkitSpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        
-        recognition.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          setText(prev => prev + (prev ? ' ' : '') + transcript);
-          setIsListening(false);
-        };
-        
-        recognition.onerror = () => setIsListening(false);
-        recognition.start();
-      } else {
-        alert("Voice input not supported.");
-        setIsListening(false);
-      }
-    }
-  };
-
   // Photo Handler
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -199,7 +168,6 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
           <div className="flex bg-gray-100 rounded-full p-1">
              <button onClick={() => setMode('text')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${mode === 'text' ? 'bg-white shadow-sm text-text-main' : 'text-text-sub'}`}>Text</button>
              <button onClick={() => setMode('draw')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${mode === 'draw' ? 'bg-white shadow-sm text-text-main' : 'text-text-sub'}`}>Draw</button>
-             <button onClick={() => setMode('voice')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${mode === 'voice' ? 'bg-white shadow-sm text-text-main' : 'text-text-sub'}`}>Voice</button>
           </div>
           <button 
             onClick={handleSave}
@@ -288,23 +256,6 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
                             onChange={handlePhotoSelect} 
                         />
                     </div>
-                </div>
-             </div>
-           )}
-
-           {mode === 'voice' && (
-             <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-                <div 
-                   onClick={toggleListening}
-                   className={`w-24 h-24 rounded-full flex items-center justify-center cursor-pointer transition-all duration-300 ${isListening ? 'bg-red-50 text-alert-red scale-110' : 'bg-primary/10 text-primary hover:scale-105'}`}
-                >
-                    <Mic size={40} className={isListening ? 'animate-pulse' : ''} />
-                </div>
-                <p className="mt-6 text-sm font-bold text-text-sub uppercase tracking-wider">
-                    {isListening ? 'Listening...' : 'Tap to Record'}
-                </p>
-                <div className="w-full mt-8 p-4 bg-white rounded-2xl border border-gray-100 min-h-[100px] text-left">
-                   {text || <span className="text-gray-300 italic">Transcription will appear here...</span>}
                 </div>
              </div>
            )}
