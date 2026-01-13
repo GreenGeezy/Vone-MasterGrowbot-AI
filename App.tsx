@@ -13,7 +13,7 @@ import BottomNav from './components/BottomNav';
 import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
-import { SplashScreen } from '@capacitor/splash-screen'; // Added Import
+import { SplashScreen } from '@capacitor/splash-screen';
 import { supabase } from './services/supabaseClient';
 
 const App: React.FC = () => {
@@ -30,7 +30,6 @@ const App: React.FC = () => {
   
   useEffect(() => {
     const initApp = async () => {
-      // 1. FAST LAUNCH: Hide native splash immediately so React UI is visible
       await SplashScreen.hide();
 
       CapacitorApp.addListener('appUrlOpen', async (data) => {
@@ -49,6 +48,18 @@ const App: React.FC = () => {
           
           await Purchases.configure({ apiKey });
           await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
+
+          // CRITICAL FIX: Check RevenueCat status immediately on app launch
+          try {
+              const customerInfo = await Purchases.getCustomerInfo();
+              // Check for 'pro' entitlement OR any active subscription
+              if (customerInfo.entitlements.active['pro'] || customerInfo.activeSubscriptions.length > 0) {
+                  console.log("Restoring active subscription from RevenueCat...");
+                  setIsTrialActive(true);
+              }
+          } catch (e) {
+              console.error("Error checking subscription status on boot:", e);
+          }
       }
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -58,6 +69,8 @@ const App: React.FC = () => {
       if (savedProfile) setUserProfile(JSON.parse(savedProfile));
 
       if (session) {
+          // If user is logged in, they are trusted (or we assume sub is linked)
+          // Ideally, we still rely on the RevenueCat check above, but this keeps legacy logic safe
           setIsTrialActive(true);
           setOnboardingStatus(OnboardingStep.COMPLETED);
           loadUserData();
@@ -100,6 +113,8 @@ const App: React.FC = () => {
   };
 
   const handlePaymentSuccess = () => {
+      // Payment finished, now we try to create an account
+      setIsTrialActive(true); // Grant access immediately in memory
       setShowPaywall(false);
       setShowAuth(true); 
   };
@@ -107,7 +122,7 @@ const App: React.FC = () => {
   const handleAuthSuccess = async (userId?: string) => {
       setShowAuth(false);
       setShowPaywall(false);
-      setIsTrialActive(true);
+      setIsTrialActive(true); // Ensure access is granted
       localStorage.setItem('mastergrowbot_onboarding_complete', 'true');
       
       if (userId && Capacitor.isNativePlatform()) {
@@ -117,7 +132,9 @@ const App: React.FC = () => {
   };
 
   const handleTabChange = (tab: any) => {
+      // Double check: if native, require trial active
       if (!isTrialActive && Capacitor.isNativePlatform()) {
+          // One final check? (Optional, but safe)
           setShowPaywall(true);
       } else {
           setCurrentTab(tab);
