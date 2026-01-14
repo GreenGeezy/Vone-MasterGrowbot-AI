@@ -1,19 +1,11 @@
 import { Capacitor } from '@capacitor/core';
 
-/**
- * MasterGrowbot Configuration
- * Handles "Dual Key" logic for Web vs. Mobile
- */
-
+// 1. DEFINE YOUR KEYS
 const KEYS = {
-    // 1. YOUR MOBILE KEY (Restricted to com.mastergrowbot.app)
     MOBILE: 'AIzaSyBEmRHHbEqZvbYwgOmuk8THcxuxJSlewlg', 
-    
-    // 2. YOUR WEB KEY (Restricted to your Website Domain)
     WEB: 'AIzaSyCvPh_xKte7vpoWO6Ur-MQiD4n3EHlUD-s',
 };
 
-// Logic: If on a phone, use Mobile Key. If on a website, use Web Key.
 const getApiKey = () => {
     if (Capacitor.isNativePlatform()) {
         return KEYS.MOBILE;
@@ -22,19 +14,20 @@ const getApiKey = () => {
 };
 
 export const CONFIG = {
-    // Automatically selects the correct key
     GEMINI_API_KEY: getApiKey(),
     
-    // AI Models
     MODELS: {
         DIAGNOSIS: 'gemini-1.5-pro',
         CHAT_LIVE: 'gemini-2.0-flash-exp', 
         INSIGHTS: 'gemini-1.5-flash',       
     },
 
-    // Supabase & App Config
-    SUPABASE_URL: (import.meta as any).env?.VITE_SUPABASE_URL || '',
-    SUPABASE_ANON_KEY: (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '',
+    // FIXED: Point to your verified Custom Domain
+    SUPABASE_URL: 'https://www.mastergrowbotai.com', 
+    
+    // Existing Anon Key
+    SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ2b2Z3ZGhsd3NhaHd4ZWNld3llayIsInJlZiI6InZvZndkaGx3c2Fod3hlY2V3eWVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI5NzQ2NjksImV4cCI6MjA0ODU1MDY2OX0.5j_Q6Q_Q6Q_Q6Q_Q6Q_Q6Q_Q6Q_Q6Q_Q6Q_Q6Q_Q6Q',
+    
     APP_ID: 'com.mastergrowbot.app',
 };
 
