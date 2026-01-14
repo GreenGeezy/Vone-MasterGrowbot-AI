@@ -22,12 +22,9 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete, onSkip, u
       try {
           setStatusMessage("Linking your subscription...");
           if (Capacitor.isNativePlatform()) {
-              // CRITICAL: Links the anonymous trial purchase to this new User Account
               await Purchases.logIn({ appUserID: userId });
           }
-
           if (userProfile) {
-              setStatusMessage("Saving your personalized plan...");
               await updateOnboardingProfile({
                   experience: userProfile.experience,
                   environment: userProfile.grow_mode,
@@ -94,10 +91,15 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete, onSkip, u
           <h1 className="text-2xl font-extrabold text-text-main mb-3">Subscription Active!</h1>
           <p className="text-text-sub text-sm mb-8">Create an account to save your purchase and sync your garden across devices.</p>
           
-          <button onClick={handleGoogleLogin} className="w-full bg-white border border-gray-200 font-bold py-3.5 rounded-2xl flex items-center justify-center gap-3 mb-6">
+          <button onClick={handleGoogleLogin} className="w-full bg-white border border-gray-200 font-bold py-3.5 rounded-2xl flex items-center justify-center gap-3 mb-6 hover:bg-gray-50 transition-colors">
               <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G" className="w-5 h-5" />
-              Save with Google
+              Sign Up with Google
           </button>
+
+          <div className="relative mb-6">
+             <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
+             <div className="relative flex justify-center text-[10px] uppercase font-black text-gray-400 tracking-widest"><span className="bg-white px-3">OR USE EMAIL</span></div>
+          </div>
 
           <div className="space-y-4 mb-6 text-left">
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3.5" />
@@ -109,7 +111,6 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete, onSkip, u
             <button onClick={handleSignIn} className="border border-gray-200 font-bold py-3.5 rounded-2xl">Sign In</button>
             <button onClick={handleSignUp} className="bg-primary text-white font-bold py-3.5 rounded-2xl">Sign Up</button>
           </div>
-          {onSkip && <button onClick={onSkip} className="mt-4 text-xs text-text-sub">Skip for now</button>}
       </div>
     </div>
   );
