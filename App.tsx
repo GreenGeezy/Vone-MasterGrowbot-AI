@@ -15,16 +15,16 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { supabase } from './services/supabaseClient';
+import { User, LogOut } from 'lucide-react';
 
 const App: React.FC = () => {
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isTrialActive, setIsTrialActive] = useState<boolean>(false);
-  const [currentTab, setCurrentTab] = useState<'home' | 'diagnose' | 'chat' | 'journal'>('home');
+  const [currentTab, setCurrentTab] = useState<'home' | 'diagnose' | 'chat' | 'journal' | 'profile'>('home');
   const [plants, setPlants] = useState<Plant[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   
-  // Flow States
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   
@@ -32,50 +32,61 @@ const App: React.FC = () => {
     const initApp = async () => {
       await SplashScreen.hide();
 
+      // --- 1. HANDLE DEEP LINK RETURNS ---
       CapacitorApp.addListener('appUrlOpen', async (data) => {
-          if (data.url.includes('access_token') || data.url.includes('refresh_token') || data.url.includes('login-callback')) {
-              setTimeout(async () => {
-                  const { data: { session } } = await supabase.auth.getSession();
-                  if (session) handleAuthSuccess(session.user.id);
-              }, 500);
+          if (data.url.includes('login-callback')) {
+              console.log("Deep link received:", data.url);
+              
+              // Parse the tokens from the URL fragment (hash)
+              const hashIndex = data.url.indexOf('#');
+              if (hashIndex !== -1) {
+                  const params = new URLSearchParams(data.url.substring(hashIndex + 1));
+                  const accessToken = params.get('access_token');
+                  const refreshToken = params.get('refresh_token');
+
+                  if (accessToken && refreshToken) {
+                      // Set session manually
+                      const { data: { session }, error } = await supabase.auth.setSession({
+                          access_token: accessToken,
+                          refresh_token: refreshToken,
+                      });
+
+                      if (session && !error) {
+                          handleAuthSuccess(session.user.id);
+                      }
+                  }
+              }
           }
       });
 
+      // --- 2. REVENUECAT INIT ---
       if (Capacitor.isNativePlatform()) {
-          const apiKey = Capacitor.getPlatform() === 'android' 
-              ? 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' 
-              : 'appl_ihDRwAcLuSWmrxGSiVxrurApZwF';
-          
+          const apiKey = 'goog_kqOynvNRCABzUPrpfyFvlMvHUna'; 
           await Purchases.configure({ apiKey });
           await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
 
-          // CRITICAL FIX: Check RevenueCat status immediately on app launch
           try {
               const customerInfo = await Purchases.getCustomerInfo();
-              // Check for 'pro' entitlement OR any active subscription
               if (customerInfo.entitlements.active['pro'] || customerInfo.activeSubscriptions.length > 0) {
-                  console.log("Restoring active subscription from RevenueCat...");
                   setIsTrialActive(true);
               }
           } catch (e) {
-              console.error("Error checking subscription status on boot:", e);
+              console.error("Subscription check failed:", e);
           }
       }
 
+      // --- 3. SESSION CHECK ---
       const { data: { session } } = await supabase.auth.getSession();
       const savedProfile = localStorage.getItem('mastergrowbot_profile');
-      const hasCompletedOnboarding = localStorage.getItem('mastergrowbot_onboarding_complete');
-
+      
       if (savedProfile) setUserProfile(JSON.parse(savedProfile));
 
       if (session) {
-          // If user is logged in, they are trusted (or we assume sub is linked)
-          // Ideally, we still rely on the RevenueCat check above, but this keeps legacy logic safe
           setIsTrialActive(true);
           setOnboardingStatus(OnboardingStep.COMPLETED);
           loadUserData();
       } else {
-          if (hasCompletedOnboarding === 'true') {
+          if (localStorage.getItem('mastergrowbot_onboarding_complete') === 'true') {
              setOnboardingStatus(OnboardingStep.COMPLETED);
           } else if (savedProfile) {
              setOnboardingStatus(OnboardingStep.SUMMARY);
@@ -91,10 +102,6 @@ const App: React.FC = () => {
           imageUri: 'https://images.unsplash.com/photo-1603796846097-b36976ea2851?auto=format&fit=crop&q=80&w=1000', 
           totalDays: 24, journal: [] 
       }]);
-      setTasks([
-          { id: '1', title: 'Check pH (Target 6.2)', completed: false, date: new Date().toISOString() },
-          { id: '2', title: 'Light 18/6 Cycle Check', completed: true, date: new Date().toISOString() }
-      ]);
   };
 
   const handleOnboardingComplete = (profile: UserProfile) => {
@@ -113,8 +120,7 @@ const App: React.FC = () => {
   };
 
   const handlePaymentSuccess = () => {
-      // Payment finished, now we try to create an account
-      setIsTrialActive(true); // Grant access immediately in memory
+      setIsTrialActive(true);
       setShowPaywall(false);
       setShowAuth(true); 
   };
@@ -122,8 +128,10 @@ const App: React.FC = () => {
   const handleAuthSuccess = async (userId?: string) => {
       setShowAuth(false);
       setShowPaywall(false);
-      setIsTrialActive(true); // Ensure access is granted
+      setIsTrialActive(true);
+      
       localStorage.setItem('mastergrowbot_onboarding_complete', 'true');
+      setOnboardingStatus(OnboardingStep.COMPLETED); 
       
       if (userId && Capacitor.isNativePlatform()) {
           await Purchases.logIn({ appUserID: userId });
@@ -131,19 +139,46 @@ const App: React.FC = () => {
       loadUserData();
   };
 
+  const handleAddJournalEntry = (entry: any) => {
+      const newEntry = { ...entry, id: Date.now().toString(), date: new Date().toLocaleDateString() };
+      setPlants(prevPlants => {
+          const updatedPlants = [...prevPlants];
+          if (updatedPlants[0]) {
+              updatedPlants[0] = { ...updatedPlants[0], journal: [newEntry, ...updatedPlants[0].journal] };
+          }
+          return updatedPlants;
+      });
+      setCurrentTab('journal');
+  };
+
+  const handleSignOut = async () => {
+      await supabase.auth.signOut();
+      window.location.reload();
+  };
+
+  const ProfileScreen = () => (
+      <div className="p-6 pt-12">
+          <h1 className="text-2xl font-bold mb-6">Profile</h1>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center mb-6">
+              <div className="w-20 h-20 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                  <User size={32} />
+              </div>
+              <h2 className="text-lg font-bold">{userProfile?.experience || "Grower"}</h2>
+              <p className="text-sm text-gray-500">Pro Member</p>
+          </div>
+          <button onClick={handleSignOut} className="w-full py-4 bg-red-50 text-red-500 font-bold rounded-xl flex items-center justify-center gap-2">
+              <LogOut size={20} /> Sign Out
+          </button>
+      </div>
+  );
+
   const handleTabChange = (tab: any) => {
-      // Double check: if native, require trial active
       if (!isTrialActive && Capacitor.isNativePlatform()) {
-          // One final check? (Optional, but safe)
           setShowPaywall(true);
       } else {
           setCurrentTab(tab);
       }
   };
-
-  const handleTaskToggle = (taskId: string) => setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t));
-  const handleAddJournalEntry = (entry: any) => console.log(entry);
-  const handleUpdatePlant = (id: string, updates: any) => console.log(updates);
 
   if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={handleGetStarted} />;
   if (onboardingStatus !== OnboardingStep.COMPLETED && onboardingStatus !== OnboardingStep.SUMMARY) return <Onboarding onComplete={handleOnboardingComplete} />;
@@ -152,26 +187,19 @@ const App: React.FC = () => {
   return (
     <div className="h-screen w-screen bg-surface overflow-hidden relative">
       <div className="h-full w-full overflow-y-auto pb-24">
-          {currentTab === 'home' && <Home plants={plants} tasks={tasks} onToggleTask={handleTaskToggle} onNavigateToPlant={() => setCurrentTab('journal')} />}
+          {currentTab === 'home' && <Home plants={plants} tasks={tasks} onToggleTask={() => {}} onNavigateToPlant={() => setCurrentTab('journal')} />}
           {currentTab === 'diagnose' && <Diagnose onSaveToJournal={handleAddJournalEntry} plant={plants[0]} />}
           {currentTab === 'chat' && <Chat onSaveToJournal={handleAddJournalEntry} plant={plants[0]} userProfile={userProfile} />}
-          {currentTab === 'journal' && <Journal plants={plants} onAddEntry={handleAddJournalEntry} onUpdatePlant={handleUpdatePlant} />}
+          {currentTab === 'journal' && <Journal plants={plants} onAddEntry={handleAddJournalEntry} />}
+          {currentTab === 'profile' && <ProfileScreen />}
       </div>
 
       {showPaywall && (
-        <Paywall 
-            onClose={() => setShowPaywall(false)} 
-            onPurchase={handlePaymentSuccess} 
-            onSkip={() => setShowPaywall(false)} 
-        />
+        <Paywall onClose={() => setShowPaywall(false)} onPurchase={handlePaymentSuccess} onSkip={() => setShowPaywall(false)} />
       )}
       
       {showAuth && (
-        <PostPaymentAuth 
-            onComplete={() => handleAuthSuccess()} 
-            onSkip={() => handleAuthSuccess()} 
-            userProfile={userProfile}
-        />
+        <PostPaymentAuth onComplete={() => handleAuthSuccess()} onSkip={() => handleAuthSuccess()} userProfile={userProfile} />
       )}
       
       <BottomNav currentScreen={currentTab} onNavigate={handleTabChange} />
