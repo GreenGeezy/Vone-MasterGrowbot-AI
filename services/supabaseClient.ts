@@ -1,45 +1,39 @@
 import { createClient } from '@supabase/supabase-js';
-import { Capacitor } from '@capacitor/core';
 import { CONFIG } from './config';
+import { Capacitor } from '@capacitor/core';
 import { UserProfile } from '../types';
 
-// Check for missing credentials to warn the developer
-if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY) {
-  console.warn("Supabase credentials missing. Auth and Database features will be limited.");
-}
+export const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+  auth: {
+    storage: localStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce',
+  },
+});
 
-// Initialize Supabase Client
-export const supabase = (CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY) 
-  ? createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY)
-  : null;
-
-/**
- * Handle Google Sign-In (Works on Web & Mobile)
- */
 export const signInWithGoogle = async () => {
-  if (!supabase) return { data: null, error: new Error("Supabase missing") };
-
+  // CRITICAL: Determine where to send the user back to
   const redirectUrl = Capacitor.isNativePlatform() 
-    ? 'com.mastergrowbot.app://login-callback' 
-    : window.location.origin;
-
-  return await supabase.auth.signInWithOAuth({
+    ? 'com.mastergrowbot.app://login-callback'  // Android/iOS Deep Link
+    : 'https://www.mastergrowbotai.com/auth/v1/callback'; // Web fallback
+    
+  const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: redirectUrl,
-      queryParams: { access_type: 'offline', prompt: 'consent' },
+      skipBrowserRedirect: false, 
     },
   });
+
+  if (error) throw error;
+  return data;
 };
 
-/**
- * Fetch the current user's profile with strict typing
- */
 export const getUserProfile = async () => {
-  if (!supabase) return { data: null, error: { message: "Supabase not initialized" } };
-  
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { data: null, error: { message: "No active user" } };
+  if (!user) return { data: null, error: "No user" };
 
   const { data, error } = await supabase
     .from('profiles')
@@ -47,22 +41,16 @@ export const getUserProfile = async () => {
     .eq('id', user.id)
     .single();
 
-  // FIXED: Explicitly cast data to UserProfile to prevent build errors
-  return { data: data as UserProfile | null, error };
+  return { data: data as UserProfile, error };
 };
 
-/**
- * Update the user's profile during onboarding
- */
-export const updateOnboardingProfile = async (updates: Partial<UserProfile>) => {
-  if (!supabase) return { data: null, error: new Error("Supabase missing") };
-  
+export const updateOnboardingProfile = async (updates: any) => {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { data: null, error: new Error("No user") };
+  if (!user) throw new Error('No user logged in');
 
-  return await supabase
+  const { error } = await supabase
     .from('profiles')
-    .upsert({ id: user.id, ...updates, updated_at: new Date().toISOString() })
-    .select()
-    .single();
+    .upsert({ id: user.id, ...updates, updated_at: new Date() });
+
+  if (error) throw error;
 };
