@@ -14,11 +14,15 @@ export const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_K
 });
 
 export const signInWithGoogle = async () => {
-  // CRITICAL: Determine where to send the user back to
-  const redirectUrl = Capacitor.isNativePlatform() 
-    ? 'com.mastergrowbot.app://login-callback'  // Android/iOS Deep Link
-    : 'https://www.mastergrowbotai.com/auth/v1/callback'; // Web fallback
+  // CRITICAL: Force the Deep Link on mobile devices
+  const isMobile = Capacitor.getPlatform() === 'android' || Capacitor.getPlatform() === 'ios';
+  
+  const redirectUrl = isMobile
+    ? 'com.mastergrowbot.app://login-callback'
+    : 'https://www.mastergrowbotai.com/auth/v1/callback';
     
+  console.log(`[Auth] Starting Google Sign-In. Redirecting to: ${redirectUrl}`);
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
