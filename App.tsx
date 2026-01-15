@@ -15,7 +15,7 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { supabase } from './services/supabaseClient';
-import { User, LogOut } from 'lucide-react';
+import { User, LogOut, Shield, FileText } from 'lucide-react';
 
 const App: React.FC = () => {
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
@@ -34,10 +34,10 @@ const App: React.FC = () => {
 
       // --- 1. HANDLE DEEP LINK RETURNS ---
       CapacitorApp.addListener('appUrlOpen', async (data) => {
+          // This listener handles the AUTH redirect from mastergrowbotai.com
           if (data.url.includes('login-callback')) {
               console.log("Deep link received:", data.url);
               
-              // Parse the tokens from the URL fragment (hash)
               const hashIndex = data.url.indexOf('#');
               if (hashIndex !== -1) {
                   const params = new URLSearchParams(data.url.substring(hashIndex + 1));
@@ -45,7 +45,6 @@ const App: React.FC = () => {
                   const refreshToken = params.get('refresh_token');
 
                   if (accessToken && refreshToken) {
-                      // Set session manually
                       const { data: { session }, error } = await supabase.auth.setSession({
                           access_token: accessToken,
                           refresh_token: refreshToken,
@@ -156,19 +155,49 @@ const App: React.FC = () => {
       window.location.reload();
   };
 
+  const openPrivacyPolicy = () => {
+      // UPDATED: Points to your existing, working website
+      window.open('https://www.mastergrowbot.com/privacy-policy', '_system');
+  };
+
   const ProfileScreen = () => (
-      <div className="p-6 pt-12">
-          <h1 className="text-2xl font-bold mb-6">Profile</h1>
+      <div className="p-6 pt-12 h-full overflow-y-auto">
+          <h1 className="text-2xl font-bold mb-6 text-text-main">Profile</h1>
+          
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center mb-6">
               <div className="w-20 h-20 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
                   <User size={32} />
               </div>
-              <h2 className="text-lg font-bold">{userProfile?.experience || "Grower"}</h2>
-              <p className="text-sm text-gray-500">Pro Member</p>
+              <h2 className="text-lg font-bold text-text-main">{userProfile?.experience || "Grower"}</h2>
+              <div className="inline-flex items-center gap-1 bg-green-50 px-2 py-1 rounded-md mt-1">
+                <Shield size={12} className="text-primary" />
+                <p className="text-xs font-bold text-primary">Pro Member</p>
+              </div>
           </div>
-          <button onClick={handleSignOut} className="w-full py-4 bg-red-50 text-red-500 font-bold rounded-xl flex items-center justify-center gap-2">
+
+          <div className="mb-6">
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1">Legal & Support</h3>
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                  <button 
+                    onClick={openPrivacyPolicy}
+                    className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors border-b border-gray-50 text-left"
+                  >
+                      <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600">
+                              <FileText size={16} />
+                          </div>
+                          <span className="font-medium text-text-main">Privacy Policy</span>
+                      </div>
+                      <Shield size={16} className="text-gray-300" />
+                  </button>
+              </div>
+          </div>
+
+          <button onClick={handleSignOut} className="w-full py-4 bg-red-50 text-red-500 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-red-100 transition-colors">
               <LogOut size={20} /> Sign Out
           </button>
+          
+          <p className="text-center text-xs text-gray-300 mt-8 mb-20">Version 1.0.0 (Build 114)</p>
       </div>
   );
 
