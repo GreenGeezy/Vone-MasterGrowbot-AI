@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Mail, Lock, CheckCircle2, UserPlus, LogIn } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Lock, CheckCircle2 } from 'lucide-react';
 import { supabase, signInWithGoogle, updateOnboardingProfile } from '../services/supabaseClient';
 import { UserProfile } from '../types';
 import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app'; // Added for state listening
 import { Purchases } from '@revenuecat/purchases-capacitor';
 
 interface PostPaymentAuthProps {
@@ -17,6 +18,31 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete, onSkip, u
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
+
+  // SAFETY VALVE: Check for session when app resumes
+  useEffect(() => {
+      const handleAppStateChange = async (state: any) => {
+          if (state.isActive && isProcessing) {
+              console.log("[Auth] App resumed. Checking for session...");
+              
+              // Allow a moment for the Deep Link to process in App.tsx
+              setTimeout(async () => {
+                  const { data } = await supabase.auth.getSession();
+                  if (data.session) {
+                      setStatusMessage("Sign in successful!");
+                      await handlePostAuthLogic(data.session.user.id);
+                  } else {
+                      // If still no session, stop the spinner so user can try again
+                      setIsProcessing(false);
+                      setAuthError("Sign in was cancelled or incomplete.");
+                  }
+              }, 2000); 
+          }
+      };
+
+      const listener = CapacitorApp.addListener('appStateChange', handleAppStateChange);
+      return () => { listener.then(l => l.remove()); };
+  }, [isProcessing]);
 
   const handlePostAuthLogic = async (userId: string) => {
       try {
@@ -71,7 +97,16 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete, onSkip, u
 
   const handleGoogleLogin = async () => {
     setIsProcessing(true);
-    try { await signInWithGoogle(); } catch (e) { console.error(e); setIsProcessing(false); }
+    setStatusMessage("Opening Google Sign-In...");
+    setAuthError(null);
+    try { 
+        await signInWithGoogle(); 
+        // Note: isProcessing remains true until the app resumes or deep link fires
+    } catch (e: any) { 
+        console.error(e); 
+        setAuthError(e.message);
+        setIsProcessing(false); 
+    }
   };
 
   if (isProcessing) {
@@ -79,7 +114,12 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete, onSkip, u
           <div className="fixed inset-0 z-[70] bg-surface flex flex-col items-center justify-center p-6 text-center">
               <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-6"></div>
               <h2 className="text-xl font-bold text-text-main mb-2">Securing Your Plan</h2>
-              <p className="text-text-sub animate-pulse">{statusMessage}</p>
+              <p className="text-text-sub animate-pulse mb-8">{statusMessage}</p>
+              
+              {/* Manual Cancel Button just in case */}
+              <button onClick={() => setIsProcessing(false)} className="text-red-500 font-bold text-sm bg-red-50 px-4 py-2 rounded-full">
+                  Cancel / Try Again
+              </button>
           </div>
       );
   }
