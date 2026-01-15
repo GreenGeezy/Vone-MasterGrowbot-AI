@@ -12,9 +12,9 @@ android {
         applicationId "com.mastergrowbot.app"
         minSdk 23
         targetSdk 35
-        // FIXED: Incremented to 63 for the new release
-        versionCode 63
-        versionName "1.0.63"
+        // FIXED: Incremented to 64 for the new release
+        versionCode 64
+        versionName "1.0.64"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
