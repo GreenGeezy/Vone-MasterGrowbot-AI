@@ -14,9 +14,9 @@ export const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_K
 });
 
 export const signInWithGoogle = async () => {
-  // CRITICAL: Force the Deep Link on mobile devices
   const isMobile = Capacitor.getPlatform() === 'android' || Capacitor.getPlatform() === 'ios';
   
+  // FIXED: Use the Branded Domain for the web redirect fallback
   const redirectUrl = isMobile
     ? 'com.mastergrowbot.app://login-callback'
     : 'https://www.mastergrowbotai.com/auth/v1/callback';
