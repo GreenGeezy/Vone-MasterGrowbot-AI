@@ -16,10 +16,10 @@ export const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_K
 export const signInWithGoogle = async () => {
   const isMobile = Capacitor.getPlatform() === 'android' || Capacitor.getPlatform() === 'ios';
   
-  // FIXED: Use the Branded Domain for the web redirect fallback
+  // FIXED: Redirect to the new 'auth' subdomain
   const redirectUrl = isMobile
     ? 'com.mastergrowbot.app://login-callback'
-    : 'https://www.mastergrowbotai.com/auth/v1/callback';
+    : 'https://auth.mastergrowbotai.com/auth/v1/callback';
     
   console.log(`[Auth] Starting Google Sign-In. Redirecting to: ${redirectUrl}`);
 
@@ -35,6 +35,7 @@ export const signInWithGoogle = async () => {
   return data;
 };
 
+// ... (Keep the rest of the file getUserProfile, etc. exactly as is) ...
 export const getUserProfile = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { data: null, error: "No user" };
