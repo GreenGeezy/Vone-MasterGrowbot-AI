@@ -24,20 +24,43 @@ const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<'home' | 'diagnose' | 'chat' | 'journal' | 'profile'>('home');
   const [plants, setPlants] = useState<Plant[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  
+   
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
-  
+   
   useEffect(() => {
     const initApp = async () => {
       await SplashScreen.hide();
 
-      // --- 1. HANDLE DEEP LINK RETURNS ---
+      // --- 1. HANDLE DEEP LINK RETURNS (FIXED FOR PKCE) ---
       CapacitorApp.addListener('appUrlOpen', async (data) => {
-          // This listener handles the AUTH redirect from mastergrowbotai.com
+          // This listener handles the AUTH redirect from auth.mastergrowbotai.com
           if (data.url.includes('login-callback')) {
               console.log("Deep link received:", data.url);
+
+              // CHECK 1: Handle PKCE Flow (The "Code" - This is what Google/Supabase sends now)
+              try {
+                  const urlObj = new URL(data.url);
+                  const code = urlObj.searchParams.get('code');
+
+                  if (code) {
+                      console.log("PKCE Code found, exchanging for session...");
+                      const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
+                      
+                      if (!error && sessionData.session) {
+                          console.log("Session exchange successful!");
+                          // Success! Stop here and log the user in.
+                          handleAuthSuccess(sessionData.session.user.id);
+                          return; 
+                      } else {
+                          console.error("Session exchange failed:", error);
+                      }
+                  }
+              } catch (e) {
+                  console.error("Error parsing Deep Link URL:", e);
+              }
               
+              // CHECK 2: Handle Implicit Flow (The "Hash" - Fallback for legacy flows)
               const hashIndex = data.url.indexOf('#');
               if (hashIndex !== -1) {
                   const params = new URLSearchParams(data.url.substring(hashIndex + 1));
@@ -156,7 +179,6 @@ const App: React.FC = () => {
   };
 
   const openPrivacyPolicy = () => {
-      // UPDATED: Points to your existing, working website
       window.open('https://www.mastergrowbot.com/privacy-policy', '_system');
   };
 
