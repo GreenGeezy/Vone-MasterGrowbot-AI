@@ -32,50 +32,57 @@ const App: React.FC = () => {
     const initApp = async () => {
       await SplashScreen.hide();
 
-      // --- 1. HANDLE DEEP LINK RETURNS (FIXED FOR PKCE) ---
+      // --- 1. HANDLE DEEP LINK RETURNS (DEBUGGING ENABLED) ---
       CapacitorApp.addListener('appUrlOpen', async (data) => {
-          // This listener handles the AUTH redirect from auth.mastergrowbotai.com
-          if (data.url.includes('login-callback')) {
-              console.log("Deep link received:", data.url);
+          console.log("Deep link received:", data.url);
 
-              // CHECK 1: Handle PKCE Flow (The "Code" - This is what Google/Supabase sends now)
+          // CHECK 0: Catch Errors Immediately
+          if (data.url.includes('error=')) {
+              const urlObj = new URL(data.url);
+              const errorDesc = urlObj.searchParams.get('error_description') || urlObj.searchParams.get('error');
+              alert(`Login Failed: ${errorDesc}`); // THIS ALERT IS CRITICAL
+              return;
+          }
+
+          // CHECK 1: Handle PKCE Flow (The "Code")
+          if (data.url.includes('code=')) {
               try {
                   const urlObj = new URL(data.url);
                   const code = urlObj.searchParams.get('code');
 
                   if (code) {
-                      console.log("PKCE Code found, exchanging for session...");
+                      // Exchange code for session
                       const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
                       
                       if (!error && sessionData.session) {
-                          console.log("Session exchange successful!");
-                          // Success! Stop here and log the user in.
                           handleAuthSuccess(sessionData.session.user.id);
-                          return; 
                       } else {
-                          console.error("Session exchange failed:", error);
+                          // Alert the actual error from Supabase
+                          alert(`Session Error: ${error?.message || 'Unknown error during exchange'}`);
                       }
                   }
-              } catch (e) {
-                  console.error("Error parsing Deep Link URL:", e);
+              } catch (e: any) {
+                  alert(`URL Parse Error: ${e.message}`);
               }
-              
-              // CHECK 2: Handle Implicit Flow (The "Hash" - Fallback for legacy flows)
-              const hashIndex = data.url.indexOf('#');
-              if (hashIndex !== -1) {
-                  const params = new URLSearchParams(data.url.substring(hashIndex + 1));
-                  const accessToken = params.get('access_token');
-                  const refreshToken = params.get('refresh_token');
+          }
+          
+          // CHECK 2: Handle Implicit Flow (Legacy Backup)
+          const hashIndex = data.url.indexOf('#');
+          if (hashIndex !== -1) {
+              const params = new URLSearchParams(data.url.substring(hashIndex + 1));
+              const accessToken = params.get('access_token');
+              const refreshToken = params.get('refresh_token');
 
-                  if (accessToken && refreshToken) {
-                      const { data: { session }, error } = await supabase.auth.setSession({
-                          access_token: accessToken,
-                          refresh_token: refreshToken,
-                      });
+              if (accessToken && refreshToken) {
+                  const { data: { session }, error } = await supabase.auth.setSession({
+                      access_token: accessToken,
+                      refresh_token: refreshToken,
+                  });
 
-                      if (session && !error) {
-                          handleAuthSuccess(session.user.id);
-                      }
+                  if (session && !error) {
+                      handleAuthSuccess(session.user.id);
+                  } else {
+                       alert(`Hash Error: ${error?.message}`);
                   }
               }
           }
