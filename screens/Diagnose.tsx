@@ -14,6 +14,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ onSaveToJournal, plant }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<any | null>(null);
 
+  // NATIVE CAMERA: Opens device camera
   const takePicture = async () => {
     try {
       const image = await CapacitorCamera.getPhoto({
@@ -25,13 +26,13 @@ const Diagnose: React.FC<DiagnoseProps> = ({ onSaveToJournal, plant }) => {
       });
 
       if (image.base64String) {
-        // Fix standard base64 prefix if missing
+        // Add prefix for display, send raw string to AI
         const base64Data = image.base64String.includes('data:image') 
             ? image.base64String 
             : `data:image/jpeg;base64,${image.base64String}`;
             
         setImage(base64Data);
-        analyzePlant(image.base64String); // Pass raw string to Gemini
+        analyzePlant(image.base64String); 
       }
     } catch (error) {
       console.error('Camera error:', error);
@@ -44,8 +45,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ onSaveToJournal, plant }) => {
       const diagnosis = await diagnosePlant(base64Image);
       setResult(diagnosis);
     } catch (error: any) {
-      console.error("Diagnosis Error:", error);
-      alert(`Diagnosis Failed: ${error.message || "Please check your internet connection."}`);
+      alert(`Diagnosis Failed: ${error.message || "Please check your internet."}`);
       setImage(null);
     } finally {
       setIsAnalyzing(false);
@@ -58,7 +58,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ onSaveToJournal, plant }) => {
       <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-text-main">AI Doctor</h1>
-            <p className="text-gray-500 text-sm">Gemini 1.5 Pro Vision</p>
+            <p className="text-gray-500 text-sm">Powered by Gemini 2.5 Pro</p>
           </div>
           <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center animate-pulse">
             <ScanLine size={20} />
@@ -66,13 +66,13 @@ const Diagnose: React.FC<DiagnoseProps> = ({ onSaveToJournal, plant }) => {
       </div>
 
       {!image ? (
-        // --- 1. IDLE STATE: SCANNER UI ---
+        // --- IDLE STATE: PREMIUM SCANNER UI ---
         <div className="animate-fade-in space-y-6">
             <div 
               onClick={takePicture}
               className="w-full aspect-[4/5] bg-gradient-to-br from-white to-gray-50 border-2 border-dashed border-primary/30 rounded-3xl flex flex-col items-center justify-center gap-6 cursor-pointer shadow-sm hover:shadow-md hover:border-primary transition-all group relative overflow-hidden"
             >
-              {/* Pulse Ring Animation */}
+              {/* Pulse Animation */}
               <div className="absolute w-64 h-64 bg-primary/5 rounded-full animate-ping opacity-75" />
               
               <div className="w-20 h-20 bg-primary text-white rounded-full flex items-center justify-center shadow-xl shadow-primary/30 z-10 group-hover:scale-110 transition-transform duration-300">
@@ -92,12 +92,11 @@ const Diagnose: React.FC<DiagnoseProps> = ({ onSaveToJournal, plant }) => {
             </div>
         </div>
       ) : (
-        // --- 2. ACTIVE STATE: ANALYSIS ---
+        // --- ACTIVE STATE: ANALYSIS & RESULTS ---
         <div className="space-y-6 animate-fade-in">
           <div className="relative w-full aspect-square rounded-3xl overflow-hidden shadow-lg border-4 border-white">
             <img src={image} alt="Diagnosis" className="w-full h-full object-cover" />
             
-            {/* Analyzing Overlay */}
             {isAnalyzing && (
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white z-20">
                 <div className="relative">
@@ -109,7 +108,6 @@ const Diagnose: React.FC<DiagnoseProps> = ({ onSaveToJournal, plant }) => {
               </div>
             )}
 
-            {/* Close Button */}
             {!isAnalyzing && (
                 <button 
                     onClick={() => { setImage(null); setResult(null); }}
@@ -125,15 +123,9 @@ const Diagnose: React.FC<DiagnoseProps> = ({ onSaveToJournal, plant }) => {
               <div className={`absolute top-0 left-0 w-full h-2 ${result.healthy ? 'bg-green-500' : 'bg-red-500'}`} />
               
               <div className="flex items-center gap-3 mb-6 mt-2">
-                {result.healthy ? (
-                  <CheckCircle className="text-green-500" size={32} />
-                ) : (
-                  <AlertCircle className="text-red-500" size={32} />
-                )}
+                {result.healthy ? <CheckCircle className="text-green-500" size={32} /> : <AlertCircle className="text-red-500" size={32} />}
                 <div>
-                    <h2 className="text-xl font-bold text-text-main">
-                    {result.healthy ? "Healthy Plant" : "Issue Detected"}
-                    </h2>
+                    <h2 className="text-xl font-bold text-text-main">{result.healthy ? "Healthy Plant" : "Issue Detected"}</h2>
                     <p className="text-xs text-gray-400">Confidence: {result.confidence || 'High'}</p>
                 </div>
               </div>
@@ -153,12 +145,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ onSaveToJournal, plant }) => {
               
               <button 
                 onClick={() => {
-                    onSaveToJournal({ 
-                        type: 'diagnosis', 
-                        result, 
-                        image,
-                        notes: result.diagnosis
-                    });
+                    onSaveToJournal({ type: 'diagnosis', result, image, notes: result.diagnosis });
                     alert("Saved to Journal!");
                 }}
                 className="w-full py-4 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/30 active:scale-95 transition-transform"
