@@ -1,7 +1,8 @@
-import React from 'react';
-import { Plant, Task, UserProfile } from '../types';
+import React, { useEffect, useState } from 'react';
+import { Plant, Task } from '../types';
 import PlantCard from '../components/PlantCard';
-import { CheckCircle, Circle, Calendar, Sun, Droplets } from 'lucide-react';
+import { CheckCircle, Calendar, Sun, Droplets, Zap } from 'lucide-react';
+import { getDailyInsight } from '../services/geminiService';
 
 interface HomeProps {
   plants: Plant[];
@@ -11,6 +12,18 @@ interface HomeProps {
 }
 
 const Home: React.FC<HomeProps> = ({ plants, tasks, onToggleTask, onNavigateToPlant }) => {
+  const [dailyTip, setDailyTip] = useState<string>("Loading daily garden insight...");
+
+  // AI INTEGRATION: Fetch Daily Insight on Mount
+  useEffect(() => {
+    const fetchTip = async () => {
+        const stage = plants[0]?.stage || 'General';
+        const tip = await getDailyInsight(stage);
+        setDailyTip(tip);
+    };
+    fetchTip();
+  }, [plants]);
+
   return (
     <div className="p-6 pt-12 space-y-8 pb-32">
       {/* Header */}
@@ -23,7 +36,18 @@ const Home: React.FC<HomeProps> = ({ plants, tasks, onToggleTask, onNavigateToPl
         </div>
       </div>
 
-      {/* Weather / Status Widget (Static for MVP) */}
+      {/* AI INSIGHT CARD (Gemini Flash) */}
+      <div className="bg-gradient-to-br from-primary/10 to-blue-500/5 p-4 rounded-2xl border border-primary/20 flex gap-3 items-start">
+          <div className="bg-white p-2 rounded-full shadow-sm shrink-0">
+              <Zap size={18} className="text-yellow-500 fill-yellow-500" />
+          </div>
+          <div>
+              <h3 className="text-xs font-bold text-primary uppercase tracking-wider mb-1">Daily AI Insight</h3>
+              <p className="text-sm text-gray-700 leading-relaxed italic">"{dailyTip}"</p>
+          </div>
+      </div>
+
+      {/* Status Widgets */}
       <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
         <div className="min-w-[140px] bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-2">
             <Sun size={20} className="text-orange-400" />
@@ -41,11 +65,9 @@ const Home: React.FC<HomeProps> = ({ plants, tasks, onToggleTask, onNavigateToPl
         </div>
       </div>
 
-      {/* Plants Section */}
+      {/* Active Grows */}
       <div className="space-y-4">
-        <div className="flex justify-between items-end">
-          <h2 className="text-xl font-bold text-text-main">Active Grows</h2>
-        </div>
+        <h2 className="text-xl font-bold text-text-main">Active Grows</h2>
         <div className="grid gap-4">
           {plants.map(plant => (
             <PlantCard key={plant.id} plant={plant} onClick={() => onNavigateToPlant(plant.id)} />
@@ -53,12 +75,12 @@ const Home: React.FC<HomeProps> = ({ plants, tasks, onToggleTask, onNavigateToPl
         </div>
       </div>
 
-      {/* Daily Tasks */}
+      {/* Daily Checklist */}
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-        <h2 className="text-xl font-bold text-text-main mb-6">Daily Checklist</h2>
+        <h2 className="text-xl font-bold text-text-main mb-6">Care Checklist</h2>
         <div className="space-y-4">
           {tasks.length === 0 ? (
-             <p className="text-sm text-gray-400 text-center py-4">No tasks for today. Great job!</p>
+             <p className="text-sm text-gray-400 text-center py-4">All tasks complete!</p>
           ) : (
               tasks.map(task => (
                 <button
