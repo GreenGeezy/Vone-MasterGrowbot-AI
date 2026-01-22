@@ -10,14 +10,15 @@ import Journal from './screens/Journal';
 import Paywall from './screens/Paywall';
 import PostPaymentAuth from './screens/PostPaymentAuth';
 import BottomNav from './components/BottomNav';
-import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor';
+import { Purchases } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { supabase } from './services/supabaseClient';
+import { STRAIN_DATABASE } from './data/strains'; // Integrated Strain DB
 import { User, LogOut, Shield, FileText } from 'lucide-react';
 
-// --- FIXED: ProfileScreen moved OUTSIDE of App component ---
+// --- Profile Component ---
 const ProfileScreen: React.FC<{ 
   userProfile: UserProfile | null; 
   onSignOut: () => void; 
@@ -64,11 +65,12 @@ const ProfileScreen: React.FC<{
               <LogOut size={20} /> Sign Out
           </button>
           
-          <p className="text-center text-xs text-gray-300 mt-8 mb-20">Version 1.0.1 (Build 115)</p>
+          <p className="text-center text-xs text-gray-300 mt-8 mb-20">Version 1.0.2 (Strain Update)</p>
       </div>
   );
 };
 
+// --- Main App Component ---
 const App: React.FC = () => {
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -84,62 +86,32 @@ const App: React.FC = () => {
     const initApp = async () => {
       await SplashScreen.hide();
 
+      // Deep Link Handler
       CapacitorApp.addListener('appUrlOpen', async (data) => {
-          console.log("Deep link received:", data.url);
-          // Error Handling
-          if (data.url.includes('error=')) {
-              const urlObj = new URL(data.url);
-              const errorDesc = urlObj.searchParams.get('error_description') || urlObj.searchParams.get('error');
-              alert(`Login Failed: ${errorDesc}`);
-              return;
-          }
-
-          // PKCE Flow
           if (data.url.includes('code=')) {
-              try {
-                  const urlObj = new URL(data.url);
-                  const code = urlObj.searchParams.get('code');
-                  if (code) {
-                      const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
-                      if (!error && sessionData.session) {
-                          handleAuthSuccess(sessionData.session.user.id);
-                      } else {
-                          alert(`Session Error: ${error?.message}`);
-                      }
+              const urlObj = new URL(data.url);
+              const code = urlObj.searchParams.get('code');
+              if (code) {
+                  const { data: sessionData } = await supabase.auth.exchangeCodeForSession(code);
+                  if (sessionData.session) {
+                      handleAuthSuccess(sessionData.session.user.id);
                   }
-              } catch (e: any) {
-                  alert(`URL Error: ${e.message}`);
-              }
-          }
-          
-          // Implicit Flow
-          const hashIndex = data.url.indexOf('#');
-          if (hashIndex !== -1) {
-              const params = new URLSearchParams(data.url.substring(hashIndex + 1));
-              const accessToken = params.get('access_token');
-              const refreshToken = params.get('refresh_token');
-
-              if (accessToken && refreshToken) {
-                  const { data: { session }, error } = await supabase.auth.setSession({
-                      access_token: accessToken,
-                      refresh_token: refreshToken,
-                  });
-                  if (session && !error) handleAuthSuccess(session.user.id);
               }
           }
       });
 
+      // RevenueCat Init
       if (Capacitor.isNativePlatform()) {
-          const apiKey = 'goog_kqOynvNRCABzUPrpfyFvlMvHUna'; 
-          await Purchases.configure({ apiKey });
+          await Purchases.configure({ apiKey: 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' });
           try {
               const customerInfo = await Purchases.getCustomerInfo();
-              if (customerInfo.entitlements.active['pro'] || customerInfo.activeSubscriptions.length > 0) {
+              if (customerInfo.entitlements.active['pro']) {
                   setIsTrialActive(true);
               }
           } catch (e) { console.error(e); }
       }
 
+      // Check Session & Load Profile
       const { data: { session } } = await supabase.auth.getSession();
       const savedProfile = localStorage.getItem('mastergrowbot_profile');
       if (savedProfile) setUserProfile(JSON.parse(savedProfile));
@@ -151,6 +123,7 @@ const App: React.FC = () => {
       } else {
           if (localStorage.getItem('mastergrowbot_onboarding_complete') === 'true') {
              setOnboardingStatus(OnboardingStep.COMPLETED);
+             loadUserData();
           } else if (savedProfile) {
              setOnboardingStatus(OnboardingStep.SUMMARY);
           }
@@ -160,11 +133,29 @@ const App: React.FC = () => {
   }, []);
 
   const loadUserData = async () => {
+      // STRAIN INTELLIGENCE INTEGRATION
+      // We explicitly look up the strain from the DB to ensure badges/details appear
+      const mockStrain = STRAIN_DATABASE.find(s => s.name === 'Blue Dream') || STRAIN_DATABASE[0];
+
       setPlants([{ 
-          id: '1', name: 'Project Alpha', strain: 'Blue Dream', stage: 'Veg', health: 92, 
+          id: '1', 
+          name: 'Project Alpha', 
+          strain: mockStrain.name, 
+          strainDetails: mockStrain, // Injects detailed genetics data
+          stage: 'Veg', 
+          healthScore: 92, 
+          age_days: 24, 
           imageUri: 'https://images.unsplash.com/photo-1603796846097-b36976ea2851?auto=format&fit=crop&q=80&w=1000', 
-          totalDays: 24, journal: [] 
+          totalDays: 24, 
+          journal: [],
+          tasks: [],
+          weeklySummaries: []
       }]);
+
+      setTasks([
+          { id: '1', title: 'Check pH levels', completed: false, date: new Date().toISOString(), type: 'check' },
+          { id: '2', title: 'Light feeding (CalMag)', completed: false, date: new Date().toISOString(), type: 'feed' }
+      ]);
   };
 
   const handleOnboardingComplete = (profile: UserProfile) => {
@@ -201,11 +192,19 @@ const App: React.FC = () => {
   };
 
   const handleAddJournalEntry = (entry: any) => {
-      const newEntry = { ...entry, id: Date.now().toString(), date: new Date().toLocaleDateString() };
+      const newEntry = { 
+          ...entry, 
+          id: Date.now().toString(), 
+          date: new Date().toLocaleDateString() 
+      };
+      
       setPlants(prevPlants => {
           const updatedPlants = [...prevPlants];
           if (updatedPlants[0]) {
-              updatedPlants[0] = { ...updatedPlants[0], journal: [newEntry, ...updatedPlants[0].journal] };
+              updatedPlants[0] = { 
+                  ...updatedPlants[0], 
+                  journal: [newEntry, ...updatedPlants[0].journal] 
+              };
           }
           return updatedPlants;
       });
@@ -225,14 +224,16 @@ const App: React.FC = () => {
       }
   };
 
+  // Onboarding Flow
   if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={handleGetStarted} />;
-  if (onboardingStatus !== OnboardingStep.COMPLETED && onboardingStatus !== OnboardingStep.SUMMARY) return <Onboarding onComplete={handleOnboardingComplete} />;
+  if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) return <Onboarding onComplete={handleOnboardingComplete} />;
   if (onboardingStatus === OnboardingStep.SUMMARY) return <OnboardingSummary profile={userProfile!} onContinue={handleSummaryContinue} />;
 
+  // Main App Flow
   return (
     <div className="h-screen w-screen bg-surface overflow-hidden relative">
       <div className="h-full w-full overflow-y-auto pb-24">
-          {currentTab === 'home' && <Home plants={plants} tasks={tasks} onToggleTask={() => {}} onNavigateToPlant={() => setCurrentTab('journal')} />}
+          {currentTab === 'home' && <Home plants={plants} tasks={tasks} onToggleTask={(id) => setTasks(t => t.map(x => x.id === id ? {...x, completed: !x.completed} : x))} onNavigateToPlant={() => setCurrentTab('journal')} />}
           {currentTab === 'diagnose' && <Diagnose onSaveToJournal={handleAddJournalEntry} plant={plants[0]} />}
           {currentTab === 'chat' && <Chat onSaveToJournal={handleAddJournalEntry} plant={plants[0]} userProfile={userProfile} />}
           {currentTab === 'journal' && <Journal plants={plants} onAddEntry={handleAddJournalEntry} />}
