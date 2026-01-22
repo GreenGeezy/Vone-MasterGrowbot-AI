@@ -1,3 +1,5 @@
+// types.ts
+
 export enum PlantStage {
   SEEDLING = 'Seedling',
   VEG = 'Vegetative',
@@ -6,7 +8,9 @@ export enum PlantStage {
   HARVEST = 'Harvest Ready'
 }
 
+// UPDATED: Added 'id' field required by the new Strain Database logic
 export interface Strain {
+  id?: string; // Optional for backward compatibility, but recommended for DB
   name: string;
   type: 'Indica' | 'Sativa' | 'Hybrid';
   thc_level: string;
@@ -18,10 +22,11 @@ export interface Task {
   id: string;
   title: string;
   completed: boolean;
+  date?: string; // Added date for calendar tracking
   type: 'water' | 'feed' | 'check' | 'train';
 }
 
-export type JournalEntryType = 'note' | 'diagnosis' | 'chat';
+export type JournalEntryType = 'note' | 'diagnosis' | 'chat' | 'water' | 'feed';
 
 export interface LogAnalysis {
   summary: string;
@@ -37,15 +42,19 @@ export interface LogAnalysis {
 export interface DiagnosisResult {
   diagnosis: string;
   severity: 'low' | 'medium' | 'high';
-  health: number; // Changed from String to Number (0-100) for the new UI
+  health?: number; // 0-100 Score
+  healthy?: boolean; // Boolean flag for quick checks
   confidence: number;
   fixSteps: string[];
-  // Optional fields for backward compatibility or future expansion
+  
+  // Extended fields for the new UI
+  topAction?: string;
+  yieldTips?: string; // Changed to string to match Gemini output
+  qualityTips?: string; // Changed to string to match Gemini output
+  
+  // Legacy fields
   issues?: string[];
   stage?: string;
-  topAction?: string;
-  yieldTips?: string[];
-  qualityTips?: string[];
   generalAdvice?: string;
 }
 
@@ -53,12 +62,17 @@ export interface JournalEntry {
   id: string;
   date: string;
   type: JournalEntryType;
-  title: string;
+  title?: string;
   notes?: string;
   originalQuestion?: string;
-  imageUri?: string;
+  image?: string; // Unified: new code uses 'image', old used 'imageUri'
+  imageUri?: string; // Kept for backward compatibility
   drawingUri?: string;
-  diagnosisData?: DiagnosisResult;
+  
+  diagnosisData?: DiagnosisResult; // Legacy structure
+  result?: DiagnosisResult; // Unified: new code uses 'result'
+  diagnosis?: string; // Simple text summary
+  
   envTemp?: number;
   envHumidity?: number;
   tags?: ('water' | 'feed' | 'prune' | 'env' | 'photo')[];
@@ -81,16 +95,18 @@ export interface Plant {
   name: string;
   strain: string; 
   strainDetails?: Strain;
-  stage: PlantStage;
-  daysInStage: number;
-  totalDays: number;
+  stage: PlantStage | string; // Allow string for flexibility
+  daysInStage?: number;
+  age_days?: number; // Unified: new code uses 'age_days'
+  totalDays?: number;
   healthScore: number;
+  health_score?: number; // Alias for consistency
   imageUri: string;
-  nextHarvestDate: string;
-  streak: number;
-  tasks: Task[];
+  nextHarvestDate?: string;
+  streak?: number;
+  tasks?: Task[];
   journal: JournalEntry[];
-  weeklySummaries: WeeklySummary[];
+  weeklySummaries?: WeeklySummary[];
   activeAlerts?: ('thirsty' | 'pest' | 'nutrient' | 'env')[];
 }
 
@@ -103,28 +119,32 @@ export enum AppScreen {
   ACCOUNT = 'account'
 }
 
-// UPDATED: Matches the new Chat.tsx structure
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant' | 'system'; // Changed from isUser boolean
-  content: string; // Changed from text
+  role: 'user' | 'assistant' | 'system' | 'model'; // Added 'model' for Gemini compatibility
+  content: string; // Unified text content
+  text?: string; // Alias for backward compatibility
   timestamp: Date | number;
 }
 
 // --- Onboarding & User Profile ---
 
 export interface UserProfile {
-  experience: 'Novice' | 'Intermediate' | 'Expert';
-  grow_mode: 'Indoor' | 'Outdoor' | 'Greenhouse';
-  goal: 'Maximize Yield' | 'Improve Quality' | 'Learn Skills';
-  space: 'Small' | 'Medium' | 'Large';
+  id?: string; // Added for database linkage
+  email?: string;
+  experience: 'Novice' | 'Intermediate' | 'Expert' | 'Pro'; // Added 'Pro' matching new UI
+  grow_mode?: 'Indoor' | 'Outdoor' | 'Greenhouse';
+  environment?: 'Indoor' | 'Outdoor' | 'Greenhouse'; // Alias
+  goal?: 'Maximize Yield' | 'Improve Quality' | 'Learn Skills';
+  space?: 'Small' | 'Medium' | 'Large';
+  notifications_enabled?: boolean;
 }
 
 export enum OnboardingStep {
-  SPLASH = 'splash',
-  QUIZ = 'quiz',
-  SUMMARY = 'summary',
-  TRIAL_PAYWALL = 'trial_paywall',
-  POST_PAYMENT_AUTH = 'post_payment_auth',
-  COMPLETED = 'completed'
+  SPLASH = 'SPLASH', // Standardized to Uppercase as per your new App.tsx
+  QUIZ_EXPERIENCE = 'QUIZ_EXPERIENCE',
+  SUMMARY = 'SUMMARY',
+  TRIAL_PAYWALL = 'TRIAL_PAYWALL',
+  POST_PAYMENT_AUTH = 'POST_PAYMENT_AUTH',
+  COMPLETED = 'COMPLETED'
 }
