@@ -21,15 +21,15 @@ workflows:
       - name: Install dependencies
         script: |
           rm -f package-lock.json
-          npm install
+          # FIXED: Added --legacy-peer-deps to ignore React 19 version strictness
+          npm install --legacy-peer-deps
       
       - name: Build Web Assets
         script: |
           npm run build
       
-      - name: Sync Capacitor Plugins (THE FIX)
+      - name: Sync Capacitor Plugins
         script: |
-          # This links the RevenueCat plugin to the Android project
           npx cap sync android
       
       - name: Decode Security Files
@@ -37,7 +37,6 @@ workflows:
           # 1. DECODE KEYSTORE
           if [ -n "$CM_KEYSTORE_ENCODED" ]; then
               echo "🔐 Decoding keystore..."
-              # FIXED: Output directly to /tmp/keystore.jks to match the global CM_KEYSTORE_PATH variable
               echo $CM_KEYSTORE_ENCODED | base64 --decode > /tmp/keystore.jks
           else
               echo "❌ ERROR: CM_KEYSTORE_ENCODED is missing!"
@@ -47,7 +46,6 @@ workflows:
           # 2. DECODE GOOGLE SERVICES JSON
           if [ -n "$ANDROID_GOOGLE_SERVICES_JSON" ]; then
               echo "🔥 Decoding google-services.json..."
-              # FIXED: Use absolute path to ensure it lands in the right place regardless of 'cd'
               echo $ANDROID_GOOGLE_SERVICES_JSON | base64 --decode > android/app/google-services.json
               echo "✅ google-services.json injected successfully."
           else
