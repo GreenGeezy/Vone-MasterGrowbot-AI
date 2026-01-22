@@ -1,29 +1,36 @@
 import React from 'react';
 import { Strain } from '../types';
-import { Dna, Zap, Wind, Info } from 'lucide-react';
+import { Dna, Zap, Wind } from 'lucide-react';
 
 interface StrainCardProps {
   strain: Strain;
   compact?: boolean;
+  onClick?: () => void;
 }
 
-const StrainCard: React.FC<StrainCardProps> = ({ strain, compact = false }) => {
+const StrainCard: React.FC<StrainCardProps> = ({ strain, compact = false, onClick }) => {
   if (compact) {
     return (
-       <div className="bg-white/80 backdrop-blur-sm border border-primary/10 rounded-xl p-3 shadow-sm flex items-center justify-between transition-all hover:bg-white active:scale-95">
+       <div 
+         onClick={onClick}
+         className="bg-white/80 backdrop-blur-sm border border-primary/10 rounded-xl p-3 shadow-sm flex items-center justify-between transition-all hover:bg-white active:scale-95 cursor-pointer"
+       >
           <div className="min-w-0 flex-1 pr-4">
-             <span className="text-[9px] sm:text-[10px] font-black uppercase text-primary tracking-[0.15em] block mb-0.5 truncate">{strain.type}</span>
-             <h4 className="text-sm sm:text-base font-extrabold text-text-main leading-tight truncate">{strain.name}</h4>
+              <span className="text-[9px] sm:text-[10px] font-black uppercase text-primary tracking-[0.15em] block mb-0.5 truncate">{strain.type}</span>
+              <h4 className="text-sm sm:text-base font-extrabold text-text-main leading-tight truncate">{strain.name}</h4>
           </div>
-          <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold text-text-sub whitespace-nowrap bg-gray-50/50 px-2 py-1 rounded-lg">
-             <Zap size={10} className="text-primary fill-current" /> {strain.thc_level} THC
+          <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold text-gray-500 whitespace-nowrap bg-gray-50/50 px-2 py-1 rounded-lg">
+              <Zap size={10} className="text-primary fill-current" /> {strain.thc_level}
           </div>
        </div>
     );
   }
 
   return (
-    <div className="bg-gradient-to-br from-white to-surface-highlight border border-white/50 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 shadow-soft relative overflow-hidden group transition-all duration-300 hover:shadow-card hover:border-primary/10">
+    <div 
+      onClick={onClick}
+      className="bg-gradient-to-br from-white to-gray-50 border border-white/50 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 shadow-sm relative overflow-hidden group transition-all duration-300 hover:shadow-md hover:border-primary/10 cursor-pointer"
+    >
       {/* Decorative background element - adapts to corner */}
       <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-primary/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
       
@@ -44,11 +51,11 @@ const StrainCard: React.FC<StrainCardProps> = ({ strain, compact = false }) => {
              <div className="flex items-center justify-end gap-1 text-primary font-black text-base sm:text-lg leading-none mb-0.5">
                 <Zap size={14} className="fill-current" /> {strain.thc_level}
              </div>
-             <span className="text-[9px] sm:text-[10px] text-text-sub font-black uppercase tracking-[0.1em] block">Potency</span>
+             <span className="text-[9px] sm:text-[10px] text-gray-400 font-black uppercase tracking-[0.1em] block">Potency</span>
          </div>
       </div>
 
-      <p className="text-xs sm:text-sm text-text-sub leading-relaxed font-medium mb-4 border-b border-gray-100/50 pb-4 line-clamp-3 group-hover:line-clamp-none transition-all">
+      <p className="text-xs sm:text-sm text-gray-500 leading-relaxed font-medium mb-4 border-b border-gray-100/50 pb-4 line-clamp-3 group-hover:line-clamp-none transition-all">
         {strain.description}
       </p>
 
