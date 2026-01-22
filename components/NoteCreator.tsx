@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, PenTool, Check, Eraser, Droplets, Utensils, Scissors, Thermometer, Camera } from 'lucide-react';
+import { X, Check, Eraser, Droplets, Utensils, Scissors, Thermometer, Camera } from 'lucide-react';
 import { JournalEntry } from '../types';
+import { Camera as CapacitorCamera, CameraResultType } from '@capacitor/camera';
 
 interface NoteCreatorProps {
-  onSave: (entry: Omit<JournalEntry, 'id' | 'date'>) => void;
+  onSave: (entry: Partial<JournalEntry>) => void; // Relaxed type for flexibility
   onClose: () => void;
 }
 
@@ -20,7 +21,6 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
   
   // Drawing Refs & State
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawingColor, setDrawingColor] = useState('#059669'); // Primary green
   const [hasDrawing, setHasDrawing] = useState(false);
@@ -31,13 +31,11 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        // Set canvas size to parent size
         const parent = canvas.parentElement;
         if (parent) {
           canvas.width = parent.clientWidth;
           canvas.height = parent.clientHeight;
         }
-        
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.lineWidth = 3;
@@ -79,9 +77,7 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
     ctx.stroke();
   };
 
-  const stopDrawing = () => {
-    setIsDrawing(false);
-  };
+  const stopDrawing = () => setIsDrawing(false);
 
   const getCoordinates = (e: React.TouchEvent | React.MouseEvent, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect();
@@ -94,11 +90,7 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
       clientX = (e as React.MouseEvent).clientX;
       clientY = (e as React.MouseEvent).clientY;
     }
-
-    return {
-      x: clientX - rect.left,
-      y: clientY - rect.top
-    };
+    return { x: clientX - rect.left, y: clientY - rect.top };
   };
 
   const clearCanvas = () => {
@@ -110,12 +102,19 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
     setHasDrawing(false);
   };
 
-  // Photo Handler
-  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const preview = URL.createObjectURL(file);
-      setAttachedImage(preview);
+  // NATIVE PHOTO HANDLER
+  const handleTakePhoto = async () => {
+    try {
+      const photo = await CapacitorCamera.getPhoto({
+        quality: 80,
+        resultType: CameraResultType.Base64,
+        allowEditing: false
+      });
+      if (photo.base64String) {
+        setAttachedImage(`data:image/jpeg;base64,${photo.base64String}`);
+      }
+    } catch (e) {
+      console.error("Camera cancelled or failed", e);
     }
   };
 
@@ -127,7 +126,6 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
     if (!title && !text && !hasDrawing && !attachedImage) return;
     
     setIsProcessing(true);
-    let finalNote = text;
     let drawingUri = undefined;
     
     if (mode === 'draw' && hasDrawing && canvasRef.current) {
@@ -135,7 +133,6 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
         if (!title) setTitle("Garden Sketch");
     }
 
-    // Default title based on tags if empty
     let finalTitle = title;
     if (!finalTitle) {
        if (mode === 'draw') finalTitle = "Sketch";
@@ -146,7 +143,7 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
     onSave({
       type: 'note',
       title: finalTitle,
-      notes: finalNote,
+      notes: text,
       drawingUri: drawingUri,
       imageUri: attachedImage || undefined,
       tags: tags
@@ -174,13 +171,12 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
             disabled={isProcessing}
             className="p-2 bg-primary text-white rounded-full hover:bg-primary-dark shadow-lg shadow-primary/30 active:scale-95 transition-transform disabled:opacity-50"
           >
-            {isProcessing ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <Check size={20} />}
+            <Check size={20} />
           </button>
         </div>
 
         {/* Content Area */}
         <div className="flex-1 relative bg-surface overflow-y-auto">
-           {/* Title Input */}
            <div className="px-6 pt-6">
               <input 
                 type="text" 
@@ -196,65 +192,47 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
                 <textarea 
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder="Type your observation... (e.g., 'Fed 500ml pH 6.0')"
+                  placeholder="Type your observation..."
                   className="w-full h-32 bg-transparent resize-none outline-none text-base leading-relaxed text-text-main placeholder-gray-300 mb-4"
                   autoFocus
                 />
                 
-                {/* Image Preview */}
                 {attachedImage && (
                     <div className="relative mb-4 w-24 h-24 rounded-xl overflow-hidden shadow-sm border border-gray-100 group">
                         <img src={attachedImage} alt="Attachment" className="w-full h-full object-cover" />
                         <button 
                           onClick={() => setAttachedImage(null)}
-                          className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full"
                         >
                             <X size={12} />
                         </button>
                     </div>
                 )}
 
-                {/* Quick Actions / Tags */}
                 <div className="mt-auto">
                     <p className="text-[10px] font-bold text-text-sub uppercase tracking-wider mb-3">Quick Tags</p>
                     <div className="flex flex-wrap gap-2">
+                        {['water', 'feed', 'prune', 'env'].map((tag) => (
+                            <button 
+                                key={tag}
+                                onClick={() => toggleTag(tag as Tag)} 
+                                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-colors ${tags.includes(tag as Tag) ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-text-sub'}`}
+                            >
+                                {tag === 'water' && <Droplets size={14} />}
+                                {tag === 'feed' && <Utensils size={14} />}
+                                {tag === 'prune' && <Scissors size={14} />}
+                                {tag === 'env' && <Thermometer size={14} />}
+                                {tag.charAt(0).toUpperCase() + tag.slice(1)}
+                            </button>
+                        ))}
+                        
+                        {/* Native Camera Button */}
                         <button 
-                            onClick={() => toggleTag('water')} 
-                            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-colors ${tags.includes('water') ? 'bg-neon-blue text-white' : 'bg-white border border-gray-200 text-text-sub'}`}
-                        >
-                            <Droplets size={14} /> Water
-                        </button>
-                        <button 
-                            onClick={() => toggleTag('feed')} 
-                            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-colors ${tags.includes('feed') ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-text-sub'}`}
-                        >
-                            <Utensils size={14} /> Feed
-                        </button>
-                        <button 
-                            onClick={() => toggleTag('prune')} 
-                            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-colors ${tags.includes('prune') ? 'bg-orange-400 text-white' : 'bg-white border border-gray-200 text-text-sub'}`}
-                        >
-                            <Scissors size={14} /> Prune
-                        </button>
-                        <button 
-                            onClick={() => toggleTag('env')} 
-                            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-colors ${tags.includes('env') ? 'bg-deep-purple text-white' : 'bg-white border border-gray-200 text-text-sub'}`}
-                        >
-                            <Thermometer size={14} /> Environment
-                        </button>
-                        <button 
-                            onClick={() => fileInputRef.current?.click()}
+                            onClick={handleTakePhoto}
                             className="flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold bg-white border border-gray-200 text-text-sub active:bg-gray-50"
                         >
                             <Camera size={14} /> Photo
                         </button>
-                        <input 
-                            type="file" 
-                            ref={fileInputRef} 
-                            accept="image/*" 
-                            className="hidden" 
-                            onChange={handlePhotoSelect} 
-                        />
                     </div>
                 </div>
              </div>
@@ -273,19 +251,15 @@ const NoteCreator: React.FC<NoteCreatorProps> = ({ onSave, onClose }) => {
                     onMouseUp={stopDrawing}
                     onMouseLeave={stopDrawing}
                 />
-                
-                {/* Drawing Tools */}
                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white shadow-xl rounded-full px-4 py-2 flex items-center gap-4 border border-gray-100">
-                    <button onClick={() => setDrawingColor('#059669')} className={`w-6 h-6 rounded-full bg-primary ${drawingColor === '#059669' ? 'ring-2 ring-offset-2 ring-primary' : ''}`} />
-                    <button onClick={() => setDrawingColor('#0F172A')} className={`w-6 h-6 rounded-full bg-text-main ${drawingColor === '#0F172A' ? 'ring-2 ring-offset-2 ring-text-main' : ''}`} />
-                    <button onClick={() => setDrawingColor('#E11D48')} className={`w-6 h-6 rounded-full bg-alert-red ${drawingColor === '#E11D48' ? 'ring-2 ring-offset-2 ring-alert-red' : ''}`} />
+                    <button onClick={() => setDrawingColor('#059669')} className={`w-6 h-6 rounded-full bg-primary ${drawingColor === '#059669' ? 'ring-2 ring-primary' : ''}`} />
+                    <button onClick={() => setDrawingColor('#E11D48')} className={`w-6 h-6 rounded-full bg-red-500 ${drawingColor === '#E11D48' ? 'ring-2 ring-red-500' : ''}`} />
                     <div className="w-px h-6 bg-gray-200"></div>
-                    <button onClick={clearCanvas} className="text-text-sub hover:text-alert-red transition-colors"><Eraser size={20} /></button>
+                    <button onClick={clearCanvas} className="text-gray-400 hover:text-red-500"><Eraser size={20} /></button>
                 </div>
              </div>
            )}
         </div>
-
       </div>
     </div>
   );
