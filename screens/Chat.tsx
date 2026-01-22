@@ -1,121 +1,129 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, User, Bot, RefreshCcw } from 'lucide-react';
-import { chatWithCoach } from '../services/geminiService';
-import { ChatMessage, UserProfile, Plant } from '../types';
-import Growbot from '../components/Growbot';
+import { Send, Sparkles, Bot, User, Loader2 } from 'lucide-react';
+import { sendMessage } from '../services/geminiService';
+import { UserProfile } from '../types';
 
 interface ChatProps {
-    onSaveToJournal?: any;
-    plant?: Plant;
-    userProfile?: UserProfile | null;
+  onSaveToJournal: (entry: any) => void;
+  plant: any;
+  userProfile: UserProfile | null;
 }
 
-const SUGGESTED_PROMPTS = [
-  "Why are my leaves yellow?",
-  "What is the best light cycle?",
-  "How do I cure my buds?",
-  "Check for mold symptoms"
-];
-
-const PERSONAS = [
-  { id: 'MasterGrowbot', label: 'Master AI', desc: 'Balanced' },
-  { id: 'Kore', label: 'Coach Kore', desc: 'Organic' },
-  { id: 'Charon', label: 'Coach Mike', desc: 'Hydro' },
-];
-
-const Chat: React.FC<ChatProps> = ({ userProfile }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([{ id: '1', role: 'assistant', content: "Hello! I'm MasterGrowbot. How's the garden doing today?", timestamp: new Date() }]);
-  const [inputText, setInputText] = useState('');
+const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
+  const [messages, setMessages] = useState<Array<{role: string, text: string}>>([
+    { role: 'model', text: `Greetings! I am MasterGrowbot. I see you are cultivating ${plant?.name || 'a plant'}. Ask me anything about lights, nutrients, or humidity.` }
+  ]);
+  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedPersona, setSelectedPersona] = useState('MasterGrowbot');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  useEffect(() => scrollToBottom(), [messages]);
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
-  const handleSend = async (text: string = inputText) => {
-    if (!text.trim()) return;
-    
-    const newMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text, timestamp: new Date() };
-    setMessages(prev => [...prev, newMsg]);
-    setInputText('');
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isLoading]);
+
+  const handleSend = async () => {
+    if (!input.trim()) return;
+
+    const userMsg = { role: 'user', text: input };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
     setIsLoading(true);
 
     try {
-        const responseText = await chatWithCoach(text, messages, selectedPersona);
-        const botMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: responseText, timestamp: new Date() };
-        setMessages(prev => [...prev, botMsg]);
-    } catch (e) {
-        // ... error handling
+      // Uses Gemini 1.5 Flash (Fast)
+      const response = await sendMessage(input, plant, userProfile);
+      setMessages(prev => [...prev, { role: 'model', text: response }]);
+    } catch (error: any) {
+      console.error("Chat Error:", error);
+      alert(`AI Connection Error: ${error.message}`);
+      setMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting to the network. Please check your internet and try again." }]);
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-surface">
-      {/* 1. Persona Selector Header */}
-      <div className="px-4 py-3 bg-white border-b border-gray-100 flex gap-2 overflow-x-auto no-scrollbar">
-          {PERSONAS.map(p => (
-              <button 
-                key={p.id}
-                onClick={() => setSelectedPersona(p.id)}
-                className={`flex-shrink-0 px-4 py-2 rounded-full border text-xs font-bold transition-all ${selectedPersona === p.id ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-200'}`}
-              >
-                  {p.label} <span className="opacity-50 font-normal ml-1">| {p.desc}</span>
-              </button>
-          ))}
+    <div className="flex flex-col h-full bg-surface relative overflow-hidden">
+      {/* Background Ambience */}
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-30">
+          <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-primary/20 rounded-full blur-3xl" />
+          <div className="absolute bottom-[-10%] left-[-10%] w-80 h-80 bg-blue-500/10 rounded-full blur-3xl" />
       </div>
 
-      {/* 2. Chat Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'user' ? 'bg-gray-200' : 'bg-primary/10'}`}>
-                {msg.role === 'user' ? <User size={16} /> : <Bot size={16} className="text-primary" />}
+      {/* Glassmorphism Header */}
+      <div className="p-4 border-b border-white/20 bg-white/60 backdrop-blur-xl sticky top-0 z-20 shadow-sm">
+        <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary shadow-inner">
+                <Bot size={24} />
             </div>
-            <div className={`max-w-[80%] p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-text-main text-white rounded-tr-none' : 'bg-white text-text-main rounded-tl-none border border-gray-100'}`}>
-                {msg.content}
+            <div>
+                <h1 className="text-lg font-bold text-text-main flex items-center gap-2">
+                    AI Coach <Sparkles size={14} className="text-yellow-500 fill-yellow-500" />
+                </h1>
+                <p className="text-xs text-gray-500 font-medium">Online • Gemini 1.5 Flash</p>
+            </div>
+        </div>
+      </div>
+
+      {/* Chat Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 z-10">
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+            {msg.role === 'model' && (
+                <div className="w-8 h-8 bg-white border border-gray-100 rounded-full flex items-center justify-center mr-2 shadow-sm shrink-0">
+                    <Bot size={16} className="text-primary" />
+                </div>
+            )}
+            
+            <div className={`max-w-[80%] p-4 text-sm leading-relaxed shadow-sm ${
+              msg.role === 'user' 
+                ? 'bg-primary text-white rounded-2xl rounded-tr-none' 
+                : 'bg-white/80 backdrop-blur-md text-text-main border border-white/50 rounded-2xl rounded-tl-none'
+            }`}>
+              {msg.text}
             </div>
           </div>
         ))}
+
         {isLoading && (
-            <div className="flex gap-3">
-                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center"><Sparkles size={16} className="text-primary animate-pulse" /></div>
-                <div className="bg-white px-4 py-3 rounded-2xl rounded-tl-none border border-gray-100 text-xs text-gray-400 font-bold tracking-widest animate-pulse">THINKING...</div>
+          <div className="flex justify-start animate-fade-in">
+             <div className="w-8 h-8 bg-white border border-gray-100 rounded-full flex items-center justify-center mr-2 shadow-sm">
+                <Bot size={16} className="text-primary" />
             </div>
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-2xl rounded-tl-none border border-white/50 shadow-sm flex items-center gap-2">
+              <span className="text-xs text-gray-400 font-medium">Thinking</span>
+              <div className="flex gap-1">
+                <div className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce" />
+                <div className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce delay-100" />
+                <div className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce delay-200" />
+              </div>
+            </div>
+          </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 3. Input Area */}
-      <div className="p-4 bg-white border-t border-gray-100 pb-24">
-        {/* Suggested Prompts (Only show if chat is short) */}
-        {messages.length < 3 && (
-            <div className="flex gap-2 overflow-x-auto pb-3 mb-2 no-scrollbar">
-                {SUGGESTED_PROMPTS.map(prompt => (
-                    <button key={prompt} onClick={() => handleSend(prompt)} className="flex-shrink-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 whitespace-nowrap">
-                        {prompt}
-                    </button>
-                ))}
-            </div>
-        )}
-        
-        <div className="relative">
-            <input 
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Ask about your plants..."
-                className="w-full bg-gray-50 border border-gray-200 rounded-2xl pl-4 pr-12 py-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-            <button 
-                onClick={() => handleSend()}
-                disabled={!inputText.trim() || isLoading}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-primary text-white rounded-xl shadow-md disabled:opacity-50"
-            >
-                <Send size={18} />
-            </button>
+      {/* Input Area */}
+      <div className="p-4 bg-white/80 backdrop-blur-xl border-t border-white/20 z-20 pb-8">
+        <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-2xl border border-gray-100 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10 transition-all shadow-inner">
+          <input 
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask about nutrients, lights, or pests..."
+            className="flex-1 bg-transparent border-none outline-none text-sm p-2 text-text-main placeholder:text-gray-400"
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          />
+          <button 
+            onClick={handleSend}
+            disabled={isLoading || !input.trim()}
+            className="w-10 h-10 bg-primary text-white rounded-xl flex items-center justify-center shadow-lg shadow-primary/30 active:scale-95 transition-transform disabled:opacity-50"
+          >
+            {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+          </button>
         </div>
       </div>
     </div>
