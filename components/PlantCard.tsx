@@ -1,27 +1,33 @@
-
 import React from 'react';
 import { Plant } from '../types';
 import { ChevronRight, Clock, Droplets, Bug, AlertTriangle, Thermometer, Zap } from 'lucide-react';
 
 interface PlantCardProps {
   plant: Plant;
-  onPress: () => void;
+  onClick: () => void; // Changed 'onPress' to 'onClick' for React standard
 }
 
-const PlantCard: React.FC<PlantCardProps> = ({ plant, onPress }) => {
+const PlantCard: React.FC<PlantCardProps> = ({ plant, onClick }) => {
   return (
     <div 
-      onClick={onPress} 
+      onClick={onClick} 
       className="group relative w-full bg-white rounded-3xl p-3 cursor-pointer border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 active:scale-[0.99]"
     >
       <div className="flex gap-4 items-center">
         {/* Plant Image */}
         <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gray-100 flex-shrink-0 relative">
-            <img 
-              src={plant.imageUri} 
-              alt={plant.name} 
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            />
+            {plant.imageUri ? (
+                <img 
+                src={plant.imageUri} 
+                alt={plant.name} 
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+            ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-300">
+                    <Droplets size={24} />
+                </div>
+            )}
+            
             {/* Status Indicator Overlay */}
             {plant.activeAlerts && plant.activeAlerts.length > 0 && (
                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
@@ -61,7 +67,7 @@ const PlantCard: React.FC<PlantCardProps> = ({ plant, onPress }) => {
                  </span>
              ) : (
                  <span className="flex items-center gap-1">
-                    <Clock size={12} /> {Math.max(0, 90 - plant.totalDays)} days left
+                    <Clock size={12} /> {Math.max(0, 90 - (plant.totalDays || 0))} days left
                  </span>
              )}
           </div>
