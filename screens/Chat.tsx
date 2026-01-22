@@ -34,13 +34,11 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
     setIsLoading(true);
 
     try {
-      // Uses Gemini 1.5 Flash (Fast)
       const response = await sendMessage(input, plant, userProfile);
       setMessages(prev => [...prev, { role: 'model', text: response }]);
     } catch (error: any) {
-      console.error("Chat Error:", error);
-      alert(`AI Connection Error: ${error.message}`);
-      setMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting to the network. Please check your internet and try again." }]);
+      alert(`AI Error: ${error.message || "Connection failed"}`);
+      setMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting to the network. Please try again." }]);
     } finally {
       setIsLoading(false);
     }
@@ -64,12 +62,12 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
                 <h1 className="text-lg font-bold text-text-main flex items-center gap-2">
                     AI Coach <Sparkles size={14} className="text-yellow-500 fill-yellow-500" />
                 </h1>
-                <p className="text-xs text-gray-500 font-medium">Online • Gemini 1.5 Flash</p>
+                <p className="text-xs text-gray-500 font-medium">Online • Gemini 2.5 Flash</p>
             </div>
         </div>
       </div>
 
-      {/* Chat Messages */}
+      {/* Chat Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6 z-10">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
@@ -96,11 +94,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
             </div>
             <div className="bg-white/80 backdrop-blur-md p-4 rounded-2xl rounded-tl-none border border-white/50 shadow-sm flex items-center gap-2">
               <span className="text-xs text-gray-400 font-medium">Thinking</span>
-              <div className="flex gap-1">
-                <div className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce" />
-                <div className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce delay-100" />
-                <div className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce delay-200" />
-              </div>
+              <Loader2 size={12} className="animate-spin text-primary" />
             </div>
           </div>
         )}
