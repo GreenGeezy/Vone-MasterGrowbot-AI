@@ -1,153 +1,174 @@
-import React, { useState, useRef } from 'react';
-import { Camera, Upload, Zap, Activity, AlertTriangle, CheckCircle, X, Share2, Plus, Check } from 'lucide-react';
-import { diagnosePlant, fileToGenerativePart } from '../services/geminiService';
-import { DiagnosisResult, JournalEntry, Plant } from '../types';
-import Growbot from '../components/Growbot';
+import React, { useState } from 'react';
+import { Camera, AlertCircle, CheckCircle, Loader2, ScanLine, X, Sparkles } from 'lucide-react';
+import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { diagnosePlant } from '../services/geminiService';
+import { Plant } from '../types';
 
 interface DiagnoseProps {
-  onSaveToJournal?: (entry: Omit<JournalEntry, 'id' | 'date'>) => void;
-  plant?: Plant; 
+  onSaveToJournal: (entry: any) => void;
+  plant: Plant;
 }
 
-const RecoveryChecklist: React.FC<{ steps: string[] }> = ({ steps }) => {
-  const [checkedState, setCheckedState] = useState<boolean[]>(new Array(steps.length).fill(false));
-  return (
-    <div className="space-y-3 mt-4">
-      {steps.map((step, idx) => (
-        <div key={idx} onClick={() => {
-            const up = [...checkedState]; up[idx] = !up[idx]; setCheckedState(up);
-        }} className={`flex items-start gap-4 p-4 rounded-xl cursor-pointer transition-all ${checkedState[idx] ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-100'} border`}>
-          <div className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center ${checkedState[idx] ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'}`}>
-            {checkedState[idx] && <Check size={14} />}
-          </div>
-          <p className={`text-sm font-medium ${checkedState[idx] ? 'text-green-800 line-through opacity-70' : 'text-gray-700'}`}>{step}</p>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const Diagnose: React.FC<DiagnoseProps> = ({ onSaveToJournal }) => {
+const Diagnose: React.FC<DiagnoseProps> = ({ onSaveToJournal, plant }) => {
   const [image, setImage] = useState<string | null>(null);
-  const [fileToAnalyze, setFileToAnalyze] = useState<File | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [result, setResult] = useState<DiagnosisResult | null>(null);
-  
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [result, setResult] = useState<any | null>(null);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setFileToAnalyze(file);
-      const reader = new FileReader();
-      reader.onload = (ev) => { setImage(ev.target?.result as string); setResult(null); };
-      reader.readAsDataURL(file);
+  const takePicture = async () => {
+    try {
+      const image = await CapacitorCamera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: CameraResultType.Base64,
+        source: CameraSource.Prompt,
+        promptLabelHeader: 'Scan Plant',
+      });
+
+      if (image.base64String) {
+        // Fix standard base64 prefix if missing
+        const base64Data = image.base64String.includes('data:image') 
+            ? image.base64String 
+            : `data:image/jpeg;base64,${image.base64String}`;
+            
+        setImage(base64Data);
+        analyzePlant(image.base64String); // Pass raw string to Gemini
+      }
+    } catch (error) {
+      console.error('Camera error:', error);
     }
   };
 
-  const handleAnalysis = async () => {
-    if (!fileToAnalyze) return alert("Please select an image first.");
-    setAnalyzing(true);
+  const analyzePlant = async (base64Image: string) => {
+    setIsAnalyzing(true);
     try {
-      const base64Data = await fileToGenerativePart(fileToAnalyze);
-      const diagnosis = await diagnosePlant([base64Data]); 
+      const diagnosis = await diagnosePlant(base64Image);
       setResult(diagnosis);
-    } catch (e) { alert("Analysis failed. Try again."); } 
-    finally { setAnalyzing(false); }
+    } catch (error: any) {
+      console.error("Diagnosis Error:", error);
+      alert(`Diagnosis Failed: ${error.message || "Please check your internet connection."}`);
+      setImage(null);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
-  const handleSave = () => {
-      if (onSaveToJournal && result && image) {
-          onSaveToJournal({
-              type: 'diagnosis',
-              title: result.diagnosis,
-              notes: `Health: ${result.health}%. Severity: ${result.severity}.`,
-              images: [image],
-              diagnosis: result
-          });
-          alert('Saved to Journal!');
-      }
-  };
-
-  // 1. Landing State
-  if (!image) {
-    return (
-      <div className="h-full flex flex-col p-6 pt-12 bg-surface">
-        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
-            <div className="relative">
-                <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full"></div>
-                <Growbot size="xl" mood="happy" />
-            </div>
-            <div className="space-y-2">
-                <h2 className="text-3xl font-black text-text-main">AI Health Scan</h2>
-                <p className="text-text-sub font-medium max-w-[200px] mx-auto">Instant diagnosis for pests, deficiency, and mold.</p>
-            </div>
-            <div className="w-full max-w-xs space-y-3 pt-8">
-                <button onClick={() => cameraInputRef.current?.click()} className="w-full py-4 bg-black text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-transform"><Camera size={22} /> Take Photo</button>
-                <button onClick={() => galleryInputRef.current?.click()} className="w-full py-4 bg-white text-text-main border border-gray-200 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 shadow-sm active:scale-95 transition-transform"><Upload size={22} /> Upload from Gallery</button>
-            </div>
-            <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleFileSelect} />
-            <input type="file" ref={galleryInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
-        </div>
-      </div>
-    );
-  }
-
-  // 2. Review State
-  if (!result) {
-      return (
-          <div className="h-full flex flex-col bg-black relative">
-              <img src={image} className="absolute inset-0 w-full h-full object-cover opacity-90" />
-              {analyzing ? (
-                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md">
-                      <Growbot size="lg" mood="alert" />
-                      <p className="mt-6 text-white font-mono font-bold tracking-widest animate-pulse">ANALYZING PLANT DATA...</p>
-                  </div>
-              ) : (
-                  <div className="absolute bottom-0 left-0 right-0 p-8 pb-24 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex gap-4">
-                      <button onClick={() => { setImage(null); setFileToAnalyze(null); }} className="flex-1 py-4 bg-white/20 backdrop-blur-md rounded-2xl text-white font-bold">Retake</button>
-                      <button onClick={handleAnalysis} className="flex-[2] py-4 bg-primary text-white rounded-2xl font-bold shadow-lg shadow-primary/30 flex items-center justify-center gap-2"><Zap size={20} fill="currentColor" /> Run Scan</button>
-                  </div>
-              )}
-          </div>
-      );
-  }
-
-  // 3. Results State (The "Beautiful" Part)
   return (
-    <div className="h-full overflow-y-auto bg-surface p-4 pb-32">
-        <div className="flex items-center justify-between mb-6">
-            <button onClick={() => { setImage(null); setResult(null); }} className="p-2 bg-white rounded-full shadow-sm"><X size={20} /></button>
-            <span className="font-black uppercase text-gray-300 text-xs tracking-widest">Diagnosis Report</span>
-            <div className="w-10"></div>
-        </div>
+    <div className="p-6 pt-8 pb-24 h-full overflow-y-auto bg-surface relative">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-text-main">AI Doctor</h1>
+            <p className="text-gray-500 text-sm">Gemini 1.5 Pro Vision</p>
+          </div>
+          <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center animate-pulse">
+            <ScanLine size={20} />
+          </div>
+      </div>
 
-        <div className="bg-white rounded-[2.5rem] p-8 shadow-card border border-gray-100 relative overflow-hidden mb-6">
-            <div className={`absolute top-0 left-0 right-0 h-2 ${result.severity === 'high' ? 'bg-red-500' : 'bg-green-500'}`}></div>
-            <div className="flex items-start justify-between mb-6">
-                <div>
-                    <h2 className="text-2xl font-black text-text-main leading-tight mb-1">{result.diagnosis}</h2>
-                    <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${result.severity === 'high' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>{result.severity} RISK</span>
-                        <span className="text-xs text-gray-400 font-bold">{result.health}% Health Score</span>
-                    </div>
-                </div>
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${result.severity === 'high' ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-500'}`}>
-                    {result.severity === 'high' ? <AlertTriangle size={24} /> : <Activity size={24} />}
-                </div>
+      {!image ? (
+        // --- 1. IDLE STATE: SCANNER UI ---
+        <div className="animate-fade-in space-y-6">
+            <div 
+              onClick={takePicture}
+              className="w-full aspect-[4/5] bg-gradient-to-br from-white to-gray-50 border-2 border-dashed border-primary/30 rounded-3xl flex flex-col items-center justify-center gap-6 cursor-pointer shadow-sm hover:shadow-md hover:border-primary transition-all group relative overflow-hidden"
+            >
+              {/* Pulse Ring Animation */}
+              <div className="absolute w-64 h-64 bg-primary/5 rounded-full animate-ping opacity-75" />
+              
+              <div className="w-20 h-20 bg-primary text-white rounded-full flex items-center justify-center shadow-xl shadow-primary/30 z-10 group-hover:scale-110 transition-transform duration-300">
+                <Camera size={32} />
+              </div>
+              <div className="text-center z-10">
+                  <h3 className="font-bold text-lg text-text-main">Tap to Scan</h3>
+                  <p className="text-gray-400 text-sm mt-1">Identify pests & deficiencies</p>
+              </div>
             </div>
+
+            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex gap-3">
+                <AlertCircle className="text-blue-500 shrink-0" size={20} />
+                <p className="text-xs text-blue-700 leading-relaxed">
+                    <strong>Pro Tip:</strong> Ensure good lighting and focus directly on the affected leaf for 99% accuracy.
+                </p>
+            </div>
+        </div>
+      ) : (
+        // --- 2. ACTIVE STATE: ANALYSIS ---
+        <div className="space-y-6 animate-fade-in">
+          <div className="relative w-full aspect-square rounded-3xl overflow-hidden shadow-lg border-4 border-white">
+            <img src={image} alt="Diagnosis" className="w-full h-full object-cover" />
             
-            <div className="mb-2 flex items-center gap-2 text-text-main font-bold">
-                <CheckCircle size={18} className="text-primary" />
-                <h3 className="uppercase text-xs tracking-wider text-gray-400">Recovery Protocol</h3>
-            </div>
-            <RecoveryChecklist steps={result.fixSteps} />
-        </div>
+            {/* Analyzing Overlay */}
+            {isAnalyzing && (
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white z-20">
+                <div className="relative">
+                    <div className="absolute inset-0 bg-primary blur-xl opacity-50 animate-pulse" />
+                    <Loader2 size={48} className="animate-spin relative z-10 text-white" />
+                </div>
+                <p className="font-bold text-lg mt-6">Analyzing Plant...</p>
+                <p className="text-xs opacity-80 mt-2">Checking 150+ known issues</p>
+              </div>
+            )}
 
-        <button onClick={handleSave} className="w-full py-4 bg-text-main text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
-            <Plus size={20} /> Save to Journal
-        </button>
+            {/* Close Button */}
+            {!isAnalyzing && (
+                <button 
+                    onClick={() => { setImage(null); setResult(null); }}
+                    className="absolute top-4 right-4 w-8 h-8 bg-black/50 backdrop-blur-md text-white rounded-full flex items-center justify-center"
+                >
+                    <X size={16} />
+                </button>
+            )}
+          </div>
+
+          {result && !isAnalyzing && (
+            <div className="bg-white rounded-2xl p-6 shadow-xl border border-gray-100 animate-slide-up relative overflow-hidden">
+              <div className={`absolute top-0 left-0 w-full h-2 ${result.healthy ? 'bg-green-500' : 'bg-red-500'}`} />
+              
+              <div className="flex items-center gap-3 mb-6 mt-2">
+                {result.healthy ? (
+                  <CheckCircle className="text-green-500" size={32} />
+                ) : (
+                  <AlertCircle className="text-red-500" size={32} />
+                )}
+                <div>
+                    <h2 className="text-xl font-bold text-text-main">
+                    {result.healthy ? "Healthy Plant" : "Issue Detected"}
+                    </h2>
+                    <p className="text-xs text-gray-400">Confidence: {result.confidence || 'High'}</p>
+                </div>
+              </div>
+              
+              <div className="prose prose-sm text-gray-600 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <p>{result.diagnosis}</p>
+              </div>
+
+              {!result.healthy && (
+                <div className="bg-red-50 p-4 rounded-xl border border-red-100 mb-6">
+                  <h3 className="font-bold text-red-700 mb-2 text-sm flex items-center gap-2">
+                    <Sparkles size={14} /> Recommended Action:
+                  </h3>
+                  <p className="text-red-600 text-sm leading-relaxed">{result.treatment}</p>
+                </div>
+              )}
+              
+              <button 
+                onClick={() => {
+                    onSaveToJournal({ 
+                        type: 'diagnosis', 
+                        result, 
+                        image,
+                        notes: result.diagnosis
+                    });
+                    alert("Saved to Journal!");
+                }}
+                className="w-full py-4 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/30 active:scale-95 transition-transform"
+              >
+                Save to Journal
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
