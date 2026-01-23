@@ -23,6 +23,7 @@ export interface Task {
   type?: 'water' | 'feed' | 'check' | 'train';
 }
 
+// THE STRUCTURE FOR YOUR AI REPORT
 export interface DiagnosisResult {
   diagnosis: string;
   severity: 'low' | 'medium' | 'high';
@@ -82,7 +83,6 @@ export interface ChatMessage {
   timestamp?: number;
 }
 
-// FIX: Added missing AppScreen enum
 export enum AppScreen {
   HOME = 'home',
   JOURNAL = 'journal',
