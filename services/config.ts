@@ -1,15 +1,15 @@
 import { Capacitor } from '@capacitor/core';
 
 export const CONFIG = {
-    // 1. API KEY
+    // 1. YOUR API KEY
     GEMINI_API_KEY: 'AIzaSyBEmRHHbEqZvbYwgOmuk8THcxuxJSlewlg',
     
-    // 2. MODEL CONFIGURATION
-    // Explicitly targeting Gemini 2.5 Pro for high-reasoning vision tasks
+    // 2. MODEL CONFIGURATION (Updated for New SDK)
+    // We use the Gemini 3 Preview models which are publicly available via the new SDK.
     MODELS: {
-        DIAGNOSIS: 'gemini-2.5-pro', 
-        CHAT_LIVE: 'gemini-2.5-flash',
-        INSIGHTS: 'gemini-2.5-flash', 
+        DIAGNOSIS: 'gemini-3-pro-preview', // Pro-level reasoning for Plant Scan
+        CHAT_LIVE: 'gemini-3-flash-preview', // High-speed for Chatbot
+        INSIGHTS: 'gemini-3-flash-preview',  
     },
 
     SUPABASE_URL: 'https://auth.mastergrowbotai.com',
