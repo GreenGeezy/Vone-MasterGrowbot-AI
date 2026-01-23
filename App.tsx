@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { OnboardingStep, UserProfile, Plant, Task } from './types';
+import { OnboardingStep, UserProfile, Plant, Task, AppScreen } from './types';
 import Splash from './screens/Splash';
 import Onboarding from './screens/Onboarding';
 import OnboardingSummary from './screens/OnboardingSummary';
@@ -33,7 +33,10 @@ const ProfileScreen: React.FC<{ userProfile: UserProfile | null; onSignOut: () =
 const App: React.FC = () => {
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [currentTab, setCurrentTab] = useState('home');
+  
+  // FIX: Using AppScreen Enum for type safety
+  const [currentTab, setCurrentTab] = useState<AppScreen>(AppScreen.HOME);
+  
   const [plants, setPlants] = useState<Plant[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
@@ -63,10 +66,11 @@ const App: React.FC = () => {
   };
 
   const handleAuthSuccess = async () => { setShowAuth(false); setShowPaywall(false); setOnboardingStatus(OnboardingStep.COMPLETED); loadUserData(); };
+  
   const handleAddJournalEntry = (entry: any) => {
       const newEntry = { ...entry, id: Date.now().toString(), date: new Date().toLocaleDateString() };
       setPlants(prev => { prev[0].journal.unshift(newEntry); return [...prev]; });
-      setCurrentTab('journal');
+      setCurrentTab(AppScreen.JOURNAL);
   };
 
   if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={() => setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE)} />;
@@ -76,15 +80,15 @@ const App: React.FC = () => {
   return (
     <div className="h-screen w-screen bg-surface overflow-hidden relative">
       <div className="h-full w-full overflow-y-auto pb-24">
-          {currentTab === 'home' && <Home plants={plants} tasks={tasks} onToggleTask={(id:string) => setTasks(t => t.map(x => x.id === id ? {...x, completed: !x.completed} : x))} onNavigateToPlant={() => setCurrentTab('journal')} />}
-          {currentTab === 'diagnose' && <Diagnose onSaveToJournal={handleAddJournalEntry} plant={plants[0]} />}
-          {currentTab === 'chat' && <Chat onSaveToJournal={handleAddJournalEntry} plant={plants[0]} userProfile={userProfile} />}
-          {currentTab === 'journal' && <Journal plants={plants} onAddEntry={handleAddJournalEntry} onUpdatePlant={(id:string, u:any) => setPlants(p => p.map(x => x.id === id ? {...x, ...u} : x))} />}
-          {currentTab === 'profile' && <ProfileScreen userProfile={userProfile} onSignOut={() => window.location.reload()} />}
+          {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={(id:string) => setTasks(t => t.map(x => x.id === id ? {...x, completed: !x.completed} : x))} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
+          {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} plant={plants[0]} />}
+          {currentTab === AppScreen.CHAT && <Chat onSaveToJournal={handleAddJournalEntry} plant={plants[0]} userProfile={userProfile} />}
+          {currentTab === AppScreen.JOURNAL && <Journal plants={plants} onAddEntry={handleAddJournalEntry} onUpdatePlant={(id:string, u:any) => setPlants(p => p.map(x => x.id === id ? {...x, ...u} : x))} />}
+          {currentTab === AppScreen.PROFILE && <ProfileScreen userProfile={userProfile} onSignOut={() => window.location.reload()} />}
       </div>
       {showPaywall && <Paywall onClose={() => setShowPaywall(false)} onPurchase={() => { setShowPaywall(false); setShowAuth(true); }} onSkip={() => setShowPaywall(false)} />}
       {showAuth && <PostPaymentAuth onComplete={handleAuthSuccess} onSkip={handleAuthSuccess} userProfile={userProfile} />}
-      <BottomNav currentScreen={currentTab as any} onNavigate={(tab) => setCurrentTab(tab)} />
+      <BottomNav currentScreen={currentTab} onNavigate={(tab) => setCurrentTab(tab)} />
     </div>
   );
 };
