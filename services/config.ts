@@ -1,11 +1,11 @@
 import { Capacitor } from '@capacitor/core';
 
 export const CONFIG = {
-    // Hardcoded API Key
+    // 1. API KEY
     GEMINI_API_KEY: 'AIzaSyBEmRHHbEqZvbYwgOmuk8THcxuxJSlewlg',
     
-    // MODEL MAP
-    // Explicitly targeting the 2.5 series
+    // 2. MODEL CONFIGURATION
+    // Explicitly targeting Gemini 2.5 Pro for high-reasoning vision tasks
     MODELS: {
         DIAGNOSIS: 'gemini-2.5-pro', 
         CHAT_LIVE: 'gemini-2.5-flash',
