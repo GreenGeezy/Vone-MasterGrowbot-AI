@@ -33,9 +33,7 @@ const ProfileScreen: React.FC<{ userProfile: UserProfile | null; onSignOut: () =
 const App: React.FC = () => {
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  
   const [currentTab, setCurrentTab] = useState<AppScreen>(AppScreen.HOME);
-  
   const [plants, setPlants] = useState<Plant[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
@@ -44,12 +42,10 @@ const App: React.FC = () => {
   useEffect(() => {
     const initApp = async () => {
       await SplashScreen.hide();
-
-      // --- CRITICAL FIX: INITIALIZE REVENUECAT ---
+      
       if (Capacitor.getPlatform() === 'android') {
           await Purchases.configure({ apiKey: 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' });
       }
-      // ------------------------------------------
 
       CapacitorApp.addListener('appUrlOpen', async (data) => {
           if (data.url.includes('code=')) {
@@ -71,7 +67,12 @@ const App: React.FC = () => {
       setTasks([{ id: '1', title: 'Check pH', completed: false }, { id: '2', title: 'CalMag', completed: false }]);
   };
 
-  const handleAuthSuccess = async () => { setShowAuth(false); setShowPaywall(false); setOnboardingStatus(OnboardingStep.COMPLETED); loadUserData(); };
+  const handleAuthSuccess = async () => { 
+      setShowAuth(false); 
+      setShowPaywall(false); 
+      setOnboardingStatus(OnboardingStep.COMPLETED); 
+      loadUserData(); 
+  };
   
   const handleAddJournalEntry = (entry: any) => {
       const newEntry = { ...entry, id: Date.now().toString(), date: new Date().toLocaleDateString() };
@@ -92,8 +93,12 @@ const App: React.FC = () => {
           {currentTab === AppScreen.JOURNAL && <Journal plants={plants} onAddEntry={handleAddJournalEntry} onUpdatePlant={(id:string, u:any) => setPlants(p => p.map(x => x.id === id ? {...x, ...u} : x))} />}
           {currentTab === AppScreen.PROFILE && <ProfileScreen userProfile={userProfile} onSignOut={() => window.location.reload()} />}
       </div>
+      
+      {/* UPDATED: Route to Auth on Purchase Success */}
       {showPaywall && <Paywall onClose={() => setShowPaywall(false)} onPurchase={() => { setShowPaywall(false); setShowAuth(true); }} onSkip={() => setShowPaywall(false)} />}
+      
       {showAuth && <PostPaymentAuth onComplete={handleAuthSuccess} onSkip={handleAuthSuccess} userProfile={userProfile} />}
+      
       <BottomNav currentScreen={currentTab} onNavigate={(tab) => setCurrentTab(tab)} />
     </div>
   );
