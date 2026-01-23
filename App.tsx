@@ -34,7 +34,6 @@ const App: React.FC = () => {
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   
-  // FIX: Using AppScreen Enum for type safety
   const [currentTab, setCurrentTab] = useState<AppScreen>(AppScreen.HOME);
   
   const [plants, setPlants] = useState<Plant[]>([]);
@@ -45,6 +44,13 @@ const App: React.FC = () => {
   useEffect(() => {
     const initApp = async () => {
       await SplashScreen.hide();
+
+      // --- CRITICAL FIX: INITIALIZE REVENUECAT ---
+      if (Capacitor.getPlatform() === 'android') {
+          await Purchases.configure({ apiKey: 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' });
+      }
+      // ------------------------------------------
+
       CapacitorApp.addListener('appUrlOpen', async (data) => {
           if (data.url.includes('code=')) {
               const { data: sessionData } = await supabase.auth.exchangeCodeForSession(new URL(data.url).searchParams.get('code')!);
