@@ -5,8 +5,8 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       groups:
-        - production    # Loads Keystore
-        - app_config    # Loads API Keys
+        - production
+        - app_config
       vars:
         CM_KEYSTORE_PATH: /tmp/keystore.jks
       node: 20.11.1
@@ -21,7 +21,6 @@ workflows:
       - name: Install dependencies
         script: |
           rm -f package-lock.json
-          # FIXED: Added --legacy-peer-deps to ignore React 19 version strictness
           npm install --legacy-peer-deps
       
       - name: Build Web Assets
@@ -34,7 +33,6 @@ workflows:
       
       - name: Decode Security Files
         script: |
-          # 1. DECODE KEYSTORE
           if [ -n "$CM_KEYSTORE_ENCODED" ]; then
               echo "🔐 Decoding keystore..."
               echo $CM_KEYSTORE_ENCODED | base64 --decode > /tmp/keystore.jks
@@ -43,13 +41,11 @@ workflows:
               exit 1
           fi
 
-          # 2. DECODE GOOGLE SERVICES JSON
           if [ -n "$ANDROID_GOOGLE_SERVICES_JSON" ]; then
               echo "🔥 Decoding google-services.json..."
               echo $ANDROID_GOOGLE_SERVICES_JSON | base64 --decode > android/app/google-services.json
-              echo "✅ google-services.json injected successfully."
           else
-              echo "❌ ERROR: ANDROID_GOOGLE_SERVICES_JSON is missing! App will crash."
+              echo "❌ ERROR: ANDROID_GOOGLE_SERVICES_JSON is missing!"
               exit 1
           fi
       
