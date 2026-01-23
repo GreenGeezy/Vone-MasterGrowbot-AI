@@ -5,22 +5,10 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
     return {
-      server: {
-        port: 3000,
-        host: '0.0.0.0',
-      },
+      server: { port: 3000, host: '0.0.0.0' },
       plugins: [react()],
-      define: {
-        'process.env': JSON.stringify(env),
-      },
-      resolve: {
-        alias: {
-          '@': path.resolve(__dirname, './src'),
-        }
-      },
-      build: {
-        outDir: 'dist',
-        sourcemap: true,
-      }
+      define: { 'process.env': JSON.stringify(env) },
+      resolve: { alias: { '@': path.resolve(__dirname, './src') } },
+      build: { outDir: 'dist', sourcemap: true }
     };
 });
