@@ -1,3 +1,5 @@
+// --- Enums & Constants ---
+
 export enum PlantStage {
   SEEDLING = 'Seedling',
   VEG = 'Vegetative',
@@ -5,6 +7,26 @@ export enum PlantStage {
   FLOWER_LATE = 'Late Flower',
   HARVEST = 'Harvest Ready'
 }
+
+export enum AppScreen {
+  HOME = 'home',
+  JOURNAL = 'journal',
+  DIAGNOSE = 'diagnose',
+  CHAT = 'chat',
+  PAYWALL = 'paywall',
+  ACCOUNT = 'account'
+}
+
+export enum OnboardingStep {
+  SPLASH = 'splash',
+  QUIZ = 'quiz',
+  SUMMARY = 'summary',
+  TRIAL_PAYWALL = 'trial_paywall',
+  POST_PAYMENT_AUTH = 'post_payment_auth',
+  COMPLETED = 'completed'
+}
+
+// --- Core Data Structures ---
 
 export interface Strain {
   id?: string;
@@ -20,74 +42,129 @@ export interface Task {
   title: string;
   completed: boolean;
   date?: string;
-  type?: 'water' | 'feed' | 'check' | 'train';
+  type: 'water' | 'feed' | 'check' | 'train' | 'other';
 }
 
-// THE STRUCTURE FOR YOUR AI REPORT
+// --- AI Analysis & Diagnosis ---
+
 export interface DiagnosisResult {
-  diagnosis: string;
+  // Core Identity
+  diagnosis: string;         // e.g. "Nitrogen Deficiency"
+  confidence: number;        // 0-100
+  
+  // Health Metrics
   severity: 'low' | 'medium' | 'high';
-  health?: number; 
-  confidence: number;
-  fixSteps: string[];
-  topAction?: string;
-  yieldTips?: string; 
-  qualityTips?: string; 
+  healthScore: number;       // 0-100 (For UI Gauge)
+  healthLabel?: 'Poor' | 'Fair' | 'Good' | 'Great' | 'Excellent'; // (For Text Badge)
+  growthStage: string;       // e.g. "Vegetative"
+  
+  // Actionable Advice
+  topAction: string;         // The #1 priority
+  fixSteps: string[];        // Step-by-step cure
+  
+  // Advanced Optimization (New Gemini 3 Features)
+  yieldTips: string[];       // How to get more weight
+  qualityTips: string[];     // How to get better terps/thc
+  generalAdvice?: string;    // Contextual summary
 }
+
+export interface LogAnalysis {
+  summary: string;
+  yieldPrediction?: string; // e.g. "Yield on track (+5%)"
+  healthIndicator?: 'good' | 'concern' | 'critical';
+  detectedValues?: {
+    ph?: number;
+    ppm?: number;
+    temp?: number;
+    humidity?: number;
+  }
+}
+
+// --- Journal & Logs ---
+
+export type JournalEntryType = 'note' | 'diagnosis' | 'chat' | 'water' | 'feed';
 
 export interface JournalEntry {
   id: string;
   date: string;
-  type: 'note' | 'diagnosis' | 'chat' | 'water' | 'feed';
-  title?: string;
+  type: JournalEntryType;
+  title: string;
+  
+  // Content
   notes?: string;
-  image?: string; 
+  originalQuestion?: string; // If this came from Chat
+  
+  // Media
   imageUri?: string;
   drawingUri?: string;
-  result?: DiagnosisResult;
-  aiAnalysis?: { summary: string };
+  
+  // Data Points
+  diagnosisData?: DiagnosisResult;
+  envTemp?: number;
+  envHumidity?: number;
+  tags?: ('water' | 'feed' | 'prune' | 'env' | 'photo' | 'training')[];
+  
+  // AI Insights
+  aiAnalysis?: LogAnalysis;
+  
+  // Social
+  isPublic?: boolean;
+  publicUrl?: string;
 }
+
+export interface WeeklySummary {
+  id: string;
+  weekNumber: number;
+  imageUri: string;
+  healthScore: number;
+  aiNotes: string; // "Week 4 Summary: Great stretch, nitrogen levels look good."
+  date: string;
+}
+
+// --- Main Entities ---
 
 export interface Plant {
   id: string;
   name: string;
-  strain: string; 
+  strain: string;
   strainDetails?: Strain;
-  stage: PlantStage | string; 
-  age_days?: number; 
-  totalDays?: number;
+  
+  // Timing
+  stage: PlantStage | string;
+  daysInStage: number;
+  totalDays: number;
+  nextHarvestDate?: string;
+  
+  // Health & Stats
   healthScore: number;
   imageUri: string;
-  tasks?: Task[];
+  streak: number; // Gamification: Consecutive days logged
+  
+  // Collections
+  tasks: Task[];
   journal: JournalEntry[];
+  weeklySummaries: WeeklySummary[]; // History cards
   activeAlerts?: ('thirsty' | 'pest' | 'nutrient' | 'env')[];
-}
-
-export interface UserProfile {
-  id?: string; 
-  experience: 'Novice' | 'Intermediate' | 'Expert' | 'Pro'; 
-}
-
-export enum OnboardingStep {
-  SPLASH = 'SPLASH', 
-  QUIZ_EXPERIENCE = 'QUIZ_EXPERIENCE',
-  SUMMARY = 'SUMMARY',
-  COMPLETED = 'COMPLETED'
 }
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'model';
-  text: string;
-  content?: string;
-  timestamp?: number;
+  role: 'user' | 'assistant'; // Standardized for Gemini API
+  content: string;            // The message text
+  timestamp: number;
+  isVoice?: boolean;          // Was this spoken?
 }
 
-export enum AppScreen {
-  HOME = 'home',
-  JOURNAL = 'journal',
-  DIAGNOSE = 'diagnose',
-  CHAT = 'chat',
-  PAYWALL = 'paywall',
-  PROFILE = 'profile'
+export interface UserProfile {
+  id?: string;
+  email?: string;
+  
+  // Cultivation Profile
+  experience: 'Novice' | 'Intermediate' | 'Expert' | 'Pro';
+  grow_mode?: 'Indoor' | 'Outdoor' | 'Greenhouse';
+  goal?: 'Maximize Yield' | 'Improve Quality' | 'Learn Skills';
+  space?: 'Small' | 'Medium' | 'Large';
+  
+  // App State
+  isOnboarded?: boolean;
 }
