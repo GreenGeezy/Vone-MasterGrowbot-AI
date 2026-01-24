@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { GoogleGenAI } from "npm:@google/genai"
+// WE USE THE UNIVERSAL SDK FOR DENO COMPATIBILITY
+import { GoogleGenerativeAI } from "npm:@google/generative-ai"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,61 +8,59 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // 1. Handle Browser Security (CORS)
+  // Handle CORS (Browser Security)
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    // 2. Get the Secure Key
     const apiKey = Deno.env.get('GEMINI_API_KEY');
     if (!apiKey) throw new Error("Missing API Key");
 
-    const genAI = new GoogleGenAI({ apiKey: apiKey });
-    const { mode, prompt, image, context } = await req.json();
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const { mode, prompt, image } = await req.json();
 
-    // 3. MODEL SELECTION (The "Gemini 3.0" Logic)
-    let modelName = "gemini-3-flash-preview"; // Default to Fastest (Chat/Voice)
+    // --- GEMINI 3.0 MODEL CONFIGURATION ---
+    // Gemini 3.0 Flash Preview: The fastest model (Best for Chat/Voice)
+    // Gemini 3.0 Pro Preview: The reasoning model (Best for Plant Doctor)
+    let modelName = "gemini-3-flash-preview"; 
     let systemInstruction = "You are MasterGrowbot. Be helpful, concise, and friendly.";
-    let contents = [];
 
-    // --- MODE A: PLANT DOCTOR (Diagnosis) ---
-    // Uses PRO model for deep reasoning on images
     if (mode === 'diagnosis') {
+      // Use PRO for Vision/Reasoning
       modelName = "gemini-3-pro-preview"; 
-      systemInstruction = "You are an expert botanist. Analyze this image for cannabis pests, deficiencies, or diseases. Return valid JSON only.";
-      
-      contents = [{
-        role: "user",
-        parts: [
-          { text: prompt },
-          { inlineData: { mimeType: "image/jpeg", data: image } }
-        ]
-      }];
-    } 
-    // --- MODE B: CHAT & VOICE ---
-    // Uses FLASH model for speed
-    else {
+      systemInstruction = "Analyze this plant image for pests, deficiencies, or disease. Return valid JSON only.";
+    } else if (mode === 'voice') {
+      // Voice needs maximum speed
       modelName = "gemini-3-flash-preview";
-      
-      // If it's Voice, keep it shorter
-      if (mode === 'voice') {
-        systemInstruction = "You are a voice assistant. Keep answers short (under 2 sentences) and conversational.";
-      }
-      
-      contents = [{ role: "user", parts: [{ text: prompt }] }];
+      systemInstruction = "You are a voice assistant. Keep answers under 2 sentences.";
     }
 
-    // 4. Run the AI
-    console.log(`Using Model: ${modelName} for Mode: ${mode}`); // Debug log
+    // Initialize the Model
     const model = genAI.getGenerativeModel({ model: modelName, systemInstruction });
-    const result = await model.generateContent({ contents });
-    const text = result.response.text();
 
-    return new Response(JSON.stringify({ result: text }), { 
+    // --- EXECUTE REQUEST ---
+    let resultText;
+
+    if (mode === 'diagnosis' && image) {
+      // Vision Request (Gemini 3 Pro)
+      const parts = [
+        { text: prompt },
+        { inlineData: { mimeType: "image/jpeg", data: image } }
+      ];
+      const result = await model.generateContent({ contents: [{ role: 'user', parts }] });
+      resultText = result.response.text();
+    } else {
+      // Text/Chat Request (Gemini 3 Flash)
+      const result = await model.generateContent(prompt);
+      resultText = result.response.text();
+    }
+
+    return new Response(JSON.stringify({ result: resultText }), { 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });
 
   } catch (error) {
-    console.error("AI Error:", error);
+    console.error("Backend Error:", error);
+    // Return the specific error so we can debug on the phone if needed
     return new Response(JSON.stringify({ error: error.message }), { 
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });
