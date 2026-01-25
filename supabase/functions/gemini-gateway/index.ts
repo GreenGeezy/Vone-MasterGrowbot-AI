@@ -16,40 +16,52 @@ serve(async (req) => {
     const genAI = new GoogleGenerativeAI(apiKey);
     const { mode, prompt, image } = await req.json();
 
-    // --- 1. PERSONA CONFIGURATION (The "Expert Teacher") ---
-    // Based on "Chatbot Summary" doc
-    const CHAT_PERSONA = `
-      You are MasterGrowbot, an expert cannabis cultivation teacher.
-      Your goal is to guide growers of any level to a successful harvest.
-      - Tone: Encouraging, precise, and authoritative but friendly (Coach Kore style).
-      - Strategy: Always identify the "Priority Action" first.
-      - If the user is a novice, explain "why". If expert, be technical (VPD, EC, PPFD).
+    // --- 1. DEFAULT MODEL (Chat/Voice) ---
+    // STRICTLY USING GEMINI 3 FLASH
+    let modelName = "gemini-3-flash-preview"; 
+    
+    // "Golden Rules" System Prompt (No Markdown, Friendly Coach)
+    let systemInstruction = `
+      You are MasterGrowbot AI, an expert cannabis cultivation coach.
+      
+      YOUR GOLDEN RULES:
+      1. TONE: Be friendly, enthusiastic, and authoritative like a supportive sports coach.
+      2. FORMATTING STRICTLY FORBIDDEN:
+         - Do NOT use Markdown headers (# or ##).
+         - Do NOT use bolding (**text**).
+         - Use simple *asterisks* for emphasis only.
+         - Use bullet points (•) for lists.
+      3. EMOJIS: Use emojis 🌿✨🌱 sparingly (max 1-2 per response).
+      4. STRUCTURE: Hook -> Lesson -> Question.
+      5. RESTRICTIONS: No promotions, no legal advice, no slang.
     `;
 
-    // --- 2. MODEL SELECTION ---
-    let modelName = "gemini-3-flash-preview"; 
-    let systemInstruction = CHAT_PERSONA;
-
+    // --- 2. DIAGNOSIS MODE ---
     if (mode === 'diagnosis') {
-      modelName = "gemini-3-pro-preview"; // Reasoning for scans
-      // Strict JSON instruction for the "Plant Scan Summary" fields
+      // STRICTLY USING GEMINI 3 PRO (Multimodal Vision)
+      modelName = "gemini-3-pro-preview"; 
+      
+      // Strict JSON Schema for Predictive Analysis
       systemInstruction = `
         You are an expert plant pathologist. Analyze this cannabis plant image.
         Return ONLY valid JSON (no markdown) with this structure:
         {
-          "diagnosis": "Name of issue or 'Healthy'",
+          "diagnosis": "string",
           "severity": "low" | "medium" | "high",
-          "healthScore": number (0-100),
-          "growthStage": "Seedling" | "Vegetative" | "Flowering",
-          "topAction": "The single most important thing to do NOW",
-          "fixSteps": ["Step 1", "Step 2", "Step 3"],
-          "yieldTips": ["Tip to increase weight"],
-          "qualityTips": ["Tip to increase potency/terpenes"]
+          "healthScore": number,
+          "growthStage": "string",
+          "topAction": "string",
+          "fixSteps": ["string"],
+          "preventionTips": ["string"],
+          "yieldEstimate": "string",
+          "harvestWindow": "string",
+          "nutrientTargets": { "ec": "string", "ph": "string" },
+          "environmentTargets": { "vpd": "string", "temp": "string", "rh": "string" },
+          "riskScore": number
         }
       `;
     } else if (mode === 'voice') {
-      // Voice mode needs to be conversational
-      systemInstruction = `${CHAT_PERSONA} Keep your response conversational and under 3 sentences for voice playback.`;
+      systemInstruction += " You are speaking via voice interface. Be ultra-concise (under 3 sentences).";
     }
 
     const model = genAI.getGenerativeModel({ model: modelName, systemInstruction });
