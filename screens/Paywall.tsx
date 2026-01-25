@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, Shield, Star, Zap, ArrowRight, Lock } from 'lucide-react';
+import { 
+  X, Check, Shield, Star, Zap, ArrowRight, Lock, 
+  LifeBuoy, Headphones, Book, Dna, Clock 
+} from 'lucide-react';
 import { Purchases, PurchasesPackage, PACKAGE_TYPE } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser'; // Ensure you have installed: npm install @capacitor/browser
 import Growbot from '../components/Growbot';
 
 interface PaywallProps {
@@ -17,216 +21,332 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load Products (Robust: Tries Offerings -> Fallback to Products)
+  // --- 1. SETUP & CONFIGURATION ---
+
   useEffect(() => {
     const loadProducts = async () => {
       try {
         if (!Capacitor.isNativePlatform()) {
-          // Web Mock for Testing
-          setPackages([
-            { identifier: 'mg_weekly', packageType: PACKAGE_TYPE.WEEKLY, product: { priceString: '$7.99', title: 'Weekly' } } as any,
-            { identifier: 'mg_499_1m', packageType: PACKAGE_TYPE.MONTHLY, product: { priceString: '$29.99', title: 'Monthly' } } as any,
-            { identifier: 'mg_2999_1y', packageType: PACKAGE_TYPE.ANNUAL, product: { priceString: '$199.99', title: 'Yearly' } } as any,
-          ]);
-          setSelectedPkgIdentifier('mg_499_1m');
+          // Web Mock for Testing UI/UX
+          const mockPackages = [
+            { 
+              identifier: 'mg_weekly', 
+              packageType: PACKAGE_TYPE.WEEKLY, 
+              product: { priceString: '$7.99', title: 'Weekly Access', description: 'Short term help' } 
+            } as any,
+            { 
+              identifier: 'mg_monthly', 
+              packageType: PACKAGE_TYPE.MONTHLY, 
+              product: { priceString: '$29.99', title: 'Monthly Pro', description: 'Ongoing optimization' } 
+            } as any,
+            { 
+              identifier: 'mg_annual', 
+              packageType: PACKAGE_TYPE.ANNUAL, 
+              product: { priceString: '$199.99', title: 'Annual Saver', description: 'Best value year round' } 
+            } as any,
+          ];
+          setPackages(mockPackages);
+          // Pre-select Monthly (Most Popular)
+          setSelectedPkgIdentifier('mg_monthly');
           setLoading(false);
           return;
         }
 
-        // 1. Try fetching configured Offerings
-        const offerings = await Purchases.getOfferings();
-        if (offerings.current && offerings.current.availablePackages.length > 0) {
-          setPackages(offerings.current.availablePackages);
-          const monthly = offerings.current.availablePackages.find(p => p.packageType === PACKAGE_TYPE.MONTHLY);
-          if (monthly) setSelectedPkgIdentifier(monthly.identifier);
-        } else {
-          // 2. Fallback: Fetch specific products if offerings fail
-          console.warn("No offerings found, attempting direct product fetch...");
-          const products = await Purchases.getProducts(['mg_499_1m', 'mg_2999_1y', 'mg_weekly']); // Add your weekly ID here if different
-          // Manually wrap them as packages for consistency
-          const fallbackPackages = products.map(p => ({
-            identifier: p.identifier,
-            packageType: p.identifier.includes('1m') ? PACKAGE_TYPE.MONTHLY : p.identifier.includes('1y') ? PACKAGE_TYPE.ANNUAL : PACKAGE_TYPE.WEEKLY,
-            product: p,
-            offeringIdentifier: 'default'
-          } as PurchasesPackage));
-          
-          if (fallbackPackages.length > 0) {
-            setPackages(fallbackPackages);
-            const monthly = fallbackPackages.find(p => p.packageType === PACKAGE_TYPE.MONTHLY);
-            if (monthly) setSelectedPkgIdentifier(monthly.identifier);
-          } else {
-            throw new Error("No products available.");
+        // Real RevenueCat Load
+        try {
+          const offerings = await Purchases.getOfferings();
+          if (offerings.current && offerings.current.availablePackages.length > 0) {
+            setPackages(offerings.current.availablePackages);
+            
+            // Smart Pre-selection: Default to Monthly, fallback to first available
+            const monthly = offerings.current.availablePackages.find(p => p.packageType === PACKAGE_TYPE.MONTHLY);
+            setSelectedPkgIdentifier(monthly ? monthly.identifier : offerings.current.availablePackages[0].identifier);
           }
+        } catch (e: any) {
+          console.error("RevenueCat Error:", e);
+          setError("Could not load offers. Please check your connection.");
         }
-      } catch (e: any) {
-        console.error("Paywall Error:", e);
-        setError("Could not load plans. Please check your connection.");
+      } catch (err) {
+        setError("Failed to initialize store connection.");
       } finally {
         setLoading(false);
       }
     };
+
     loadProducts();
   }, []);
+
+  // --- 2. ACTIONS ---
 
   const handleStartTrial = async () => {
     if (!selectedPkgIdentifier) return;
     setIsPurchasing(true);
+    setError(null);
+
     try {
       if (!Capacitor.isNativePlatform()) {
-        setTimeout(onPurchase, 1000); // Simulate success on web
-      } else {
-        const pkgToBuy = packages.find(p => p.identifier === selectedPkgIdentifier);
-        if (!pkgToBuy) throw new Error("Package not found");
+        setTimeout(() => {
+          setIsPurchasing(false);
+          onPurchase(); // Mock success
+        }, 1500);
+        return;
+      }
 
-        const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkgToBuy });
-        if (customerInfo.entitlements.active['pro_access']) {
-          onPurchase(); // CRITICAL: Routes to PostPaymentAuth in App.tsx
+      const pkg = packages.find(p => p.identifier === selectedPkgIdentifier);
+      if (pkg) {
+        const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkg });
+        if (customerInfo.entitlements.active['pro_access']) { // Ensure this matches your RevenueCat Entitlement ID
+          onPurchase();
         }
       }
     } catch (e: any) {
       if (!e.userCancelled) {
-        alert(`Purchase failed: ${e.message}`);
+        setError(e.message || "Purchase failed. Please try again.");
       }
     } finally {
       setIsPurchasing(false);
     }
   };
 
-  // Helper to sort packages: Weekly -> Monthly -> Yearly
-  const sortedPackages = [...packages].sort((a, b) => {
-    const order = { [PACKAGE_TYPE.WEEKLY]: 1, [PACKAGE_TYPE.MONTHLY]: 2, [PACKAGE_TYPE.ANNUAL]: 3 };
-    return (order[a.packageType] || 4) - (order[b.packageType] || 4);
-  });
+  const handleRestore = async () => {
+    setIsPurchasing(true);
+    try {
+      if (Capacitor.isNativePlatform()) {
+        const { customerInfo } = await Purchases.restorePurchases();
+        if (customerInfo.entitlements.active['pro_access']) {
+          alert("Success! Your subscription has been restored.");
+          onPurchase();
+        } else {
+          alert("No active subscription found to restore.");
+        }
+      } else {
+        alert("Restore not available in web mode.");
+      }
+    } catch (e) {
+      alert("Failed to restore purchases. Please try again.");
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
 
-  if (loading) {
-    return <div className="fixed inset-0 bg-surface flex items-center justify-center z-50"><Growbot size="lg" mood="thinking" /></div>;
-  }
+  const openLink = async (url: string) => {
+    try {
+      await Browser.open({ url });
+    } catch (e) {
+      window.open(url, '_blank');
+    }
+  };
 
-  if (error) {
-    return (
-      <div className="fixed inset-0 bg-surface flex flex-col items-center justify-center z-50 p-6 text-center">
-        <Growbot size="lg" mood="sad" />
-        <p className="text-text-main font-bold mt-4">{error}</p>
-        <button onClick={onClose} className="mt-4 text-gray-400 underline">Close</button>
-      </div>
-    );
-  }
+  // --- 3. HELPER VARS FOR DYNAMIC TEXT ---
+
+  const selectedPkg = packages.find(p => p.identifier === selectedPkgIdentifier);
+  
+  // Dynamic Price Formatting (Compliance Requirement)
+  const getTrialText = () => {
+    if (!selectedPkg) return "Select a plan";
+    
+    const price = selectedPkg.product.priceString;
+    let period = "month";
+    if (selectedPkg.packageType === PACKAGE_TYPE.WEEKLY) period = "week";
+    if (selectedPkg.packageType === PACKAGE_TYPE.ANNUAL) period = "year";
+
+    return `After free trial, auto-bills ${price}/${period}`;
+  };
+
+  // --- 4. RENDER ---
+
+  if (loading) return (
+    <div className="fixed inset-0 bg-white z-[60] flex items-center justify-center">
+      <Growbot size="lg" mood="thinking" className="animate-bounce" />
+    </div>
+  );
 
   return (
-    <div className="fixed inset-0 z-50 bg-surface flex flex-col font-sans h-full">
-      {/* 1. Header / Hero */}
-      <div className="relative shrink-0">
-        <div className="absolute top-4 right-4 z-20">
-          <button onClick={onSkip} className="bg-black/10 text-text-sub p-2 rounded-full hover:bg-gray-100 transition-colors">
-            <X size={24} />
-          </button>
-        </div>
-        <div className="pt-12 pb-6 px-6 text-center">
-          <Growbot size="xl" mood="happy" className="mx-auto mb-4 animate-bounce" />
-          <h1 className="text-3xl font-black text-text-main leading-tight mb-2">Unlock Your<br/>Best Harvest</h1>
-          <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-            <Shield size={12} className="fill-current" /> Verified Expert Logic
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Scrollable Content (Plans & Benefits) */}
-      <div className="flex-1 overflow-y-auto px-6 pb-40 no-scrollbar">
+    <div className="fixed inset-0 bg-white z-[60] flex flex-col overflow-hidden">
+      
+      {/* HEADER IMAGE & CLOSE */}
+      <div className="relative h-64 bg-green-900 flex-shrink-0">
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1596791836043-982c75908b89?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80')] bg-cover bg-center opacity-40"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white"></div>
         
-        {/* Benefits Grid */}
-        <div className="grid grid-cols-1 gap-3 mb-8">
-          <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-            <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center shrink-0"><Zap size={20} /></div>
-            <div><h3 className="font-bold text-text-main">Unlimited AI Diagnosis</h3><p className="text-xs text-gray-500">Identify pests & deficiencies instantly.</p></div>
-          </div>
-          <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-            <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-500 flex items-center justify-center shrink-0"><Check size={20} strokeWidth={3} /></div>
-            <div><h3 className="font-bold text-text-main">24/7 Expert Chatbot</h3><p className="text-xs text-gray-500">Your personal grow coach.</p></div>
-          </div>
-        </div>
+        <button 
+          onClick={onSkip} 
+          className="absolute top-12 right-6 bg-black/20 hover:bg-black/40 text-white p-2 rounded-full backdrop-blur-md z-50 transition-colors"
+        >
+          <X size={20} />
+        </button>
 
-        {/* Plan Selection */}
-        <div className="space-y-4">
-          {sortedPackages.map((pkg) => {
-            const isSelected = selectedPkgIdentifier === pkg.identifier;
-            const isMonthly = pkg.packageType === PACKAGE_TYPE.MONTHLY;
-            const isYearly = pkg.packageType === PACKAGE_TYPE.ANNUAL;
-            const isWeekly = pkg.packageType === PACKAGE_TYPE.WEEKLY;
-
-            return (
-              <div 
-                key={pkg.identifier}
-                onClick={() => setSelectedPkgIdentifier(pkg.identifier)}
-                className={`relative p-5 rounded-3xl border-2 transition-all cursor-pointer flex justify-between items-center ${
-                  isSelected ? 'border-primary bg-green-50/50 shadow-md transform scale-[1.02]' : 'border-gray-100 bg-white hover:border-gray-200'
-                }`}
-              >
-                {/* Badges */}
-                {isMonthly && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
-                    <Star size={10} className="fill-current" /> Most Popular
-                  </div>
-                )}
-                {isYearly && (
-                  <div className="absolute -top-3 right-6 bg-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
-                    Best Value
-                  </div>
-                )}
-
-                <div>
-                  <h4 className="font-black text-text-main text-lg">
-                    {isMonthly ? "Monthly" : isYearly ? "Yearly" : "Weekly"}
-                  </h4>
-                  {isWeekly && <p className="text-xs font-bold text-primary mt-0.5">Dive In – Cancel Anytime</p>}
-                  {isYearly && <p className="text-xs font-bold text-orange-600 mt-0.5">Save 50% Long Term</p>}
-                </div>
-
-                <div className="text-right">
-                  <div className="text-xl font-black text-text-main">{pkg.product.priceString}</div>
-                  <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">
-                    /{isMonthly ? 'mo' : isYearly ? 'yr' : 'wk'}
-                  </div>
-                </div>
-
-                {/* Radio Circle */}
-                <div className={`absolute top-1/2 -translate-y-1/2 left-[-12px] w-6 h-6 bg-white rounded-full border-2 flex items-center justify-center shadow-sm ${isSelected ? 'border-primary' : 'border-gray-200 opacity-0'}`}>
-                   {isSelected && <div className="w-3 h-3 bg-primary rounded-full" />}
-                </div>
-              </div>
-            );
-          })}
+        <div className="absolute bottom-4 left-6 right-6">
+           <div className="flex items-center gap-2 mb-2">
+              <span className="bg-black/80 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 backdrop-blur-md">
+                 <Shield size={10} className="text-green-400" /> Official Release
+              </span>
+           </div>
+           <h1 className="text-3xl font-black text-gray-900 leading-tight">
+             Unlock Your Best Harvest with Expert AI
+           </h1>
+           <p className="text-sm font-medium text-gray-600 mt-1">
+             Mitigate risks and optimize yields to avoid crop losses.
+           </p>
         </div>
       </div>
 
-      {/* 3. Sticky Footer (High Z-Index) */}
+      {/* SCROLLABLE CONTENT (Increased Padding for Footer) */}
+      <div className="flex-1 overflow-y-auto px-6 pb-48 pt-2">
+        
+        {/* BENEFITS LIST */}
+        <div className="space-y-5 mb-8">
+           {/* Benefit 1 */}
+           <div className="flex gap-4 items-start">
+              <div className="p-3 bg-red-50 text-red-500 rounded-2xl flex-shrink-0"><LifeBuoy size={24} /></div>
+              <div>
+                 <h3 className="font-bold text-gray-900 text-sm">Unlimited AI Diagnosis</h3>
+                 <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Stop guessing—identify pests, diseases, and deficiencies instantly to prevent crop loss.</p>
+              </div>
+           </div>
+
+           {/* Benefit 2 */}
+           <div className="flex gap-4 items-start">
+              <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl flex-shrink-0"><Headphones size={24} /></div>
+              <div>
+                 <h3 className="font-bold text-gray-900 text-sm">24/7 Expert Chatbot</h3>
+                 <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Hands-free voice coach for real-time answers during grows, saving time and effort.</p>
+              </div>
+           </div>
+
+           {/* Benefit 3 */}
+           <div className="flex gap-4 items-start">
+              <div className="p-3 bg-yellow-50 text-yellow-600 rounded-2xl flex-shrink-0"><Zap size={24} /></div>
+              <div>
+                 <h3 className="font-bold text-gray-900 text-sm">Personalized Grow Plan</h3>
+                 <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Tailored tasks to your setup—avoid mistakes and maximize your harvest potential.</p>
+              </div>
+           </div>
+
+           {/* Benefit 4 */}
+           <div className="flex gap-4 items-start">
+              <div className="p-3 bg-purple-50 text-purple-500 rounded-2xl flex-shrink-0"><Book size={24} /></div>
+              <div>
+                 <h3 className="font-bold text-gray-900 text-sm">Digital Living Journal</h3>
+                 <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Track trends and predict yields—turn data into insights for better grows.</p>
+              </div>
+           </div>
+
+           {/* Benefit 5 */}
+           <div className="flex gap-4 items-start">
+              <div className="p-3 bg-green-50 text-green-500 rounded-2xl flex-shrink-0"><Dna size={24} /></div>
+              <div>
+                 <h3 className="font-bold text-gray-900 text-sm">Verified Strain Intelligence</h3>
+                 <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Strain-specific advice to handle variations ensuring peak potency.</p>
+              </div>
+           </div>
+        </div>
+
+        {/* PLAN CARDS */}
+        <h2 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 text-center">Select Your Plan</h2>
+        <div className="grid grid-cols-1 gap-4">
+           {packages.map((pkg) => {
+             const isSelected = selectedPkgIdentifier === pkg.identifier;
+             const isMonthly = pkg.packageType === PACKAGE_TYPE.MONTHLY;
+             const isAnnual = pkg.packageType === PACKAGE_TYPE.ANNUAL;
+             
+             return (
+               <div 
+                 key={pkg.identifier}
+                 onClick={() => setSelectedPkgIdentifier(pkg.identifier)}
+                 className={`relative rounded-2xl border-2 p-4 transition-all active:scale-[0.98] ${
+                   isSelected ? 'border-green-500 bg-green-50/50' : 'border-gray-100 bg-white'
+                 }`}
+               >
+                 {isMonthly && (
+                   <div className="absolute -top-3 left-4 bg-green-500 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full flex items-center gap-1 shadow-md">
+                     <Star size={10} fill="currentColor" /> Most Popular
+                   </div>
+                 )}
+                 {isAnnual && (
+                   <div className="absolute -top-3 left-4 bg-black text-white text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-md">
+                     Best Value
+                   </div>
+                 )}
+
+                 <div className="flex justify-between items-center">
+                    <div>
+                       <h3 className={`font-black text-base ${isSelected ? 'text-green-800' : 'text-gray-800'}`}>
+                         {pkg.product.title}
+                       </h3>
+                       <p className="text-xs text-gray-500 font-medium mt-1">
+                          {isMonthly ? "Flexible. Cancel anytime." : isAnnual ? "Save 45% vs Monthly" : "Short-term access"}
+                       </p>
+                    </div>
+                    <div className="text-right">
+                       <span className={`block font-black text-xl ${isSelected ? 'text-green-700' : 'text-gray-900'}`}>
+                         {pkg.product.priceString}
+                       </span>
+                       <div className={`w-5 h-5 rounded-full border-2 ml-auto mt-2 flex items-center justify-center ${
+                         isSelected ? 'border-green-500 bg-green-500' : 'border-gray-300'
+                       }`}>
+                         {isSelected && <Check size={12} className="text-white" />}
+                       </div>
+                    </div>
+                 </div>
+               </div>
+             );
+           })}
+        </div>
+      </div>
+
+      {/* FOOTER (Sticky CTA) */}
       <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-6 pb-8 z-50 rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+        
+        {/* Visual Timeline (Compliance) */}
+        <div className="flex items-center justify-center gap-2 mb-4 text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+           <span className="flex items-center gap-1 text-green-600"><Clock size={12} /> Days 1-3: Free</span>
+           <ArrowRight size={12} className="text-gray-300" />
+           <span className="flex items-center gap-1"><Lock size={12} /> Day 4+: Auto-Bill</span>
+        </div>
+
         <button 
           onClick={handleStartTrial}
           disabled={isPurchasing || !selectedPkgIdentifier}
-          className="w-full bg-primary text-white font-black text-lg py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+          className="w-full bg-green-600 text-white font-black text-lg py-4 rounded-2xl shadow-xl shadow-green-200 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:shadow-none"
         >
           {isPurchasing ? (
             <span className="animate-pulse">Processing...</span>
           ) : (
-            <>Start Free 3-Day Free Trial <ArrowRight strokeWidth={3} size={20} /></>
+            <>Start Your Free 3-Day Trial Now <ArrowRight strokeWidth={3} size={20} /></>
           )}
         </button>
         
-        <div className="text-center mt-4 space-y-2">
-          <p className="text-[10px] text-gray-500 font-medium leading-relaxed">
-            Free 3-day trial. Cancel anytime before trial ends to avoid charges.<br/>
-            Billing starts after trial based on the plan you select.
+        {/* Compliance Text Block */}
+        <div className="text-center mt-4 space-y-3">
+          {selectedPkg && (
+             <div className="bg-gray-50 rounded-lg p-2 inline-block">
+                <p className="text-[10px] text-gray-600 font-bold leading-tight">
+                  {getTrialText()} unless canceled.
+                </p>
+             </div>
+          )}
+          
+          <p className="text-[9px] text-gray-400 font-medium leading-relaxed max-w-xs mx-auto">
+            Recurring billing. Cancel anytime in your settings. Family Sharing enabled. 
+            By continuing, you agree to our Terms.
           </p>
-          <div className="flex justify-center gap-3 text-[9px] text-gray-400 font-bold uppercase tracking-wider">
-            <button className="hover:text-primary">Terms</button>
-            <span>•</span>
-            <button className="hover:text-primary">Privacy</button>
-            <span>•</span>
-            <button onClick={async () => { await Purchases.restorePurchases(); alert("Purchases Restored"); }} className="hover:text-primary">Restore</button>
+
+          <div className="flex justify-center gap-4 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+            <button onClick={() => openLink('https://mastergrowbot.com/terms-of-service')} className="hover:text-green-600">Terms</button>
+            <span className="text-gray-300">•</span>
+            <button onClick={() => openLink('https://mastergrowbot.com/privacy-policy')} className="hover:text-green-600">Privacy</button>
+            <span className="text-gray-300">•</span>
+            <button onClick={handleRestore} className="hover:text-green-600">Restore</button>
           </div>
         </div>
       </div>
+
+      {error && (
+        <div className="absolute top-6 left-6 right-6 bg-red-500 text-white p-3 rounded-xl text-center text-xs font-bold shadow-2xl animate-in slide-in-from-top-2 z-[70]">
+          {error}
+        </div>
+      )}
     </div>
   );
 };
