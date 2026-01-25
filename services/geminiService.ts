@@ -1,6 +1,8 @@
 import { supabase } from './supabaseClient';
 import { DiagnosisResult, UserProfile } from '../types';
 
+// --- Types ---
+
 export interface ExtendedDiagnosisResult extends DiagnosisResult {
   yieldEstimate?: string;
   harvestWindow?: string;
@@ -10,9 +12,27 @@ export interface ExtendedDiagnosisResult extends DiagnosisResult {
   preventionTips?: string[];
 }
 
-const cleanBase64 = (data: string) => data.includes('base64,') ? data.split('base64,')[1] : data;
+// --- Helpers ---
 
-export async function diagnosePlant(base64Image: string, context: { strain?: string; growMethod?: 'Indoor' | 'Outdoor' | 'Greenhouse'; stage?: string; userProfile?: UserProfile; }): Promise<ExtendedDiagnosisResult> {
+const cleanBase64 = (data: string) => 
+  data.includes('base64,') ? data.split('base64,')[1] : data;
+
+// --- Core Functions ---
+
+/**
+ * AI Plant Diagnosis (Vision + Logic)
+ * Uses 'gemini-3-pro-preview' via Gateway
+ */
+export async function diagnosePlant(
+  base64Image: string, 
+  context: { 
+    strain?: string; 
+    growMethod?: 'Indoor' | 'Outdoor' | 'Greenhouse'; 
+    stage?: string; 
+    userProfile?: UserProfile; 
+  }
+): Promise<ExtendedDiagnosisResult> {
+  
   const cleanImage = cleanBase64(base64Image);
   const experienceLevel = context.userProfile?.experience || 'Novice';
   const method = context.growMethod || 'Indoor';
@@ -30,7 +50,7 @@ export async function diagnosePlant(base64Image: string, context: { strain?: str
     Analyze this plant image strictly.
     REQUIRED OUTPUT (JSON ONLY):
     {
-      "diagnosis": "Precise identification of issue or 'Healthy'",
+      "diagnosis": "Precise identification of the main issue (or 'Healthy')",
       "severity": "low" | "medium" | "high",
       "healthScore": 0-100,
       "growthStage": "Seedling" | "Vegetative" | "Early Flower" | "Late Flower" | "Harvest",
@@ -38,7 +58,7 @@ export async function diagnosePlant(base64Image: string, context: { strain?: str
       "topAction": "The single most important immediate action",
       "fixSteps": ["Step 1", "Step 2", "Step 3"],
       "preventionTips": ["Proactive tip 1", "Proactive tip 2"],
-      "yieldEstimate": "Estimate dry weight (e.g. '3-4oz') or 'N/A' if veg",
+      "yieldEstimate": "Estimate dry weight based on visual bud density (e.g. '3-4oz') or 'N/A' if veg",
       "harvestWindow": "Predicted time to harvest (e.g. '3 weeks') or 'N/A'",
       "nutrientTargets": { "ec": "Target EC", "ph": "Target pH" },
       "environmentTargets": { "vpd": "Target VPD", "temp": "Target Temp", "rh": "Target Humidity" },
@@ -47,21 +67,80 @@ export async function diagnosePlant(base64Image: string, context: { strain?: str
   `;
 
   const { data, error } = await supabase.functions.invoke('gemini-gateway', {
-    body: { mode: 'diagnosis', image: cleanImage, prompt: systemContext + prompt }
+    body: {
+      mode: 'diagnosis',
+      image: cleanImage,
+      prompt: systemContext + prompt
+    }
   });
 
-  if (error) throw new Error("Failed to connect to AI Doctor.");
+  if (error) {
+    console.error("Gemini Connection Error:", error);
+    throw new Error("Failed to connect to AI Doctor.");
+  }
 
   try {
     const rawText = data.result || "";
     const jsonString = rawText.replace(/```json|```/g, '').trim();
     const result: ExtendedDiagnosisResult = JSON.parse(jsonString);
-    return { ...result, severity: result.severity || 'low', healthScore: result.healthScore || 80 };
+
+    return {
+      ...result,
+      severity: result.severity || 'low',
+      healthScore: result.healthScore || 80,
+    };
+
   } catch (e) {
-    return { diagnosis: "Analysis Inconclusive", severity: "low", confidence: 0, topAction: "Retake photo with better lighting", fixSteps: ["Ensure clear focus"], healthScore: 0, growthStage: "Unknown" } as ExtendedDiagnosisResult;
+    console.error("AI Parsing Failed:", e);
+    return {
+      diagnosis: "Analysis Inconclusive",
+      severity: "low",
+      confidence: 0,
+      topAction: "Retake photo with better lighting",
+      fixSteps: ["Ensure clear focus", "Check internet connection"],
+      healthScore: 0,
+      growthStage: "Unknown"
+    } as ExtendedDiagnosisResult;
   }
 }
 
+/**
+ * Chat with Coach (Text / Voice)
+ * Uses 'gemini-3-flash-preview' via Gateway
+ */
 export async function sendMessage(message: string, isVoice: boolean = false) {
-  return await supabase.functions.invoke('gemini-gateway', { body: { mode: isVoice ? 'voice' : 'chat', prompt: message } }).then(res => res.data?.result || "Connection error.");
+  const { data, error } = await supabase.functions.invoke('gemini-gateway', {
+    body: { mode: isVoice ? 'voice' : 'chat', prompt: message }
+  });
+  
+  if (error) {
+      console.error(error);
+      return "I'm having trouble connecting to the network right now.";
+  }
+  return data?.result || "I didn't catch that.";
+}
+
+/**
+ * Daily Insight (Home Screen)
+ * Restored function required by Home.tsx
+ */
+export async function getDailyInsight(userProfile?: UserProfile): Promise<string> {
+  const experience = userProfile?.experience || 'General';
+  const prompt = `Generate a single, short (under 15 words), motivating cannabis cultivation tip for a ${experience} grower. No hashtags.`;
+  
+  try {
+    const response = await sendMessage(prompt);
+    return response.replace(/"/g, ''); // Remove quotes if AI adds them
+  } catch (e) {
+    return "Check your pH and temperature daily for best results!";
+  }
+}
+
+/**
+ * Grow Log Analysis (Journal)
+ * Restored function required by Journal.tsx
+ */
+export async function analyzeGrowLog(notes: string, tags: string[] = []): Promise<string> {
+  const prompt = `Analyze this grow journal note: "${notes}". Tags: ${tags.join(', ')}. Provide a 1-sentence observation on plant health.`;
+  return await sendMessage(prompt);
 }
