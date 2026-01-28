@@ -69,7 +69,19 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
   const [showCamera, setShowCamera] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
-  const [searchQuery, setSearchQuery] = useState(''); // Added filter for strains
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Fake timer state for loading screen
+  const [timeLeft, setTimeLeft] = useState(15);
+
+  useEffect(() => {
+    let interval: any;
+    if (loading) {
+      setTimeLeft(15);
+      interval = setInterval(() => setTimeLeft(prev => prev > 0 ? prev - 1 : 0), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [loading]);
 
   const processImage = async (dataUrl: string) => {
     setImage(dataUrl);
@@ -105,7 +117,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
     if (videoRef.current) {
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight; // Force portrait orientation handling if needed
+      canvas.height = videoRef.current.videoHeight;
       canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       stopCamera();
@@ -115,10 +127,18 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
+      const file = e.target.files[0];
+
+      // STRICT: Ensure only images are processed (No Video)
+      if (!file.type.startsWith('image/')) {
+        alert("Please select a photo. Video analysis is not supported.");
+        return;
+      }
+
       setLoading(true); // Immediate Feedback
       const reader = new FileReader();
       reader.onloadend = () => processImage(reader.result as string);
-      reader.readAsDataURL(e.target.files[0]);
+      reader.readAsDataURL(file);
     }
   };
 
@@ -131,7 +151,6 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
         dialogTitle: 'Share Result'
       });
     } catch (e) {
-      // Web fallback
       if (navigator.share) {
         navigator.share({ title: 'Diagnosis', text: `My plant is ${getHealthRating(result.healthScore || 0)}` });
       } else {
@@ -159,22 +178,56 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
   // Filter Strains
   const filteredStrains = STRAIN_DATABASE.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // 1. Loading State
+  // 1. Loading State (UPDATED: Scanning UI)
   if (loading) return (
-    <div className="flex flex-col items-center justify-center h-screen bg-white">
-      <Growbot size="xl" mood="thinking" className="animate-bounce" />
-      <p className="mt-4 font-bold text-gray-400 text-sm animate-pulse">Analyzing Genetics & Health...</p>
+    <div className="flex flex-col items-center justify-between h-screen bg-gray-900 text-white p-8 overflow-hidden relative">
+      <div className="z-10 text-center pt-10">
+        <h2 className="text-2xl font-black uppercase tracking-widest text-green-400 mb-2">Analyzing Photo</h2>
+        <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Please wait while we check plant health</p>
+      </div>
+
+      {/* Scanning Animation */}
+      <div className="relative w-64 h-80 rounded-2xl overflow-hidden border-2 border-green-500/30 shadow-2xl shadow-green-500/20 z-10">
+        {image && <img src={image} className="w-full h-full object-cover opacity-60" />}
+        <div className="absolute inset-0 bg-gradient-to-t from-green-500/20 to-transparent"></div>
+        {/* Scan Bar */}
+        <div className="absolute top-0 left-0 w-full h-1 bg-green-400 shadow-[0_0_20px_rgba(74,222,128,0.8)] animate-[scan_2s_ease-in-out_infinite]"></div>
+        <div className="absolute top-2 right-2 px-2 py-1 bg-black/50 rounded-md text-[10px] font-mono text-green-400 border border-green-500/30">AI_VISION_ACTIVE</div>
+      </div>
+
+      <div className="z-10 pb-12 flex flex-col items-center">
+        <Growbot size="md" mood="thinking" />
+        <p className="mt-6 font-mono text-green-400 text-xl font-bold">{timeLeft}s remaining...</p>
+      </div>
+
+      {/* Background Grid */}
+      <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'linear-gradient(rgba(0, 255, 0, 0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 0, 0.2) 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
     </div>
   );
 
-  // 2. Camera View (Improved for Android)
+  // 2. Camera View (UPDATED: Fixed Controls/Autoplay)
   if (showCamera) return (
     <div className="fixed inset-0 z-[60] bg-black">
-      {/* Force playsInline for Android WebView support */}
-      <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-0" />
+      {/* Force playsInline, muted, controls=false for Android WebView */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        controls={false}
+        className="absolute inset-0 w-full h-full object-cover z-0"
+        style={{ pointerEvents: 'none' }} // PREVENT TOUCH INTERACTION WITH VIDEO
+      />
       <div className="relative z-10 w-full h-full">
-        <button onClick={handleCapture} className="absolute bottom-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-white rounded-full border-4 border-gray-300 active:scale-90 transition-transform" />
-        <button onClick={stopCamera} className="absolute top-6 right-6 text-white bg-black/50 p-3 rounded-full backdrop-blur-md"><X /></button>
+        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-black/60 to-transparent pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-full h-48 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+
+        <p className="absolute top-8 left-0 w-full text-center text-white/80 font-bold text-sm drop-shadow-md">Position plant in frame</p>
+
+        <button onClick={handleCapture} className="absolute bottom-12 left-1/2 -translate-x-1/2 w-20 h-20 bg-white/20 rounded-full border-4 border-white backdrop-blur-sm active:scale-90 transition-transform flex items-center justify-center">
+          <div className="w-16 h-16 bg-white rounded-full"></div>
+        </button>
+        <button onClick={stopCamera} className="absolute top-6 right-6 text-white bg-black/40 p-3 rounded-full backdrop-blur-md hover:bg-black/60"><X /></button>
       </div>
     </div>
   );
@@ -210,12 +263,11 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
           </div>
 
           <div className="grid grid-cols-2 gap-3 animate-in fade-in delay-100">
-            {/* Updated Metric: Health Score (Word only) */}
             <MetricCard
               icon={Scale}
               label="Health Score"
               value={healthRating}
-              subValue={null} // Hide number
+              subValue={null}
               color="purple"
             />
             <MetricCard icon={Calendar} label="Harvest In" value={result.harvestWindow} color="green" />

@@ -124,6 +124,15 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       if (event.results[0].isFinal) {
         setIsUserSpeaking(false);
         setLiveTranscript("Thinking...");
+
+        // PRIME/KEEP-ALIVE: Trigger a silent speak to keep audio context active on mobile
+        // while waiting for the async Gemini API response.
+        if (window.speechSynthesis) {
+          const keepAlive = new SpeechSynthesisUtterance('');
+          keepAlive.volume = 0;
+          window.speechSynthesis.speak(keepAlive);
+        }
+
         // handleSend will trigger speakResponse -> which triggers recognition.start again
         handleSend(transcript);
       }
