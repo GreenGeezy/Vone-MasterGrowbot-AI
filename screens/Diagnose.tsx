@@ -1,14 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Upload, X, Zap, Activity, Sprout, Check, RefreshCcw, CheckSquare, Square, ChevronRight, Droplet, Thermometer, Calendar, Scale, ShieldAlert, Wind, AlertTriangle, CheckCircle, Share2, Save, MoreHorizontal } from 'lucide-react';
+import { Camera, Upload, X, Zap, Activity, CheckSquare, Square, ChevronRight, Droplet, Calendar, Scale, ShieldAlert, Wind, CheckCircle, Share2, Save, RotateCcw, ScanLine } from 'lucide-react';
 import { diagnosePlant, ExtendedDiagnosisResult } from '../services/geminiService';
-import { Plant, JournalEntry } from '../types';
+import { Plant } from '../types';
 import Growbot from '../components/Growbot';
 import { STRAIN_DATABASE } from '../data/strains';
-import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 
 /**
- * Health Score Mapping (0-100 -> Word)
+ * Health Score Mapping help
  */
 const getHealthRating = (score: number) => {
   if (score >= 90) return "Thriving";
@@ -58,6 +57,7 @@ interface DiagnoseProps {
 
 const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) => {
   const [image, setImage] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null); // NEW: For Review Step
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ExtendedDiagnosisResult | null>(null);
   const [strain, setStrain] = useState<string>(plant?.strain || '');
@@ -71,7 +71,6 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fake timer state for loading screen
   const [timeLeft, setTimeLeft] = useState(15);
 
   useEffect(() => {
@@ -85,6 +84,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
 
   const processImage = async (dataUrl: string) => {
     setImage(dataUrl);
+    setPreviewImage(null); // Clear preview once processing starts
     setLoading(true);
     setResult(null);
     try {
@@ -99,11 +99,16 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
 
   const handleStartCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      // Force environment facing mode for rear camera
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { exact: 'environment' }
+        }
+      }).catch(() => navigator.mediaDevices.getUserMedia({ video: true })); // Fallback
+
       streamRef.current = stream;
       setShowCamera(true);
     } catch (err) {
-      // Fallback to native file input if stream fails
       cameraInputRef.current?.click();
     }
   };
@@ -120,24 +125,25 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
       canvas.height = videoRef.current.videoHeight;
       canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
       stopCamera();
-      processImage(dataUrl);
+      setPreviewImage(dataUrl); // GO TO REVIEW STEP
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       const file = e.target.files[0];
-
       // STRICT: Ensure only images are processed (No Video)
       if (!file.type.startsWith('image/')) {
         alert("Please select a photo. Video analysis is not supported.");
         return;
       }
 
-      setLoading(true); // Immediate Feedback
       const reader = new FileReader();
-      reader.onloadend = () => processImage(reader.result as string);
+      reader.onloadend = () => {
+        setPreviewImage(reader.result as string); // ALSO GO TO REVIEW STEP FOR GALLERY
+      };
       reader.readAsDataURL(file);
     }
   };
@@ -178,61 +184,67 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
   // Filter Strains
   const filteredStrains = STRAIN_DATABASE.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // 1. Loading State (UPDATED: Scanning UI)
+  // 1. Loading State (UPDATED: Fullscreen Image + Overlay)
   if (loading) return (
-    <div className="flex flex-col items-center justify-between h-screen bg-gray-900 text-white p-8 overflow-hidden relative">
-      <div className="z-10 text-center pt-10">
+    <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
+      {/* Full Screen Background Image */}
+      {image && <img src={image} className="absolute inset-0 w-full h-full object-cover opacity-50" />}
+
+      {/* Pulse Overlay */}
+      <div className="absolute inset-0 bg-green-500/10 animate-pulse"></div>
+
+      {/* Scanning Line */}
+      <div className="absolute top-0 left-0 w-full h-2 bg-green-400 shadow-[0_0_20px_rgba(74,222,128,1)] animate-[scan_2s_ease-in-out_infinite] z-10"></div>
+
+      <div className="relative z-20 text-center p-8 bg-black/60 rounded-3xl backdrop-blur-md border border-white/10 m-6">
+        <Growbot size="lg" mood="thinking" className="mb-4 mx-auto" />
         <h2 className="text-2xl font-black uppercase tracking-widest text-green-400 mb-2">Analyzing Photo</h2>
-        <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Please wait while we check plant health</p>
+        <p className="text-white/80 text-xs font-bold uppercase tracking-wider mb-6">Processing Plant Genetics...</p>
+        <div className="text-4xl font-mono text-white font-black">{timeLeft}s</div>
       </div>
-
-      {/* Scanning Animation */}
-      <div className="relative w-64 h-80 rounded-2xl overflow-hidden border-2 border-green-500/30 shadow-2xl shadow-green-500/20 z-10">
-        {image && <img src={image} className="w-full h-full object-cover opacity-60" />}
-        <div className="absolute inset-0 bg-gradient-to-t from-green-500/20 to-transparent"></div>
-        {/* Scan Bar */}
-        <div className="absolute top-0 left-0 w-full h-1 bg-green-400 shadow-[0_0_20px_rgba(74,222,128,0.8)] animate-[scan_2s_ease-in-out_infinite]"></div>
-        <div className="absolute top-2 right-2 px-2 py-1 bg-black/50 rounded-md text-[10px] font-mono text-green-400 border border-green-500/30">AI_VISION_ACTIVE</div>
-      </div>
-
-      <div className="z-10 pb-12 flex flex-col items-center">
-        <Growbot size="md" mood="thinking" />
-        <p className="mt-6 font-mono text-green-400 text-xl font-bold">{timeLeft}s remaining...</p>
-      </div>
-
-      {/* Background Grid */}
-      <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'linear-gradient(rgba(0, 255, 0, 0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 0, 0.2) 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
     </div>
   );
 
-  // 2. Camera View (UPDATED: Fixed Controls/Autoplay)
+  // 2. Camera View
   if (showCamera) return (
     <div className="fixed inset-0 z-[60] bg-black">
-      {/* Force playsInline, muted, controls=false for Android WebView */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
-        controls={false}
+        controls={false} // CRITICAL
         className="absolute inset-0 w-full h-full object-cover z-0"
-        style={{ pointerEvents: 'none' }} // PREVENT TOUCH INTERACTION WITH VIDEO
+        style={{ pointerEvents: 'none' }}
       />
-      <div className="relative z-10 w-full h-full">
-        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-black/60 to-transparent pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-full h-48 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
-
-        <p className="absolute top-8 left-0 w-full text-center text-white/80 font-bold text-sm drop-shadow-md">Position plant in frame</p>
-
-        <button onClick={handleCapture} className="absolute bottom-12 left-1/2 -translate-x-1/2 w-20 h-20 bg-white/20 rounded-full border-4 border-white backdrop-blur-sm active:scale-90 transition-transform flex items-center justify-center">
-          <div className="w-16 h-16 bg-white rounded-full"></div>
-        </button>
+      <div className="relative z-10 w-full h-full flex flex-col justify-between py-12">
+        <p className="text-center text-white/80 font-bold text-sm drop-shadow-md mt-4">Position plant in frame</p>
+        <div className="flex justify-center items-center gap-8 pb-12">
+          <button onClick={handleCapture} className="w-20 h-20 bg-white/20 rounded-full border-4 border-white backdrop-blur-sm active:scale-95 transition-transform flex items-center justify-center cursor-pointer">
+            <div className="w-16 h-16 bg-white rounded-full"></div>
+          </button>
+        </div>
         <button onClick={stopCamera} className="absolute top-6 right-6 text-white bg-black/40 p-3 rounded-full backdrop-blur-md hover:bg-black/60"><X /></button>
       </div>
     </div>
   );
 
-  // 3. Result View (Enhanced)
+  // 3. Review Step (NEW: Retake vs Analyze)
+  if (previewImage) return (
+    <div className="fixed inset-0 z-50 bg-black flex flex-col">
+      <img src={previewImage} className="flex-1 w-full object-contain bg-black" />
+      <div className="h-32 bg-gray-900 px-6 flex items-center justify-between gap-4 shrink-0">
+        <button onClick={() => { setPreviewImage(null); handleStartCamera(); }} className="flex-1 py-4 bg-gray-800 text-white rounded-2xl font-bold flex items-center justify-center gap-2">
+          <RotateCcw size={18} /> Retake
+        </button>
+        <button onClick={() => processImage(previewImage)} className="flex-[2] py-4 bg-green-500 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,197,94,0.4)]">
+          <ScanLine size={20} /> Analyze Plant
+        </button>
+      </div>
+    </div>
+  );
+
+  // 4. Result View
   if (result) {
     const isCritical = result.severity === 'high';
     const themeColor = isCritical ? 'text-red-500' : result.severity === 'medium' ? 'text-orange-500' : 'text-green-500';
@@ -241,16 +253,17 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
 
     return (
       <div className="bg-gray-50 min-h-screen pb-32 overflow-y-auto font-sans">
-        <div className="sticky top-0 z-40 bg-white/90 backdrop-blur px-6 py-4 flex justify-between items-center shadow-sm">
+        <div className="sticky top-0 z-[60] bg-white/90 backdrop-blur px-6 py-4 flex justify-between items-center shadow-sm">
           <div className="flex items-center gap-2 text-gray-800 font-black uppercase text-xs tracking-widest"><Activity size={16} className={themeColor} /> Health Report</div>
-          {/* Thumbnail Image */}
+          {/* Thumbnail Image: Explicitly rendered */}
           <div className="flex items-center gap-3">
-            {image && <img src={image} className="w-8 h-8 rounded-full border border-gray-200 object-cover" />}
+            {image && <img src={image} className="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover" />}
             <button onClick={() => { setResult(null); setImage(null); }} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={18} /></button>
           </div>
         </div>
 
         <div className="p-6 space-y-6 max-w-lg mx-auto">
+          {/* ... Content ... */}
           <div className="animate-in fade-in slide-in-from-top-4">
             <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2 text-white ${bgTheme}`}>{result.severity} Severity • {result.confidence}% Conf.</span>
             <h1 className={`text-3xl font-black leading-tight ${themeColor}`}>{result.diagnosis}</h1>
@@ -263,13 +276,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
           </div>
 
           <div className="grid grid-cols-2 gap-3 animate-in fade-in delay-100">
-            <MetricCard
-              icon={Scale}
-              label="Health Score"
-              value={healthRating}
-              subValue={null}
-              color="purple"
-            />
+            <MetricCard icon={Scale} label="Health Score" value={healthRating} color="purple" />
             <MetricCard icon={Calendar} label="Harvest In" value={result.harvestWindow} color="green" />
             <MetricCard icon={Droplet} label="Nutrient Target" value={result.nutrientTargets?.ec || "N/A"} subValue={`pH: ${result.nutrientTargets?.ph || "--"}`} color="blue" />
             <MetricCard icon={Wind} label="VPD Target" value={result.environmentTargets?.vpd || "N/A"} subValue={`${result.environmentTargets?.temp || "--"} / ${result.environmentTargets?.rh || "--"}`} color="cyan" />
@@ -281,21 +288,16 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
             {result.preventionTips && result.preventionTips.length > 0 && <PreventionSection tips={result.preventionTips} />}
           </div>
 
-          {/* Action Buttons */}
           <div className="grid grid-cols-2 gap-4 pt-4">
-            <button onClick={handleSave} className="py-4 bg-gray-900 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform">
-              <Save size={18} /> Save to Journal
-            </button>
-            <button onClick={handleShare} className="py-4 bg-gray-100 text-gray-900 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-gray-200">
-              <Share2 size={18} /> Share Result
-            </button>
+            <button onClick={handleSave} className="py-4 bg-gray-900 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"><Save size={18} /> Save to Journal</button>
+            <button onClick={handleShare} className="py-4 bg-gray-100 text-gray-900 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-gray-200"><Share2 size={18} /> Share Result</button>
           </div>
         </div>
       </div>
     );
   }
 
-  // 4. Initial View (Main)
+  // 5. Initial View (Main)
   return (
     <div className="bg-gray-50 h-full pb-20 overflow-y-auto w-full absolute inset-0">
       <div className="bg-white px-6 pt-12 pb-8 rounded-b-[3rem] shadow-sm mb-6">
@@ -306,8 +308,6 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
 
       <div className="px-6 space-y-6 max-w-md mx-auto">
         <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 space-y-5">
-
-          {/* Strains Dropdown with Search */}
           <div className="relative">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Genetics</label>
             <div onClick={() => setShowStrainMenu(!showStrainMenu)} className="w-full bg-gray-50 p-4 rounded-xl font-bold text-gray-800 flex justify-between items-center cursor-pointer border border-transparent hover:border-green-200 transition-all">
@@ -316,30 +316,19 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
             </div>
             {showStrainMenu && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 p-2 max-h-64 overflow-y-auto animate-in fade-in slide-in-from-top-2">
-                <input
-                  className="w-full text-xs p-3 bg-gray-50 rounded-lg mb-2 outline-none font-bold"
-                  placeholder="Search Strains..."
-                  autoFocus
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+                <input className="w-full text-xs p-3 bg-gray-50 rounded-lg mb-2 outline-none font-bold" placeholder="Search Strains..." autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                 <div className="grid grid-cols-2 gap-2 mb-2 pb-2 border-b border-gray-50">
                   <button onClick={() => { setStrain("Auto-Detect"); setShowStrainMenu(false); }} className="p-2 bg-green-50 text-green-700 rounded-lg text-xs font-bold text-center">✨ Auto-Detect</button>
                   <button onClick={() => { setStrain("Custom Strain"); setShowStrainMenu(false); }} className="p-2 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold text-center">+ Custom</button>
                 </div>
-
-                {filteredStrains.length === 0 && <p className="text-center text-xs text-gray-400 py-2">No matches found</p>}
-
                 {filteredStrains.map(s => (
                   <button key={s.id} onClick={() => { setStrain(s.name); setShowStrainMenu(false); }} className="w-full text-left p-3 hover:bg-gray-50 rounded-lg text-sm font-bold text-gray-800 flex justify-between items-center group">
                     {s.name}
-                    <span className="text-[10px] text-gray-400 font-normal opacity-0 group-hover:opacity-100 transition-opacity">{s.type}</span>
                   </button>
                 ))}
               </div>
             )}
           </div>
-
           <div>
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Environment</label>
             <div className="flex bg-gray-100 p-1 rounded-xl">

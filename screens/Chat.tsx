@@ -57,8 +57,14 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   }, []);
 
   const handleSend = async (text: string = input) => {
-    // FIX: Mobile Chrome/iOS requires user interaction to resume audio context
-    if (window.speechSynthesis) window.speechSynthesis.resume();
+    // FIX: RESUME & PRIME (Aggressive)
+    if (window.speechSynthesis) {
+      window.speechSynthesis.resume();
+      // Force a tiny silent utterance to "wake up" the engine on user interaction
+      const primer = new SpeechSynthesisUtterance('');
+      primer.volume = 0;
+      window.speechSynthesis.speak(primer);
+    }
 
     if (!text.trim()) return;
 
@@ -78,10 +84,6 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       const botMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: responseText, timestamp: Date.now() };
       setMessages(prev => [...prev, botMsg]);
 
-      // Speak response if Live Mode is active OR if the user just asked via voice
-      // Note: isLive handles the "Continuous" loop, but we can also speak on single text reply if desired.
-      // For now, only speak if isLive is true as per original logic, 
-      // BUT make sure resume() was called above.
       if (isLive) {
         speakResponse(responseText);
       }
@@ -95,7 +97,13 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   };
 
   const startLiveSession = () => {
-    if (window.speechSynthesis) window.speechSynthesis.resume(); // Voice Unlock
+    if (window.speechSynthesis) {
+      window.speechSynthesis.resume();
+      // Force unlock immediately on the click
+      const primer = new SpeechSynthesisUtterance('');
+      primer.volume = 0;
+      window.speechSynthesis.speak(primer);
+    }
 
     if (!('webkitSpeechRecognition' in window)) {
       alert("Voice features require a supported browser (Chrome/Safari/Android).");
@@ -125,15 +133,12 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
         setIsUserSpeaking(false);
         setLiveTranscript("Thinking...");
 
-        // PRIME/KEEP-ALIVE: Trigger a silent speak to keep audio context active on mobile
-        // while waiting for the async Gemini API response.
-        if (window.speechSynthesis) {
-          const keepAlive = new SpeechSynthesisUtterance('');
-          keepAlive.volume = 0;
-          window.speechSynthesis.speak(keepAlive);
-        }
+        // Note: We do NOT prime here anymore because this is an async callback (not user gesture).
+        // Trust the primer from the initial startLiveSession click or rely on the fact 
+        // that continuous interaction keeps it alive.
+        // Actually, on Android Chrome, the initial click in startLiveSession should invoke
+        // a "silent speak" to unlock the engine for the session.
 
-        // handleSend will trigger speakResponse -> which triggers recognition.start again
         handleSend(transcript);
       }
     };
