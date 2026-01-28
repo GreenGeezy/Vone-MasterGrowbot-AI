@@ -192,7 +192,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
       </div>
 
       {/* SCROLLABLE CONTENT (Increased Padding for Footer) */}
-      <div className="flex-1 overflow-y-auto px-6 pb-48 pt-2">
+      <div className="flex-1 overflow-y-auto px-6 pb-32 pt-2">
 
         {/* BENEFITS LIST */}
         <div className="space-y-5 mb-8">
