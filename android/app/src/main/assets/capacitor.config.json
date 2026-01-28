@@ -1,0 +1,18 @@
+{
+	"appId": "com.mastergrowbot.app",
+	"appName": "MasterGrowbot AI",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https"
+	},
+	"plugins": {
+		"GoogleAuth": {
+			"scopes": [
+				"profile",
+				"email"
+			],
+			"serverClientId": "360575943200-mq17ju3a221117rgu96v7as1b4o49rq8.apps.googleusercontent.com",
+			"forceCodeForRefreshToken": true
+		}
+	}
+}
