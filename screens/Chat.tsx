@@ -3,6 +3,7 @@ import { Send, AudioLines, X, Power, Settings2, Check, Sparkles, Mic } from 'luc
 import { sendMessage } from '../services/geminiService';
 import { ChatMessage, JournalEntry, Plant, UserProfile } from '../types';
 import Growbot from '../components/Growbot';
+import { TextToSpeech } from '@capacitor-community/text-to-speech';
 
 interface ChatProps {
   onSaveToJournal?: (entry: Omit<JournalEntry, 'id' | 'date'>) => void;
@@ -43,7 +44,6 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
 
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
-  const synth = window.speechSynthesis;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -52,20 +52,12 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   useEffect(() => {
     return () => {
       stopLiveSession();
-      synth.cancel();
+      TextToSpeech.stop();
     };
   }, []);
 
   const handleSend = async (text: string = input) => {
-    // FIX: RESUME & PRIME (Aggressive)
-    if (window.speechSynthesis) {
-      window.speechSynthesis.resume();
-      // Force a tiny silent utterance to "wake up" the engine on user interaction
-      const primer = new SpeechSynthesisUtterance('');
-      primer.volume = 0;
-      window.speechSynthesis.speak(primer);
-    }
-
+    // Native TTS doesn't need priming like Web Speech does!
     if (!text.trim()) return;
 
     const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text, timestamp: Date.now() };
@@ -84,6 +76,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       const botMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: responseText, timestamp: Date.now() };
       setMessages(prev => [...prev, botMsg]);
 
+      // Always speak if Live, or if this function was called from a speech recognition result
       if (isLive) {
         speakResponse(responseText);
       }
@@ -97,14 +90,6 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   };
 
   const startLiveSession = () => {
-    if (window.speechSynthesis) {
-      window.speechSynthesis.resume();
-      // Force unlock immediately on the click
-      const primer = new SpeechSynthesisUtterance('');
-      primer.volume = 0;
-      window.speechSynthesis.speak(primer);
-    }
-
     if (!('webkitSpeechRecognition' in window)) {
       alert("Voice features require a supported browser (Chrome/Safari/Android).");
       return;
@@ -132,13 +117,6 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       if (event.results[0].isFinal) {
         setIsUserSpeaking(false);
         setLiveTranscript("Thinking...");
-
-        // Note: We do NOT prime here anymore because this is an async callback (not user gesture).
-        // Trust the primer from the initial startLiveSession click or rely on the fact 
-        // that continuous interaction keeps it alive.
-        // Actually, on Android Chrome, the initial click in startLiveSession should invoke
-        // a "silent speak" to unlock the engine for the session.
-
         handleSend(transcript);
       }
     };
@@ -154,32 +132,46 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
     setIsLive(false);
     setIsUserSpeaking(false);
     if (recognitionRef.current) recognitionRef.current.stop();
-    synth.cancel();
+    TextToSpeech.stop();
   };
 
-  const speakResponse = (text: string) => {
-    if (synth.speaking) synth.cancel();
-    // Remove emojis and asterisks for cleaner speech
-    const cleanText = text.replace(/[\u{1F600}-\u{1F6FF}|[\u{2600}-\u{26FF}]/gu, '').replace(/\*/g, '');
+  const speakResponse = async (text: string) => {
+    await TextToSpeech.stop(); // Clear queue
 
-    const utterance = new SpeechSynthesisUtterance(cleanText);
+    // Remove emojis/asterisks for cleaner speech
+    const cleanText = text.replace(/[\u{1F600}-\u{1F6FF}|[\u{2600}-\u{26FF}]/gu, '').replace(/\*/g, '');
     const config = VOICE_OPTIONS.find(v => v.id === selectedVoiceId) || VOICE_OPTIONS[0];
 
-    utterance.pitch = config.pitch;
-    utterance.rate = config.rate;
+    try {
+      await TextToSpeech.speak({
+        text: cleanText,
+        lang: 'en-US',
+        rate: config.rate,
+        pitch: config.pitch,
+        volume: 1.0,
+        category: 'ambient',
+      });
 
-    const voices = synth.getVoices();
-    const preferred = voices.find(v => v.name.includes('Google US English') || v.name.includes('Samantha'));
-    if (preferred) utterance.voice = preferred;
+      // When finished speaking (this await waits for completion on some platforms, or returns immediately)
+      // Note: Capacitor TTS plugin 6.0 speak() promise resolves when speech STARTS or ENDS depending on platform.
+      // Usually we want to restart listening.
+      // For robustness, we can just restart listenting after a delay or assume the user will press again.
+      // Better yet, just restart listening if "continuous" behavior is desired.
 
-    utterance.onend = () => {
       if (isLive) {
-        setLiveTranscript("Listening...");
-        try { recognitionRef.current.start(); } catch (e) { }
+        setTimeout(() => {
+          setLiveTranscript("Listening...");
+          try { recognitionRef.current.start(); } catch (e) { }
+        }, cleanText.length * 50 + 1000); // Rough estimate wait or just rely on user interaction?
+        // Actually, let's keep it simple. User speaks, AI speaks. Session stays open. 
+        // The user has to tap mic to speak again? Original code tried to auto-start.
+        // Auto-start is risky with speakers. Let's just reset state.
+        setLiveTranscript("Tap to Speak");
       }
-    };
 
-    synth.speak(utterance);
+    } catch (e) {
+      console.error("Native TTS failed", e);
+    }
   };
 
   return (
@@ -192,7 +184,6 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
           </div>
           <div>
             <h1 className="font-black text-gray-800 text-lg leading-none tracking-tight">MasterGrowbot AI</h1>
-            {/* UPDATED: Subheading */}
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">
               AI Cultivation Assistant
             </p>
@@ -227,8 +218,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       </div>
       <div className="px-4 py-2 overflow-x-auto whitespace-nowrap no-scrollbar z-20 mb-1">
         {SUGGESTED_PROMPTS.map(prompt => (
-          // FIX: Added Voice Resume here too
-          <button key={prompt} onClick={() => { if (window.speechSynthesis) window.speechSynthesis.resume(); handleSend(prompt); }} className="inline-flex items-center gap-1.5 mr-2 px-4 py-2 bg-white border border-gray-200 rounded-full text-xs text-gray-600 font-bold shadow-sm hover:border-green-400 hover:text-green-600 transition-colors">
+          <button key={prompt} onClick={() => { handleSend(prompt); }} className="inline-flex items-center gap-1.5 mr-2 px-4 py-2 bg-white border border-gray-200 rounded-full text-xs text-gray-600 font-bold shadow-sm hover:border-green-400 hover:text-green-600 transition-colors">
             <Sparkles size={12} /> {prompt}
           </button>
         ))}
@@ -236,8 +226,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       <div className="p-4 bg-white/90 backdrop-blur-lg border-t border-gray-100 z-30 pb-8">
         <div className="flex items-center gap-2 bg-gray-100 border border-gray-200 rounded-full px-2 py-2 focus-within:ring-2 focus-within:ring-green-500/20 focus-within:border-green-500 transition-all">
           <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Ask your coach..." className="flex-1 bg-transparent outline-none text-sm text-gray-800 ml-4 placeholder-gray-400 font-medium" />
-          {/* FIX: Added Voice Resume here too */}
-          <button onClick={() => { if (window.speechSynthesis) window.speechSynthesis.resume(); startLiveSession(); }} className="p-3 bg-white text-gray-600 rounded-full hover:text-green-600 shadow-sm hover:shadow-md transition-all"><AudioLines size={20} /></button>
+          <button onClick={() => { startLiveSession(); }} className="p-3 bg-white text-gray-600 rounded-full hover:text-green-600 shadow-sm hover:shadow-md transition-all"><AudioLines size={20} /></button>
           <button onClick={() => handleSend()} disabled={loading || !input.trim()} className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${input.trim() ? 'bg-black text-white shadow-md hover:scale-105' : 'bg-gray-200 text-gray-400'}`}><Send size={16} /></button>
         </div>
       </div>

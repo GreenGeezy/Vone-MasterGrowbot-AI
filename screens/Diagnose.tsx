@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Upload, X, Zap, Activity, CheckSquare, Square, ChevronRight, Droplet, Calendar, Scale, ShieldAlert, Wind, CheckCircle, Share2, Save, RotateCcw, ScanLine } from 'lucide-react';
+import { Camera as CameraIcon, Upload, X, Zap, Activity, CheckSquare, Square, ChevronRight, Droplet, Calendar, Scale, ShieldAlert, Wind, CheckCircle, Share2, Save, RotateCcw, ScanLine } from 'lucide-react';
 import { diagnosePlant, ExtendedDiagnosisResult } from '../services/geminiService';
 import { Plant } from '../types';
 import Growbot from '../components/Growbot';
 import { STRAIN_DATABASE } from '../data/strains';
 import { Share } from '@capacitor/share';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 
 /**
  * Health Score Mapping help
@@ -57,18 +58,12 @@ interface DiagnoseProps {
 
 const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) => {
   const [image, setImage] = useState<string | null>(null);
-  const [previewImage, setPreviewImage] = useState<string | null>(null); // NEW: For Review Step
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ExtendedDiagnosisResult | null>(null);
   const [strain, setStrain] = useState<string>(plant?.strain || '');
   const [growMethod, setGrowMethod] = useState<'Indoor' | 'Outdoor' | 'Greenhouse'>('Indoor');
   const [showStrainMenu, setShowStrainMenu] = useState(false);
-
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const [showCamera, setShowCamera] = useState(false);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [timeLeft, setTimeLeft] = useState(15);
@@ -84,7 +79,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
 
   const processImage = async (dataUrl: string) => {
     setImage(dataUrl);
-    setPreviewImage(null); // Clear preview once processing starts
+    setPreviewImage(null);
     setLoading(true);
     setResult(null);
     try {
@@ -97,56 +92,44 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
     }
   };
 
+  // ----------------------------------------------------
+  // NATIVE CAMERA & UPLOAD LOGIC (Capacitor)
+  // ----------------------------------------------------
   const handleStartCamera = async () => {
     try {
-      // Force environment facing mode for rear camera
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { exact: 'environment' }
-        }
-      }).catch(() => navigator.mediaDevices.getUserMedia({ video: true })); // Fallback
+      const photo = await Camera.getPhoto({
+        quality: 90,
+        allowEditing: false, // Set to true if you want native crop
+        resultType: CameraResultType.DataUrl,
+        source: CameraSource.Camera
+      });
 
-      streamRef.current = stream;
-      setShowCamera(true);
-    } catch (err) {
-      cameraInputRef.current?.click();
-    }
-  };
-
-  const stopCamera = () => {
-    if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
-    setShowCamera(false);
-  };
-
-  const handleCapture = () => {
-    if (videoRef.current) {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
-      canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-
-      stopCamera();
-      setPreviewImage(dataUrl); // GO TO REVIEW STEP
-    }
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      const file = e.target.files[0];
-      // STRICT: Ensure only images are processed (No Video)
-      if (!file.type.startsWith('image/')) {
-        alert("Please select a photo. Video analysis is not supported.");
-        return;
+      if (photo.dataUrl) {
+        setPreviewImage(photo.dataUrl);
       }
-
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreviewImage(reader.result as string); // ALSO GO TO REVIEW STEP FOR GALLERY
-      };
-      reader.readAsDataURL(file);
+    } catch (err) {
+      // User cancelled or no permissions
+      console.log("Camera cancelled");
     }
   };
+
+  const handleGalleryUpload = async () => {
+    try {
+      const photo = await Camera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: CameraResultType.DataUrl,
+        source: CameraSource.Photos // Force Gallery
+      });
+
+      if (photo.dataUrl) {
+        setPreviewImage(photo.dataUrl);
+      }
+    } catch (err) {
+      console.log("Gallery cancelled");
+    }
+  };
+
 
   const handleShare = async () => {
     if (!result) return;
@@ -184,16 +167,11 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
   // Filter Strains
   const filteredStrains = STRAIN_DATABASE.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // 1. Loading State (UPDATED: Fullscreen Image + Overlay)
+  // 1. Loading State (Fullscreen)
   if (loading) return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
-      {/* Full Screen Background Image */}
+    <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center">
       {image && <img src={image} className="absolute inset-0 w-full h-full object-cover opacity-50" />}
-
-      {/* Pulse Overlay */}
       <div className="absolute inset-0 bg-green-500/10 animate-pulse"></div>
-
-      {/* Scanning Line */}
       <div className="absolute top-0 left-0 w-full h-2 bg-green-400 shadow-[0_0_20px_rgba(74,222,128,1)] animate-[scan_2s_ease-in-out_infinite] z-10"></div>
 
       <div className="relative z-20 text-center p-8 bg-black/60 rounded-3xl backdrop-blur-md border border-white/10 m-6">
@@ -205,46 +183,28 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
     </div>
   );
 
-  // 2. Camera View
-  if (showCamera) return (
-    <div className="fixed inset-0 z-[60] bg-black">
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        controls={false} // CRITICAL
-        className="absolute inset-0 w-full h-full object-cover z-0"
-        style={{ pointerEvents: 'none' }}
-      />
-      <div className="relative z-10 w-full h-full flex flex-col justify-between py-12">
-        <p className="text-center text-white/80 font-bold text-sm drop-shadow-md mt-4">Position plant in frame</p>
-        <div className="flex justify-center items-center gap-8 pb-12">
-          <button onClick={handleCapture} className="w-20 h-20 bg-white/20 rounded-full border-4 border-white backdrop-blur-sm active:scale-95 transition-transform flex items-center justify-center cursor-pointer">
-            <div className="w-16 h-16 bg-white rounded-full"></div>
-          </button>
-        </div>
-        <button onClick={stopCamera} className="absolute top-6 right-6 text-white bg-black/40 p-3 rounded-full backdrop-blur-md hover:bg-black/60"><X /></button>
-      </div>
-    </div>
-  );
-
-  // 3. Review Step (NEW: Retake vs Analyze)
+  // 2. Review Step (Retake vs Analyze)
+  // Ensure strict Z-Index and Layout
   if (previewImage) return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col">
-      <img src={previewImage} className="flex-1 w-full object-contain bg-black" />
-      <div className="h-32 bg-gray-900 px-6 flex items-center justify-between gap-4 shrink-0">
-        <button onClick={() => { setPreviewImage(null); handleStartCamera(); }} className="flex-1 py-4 bg-gray-800 text-white rounded-2xl font-bold flex items-center justify-center gap-2">
+    <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center h-screen w-screen overflow-hidden">
+      {/* Main Image */}
+      <div className="flex-1 w-full bg-black flex items-center justify-center overflow-hidden relative">
+        <img src={previewImage} className="max-w-full max-h-full object-contain" />
+      </div>
+
+      {/* Bottom Controls */}
+      <div className="w-full bg-gray-900/90 backdrop-blur-md p-6 pb-12 flex items-center justify-between gap-4 shrink-0 absolute bottom-0 left-0 right-0 z-[110]">
+        <button onClick={() => { setPreviewImage(null); handleStartCamera(); }} className="flex-1 py-4 bg-gray-800 text-white rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform">
           <RotateCcw size={18} /> Retake
         </button>
-        <button onClick={() => processImage(previewImage)} className="flex-[2] py-4 bg-green-500 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,197,94,0.4)]">
+        <button onClick={() => processImage(previewImage)} className="flex-[2] py-4 bg-green-500 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,197,94,0.4)] active:scale-95 transition-transform">
           <ScanLine size={20} /> Analyze Plant
         </button>
       </div>
     </div>
   );
 
-  // 4. Result View
+  // 3. Result View
   if (result) {
     const isCritical = result.severity === 'high';
     const themeColor = isCritical ? 'text-red-500' : result.severity === 'medium' ? 'text-orange-500' : 'text-green-500';
@@ -255,7 +215,6 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
       <div className="bg-gray-50 min-h-screen pb-32 overflow-y-auto font-sans">
         <div className="sticky top-0 z-[60] bg-white/90 backdrop-blur px-6 py-4 flex justify-between items-center shadow-sm">
           <div className="flex items-center gap-2 text-gray-800 font-black uppercase text-xs tracking-widest"><Activity size={16} className={themeColor} /> Health Report</div>
-          {/* Thumbnail Image: Explicitly rendered */}
           <div className="flex items-center gap-3">
             {image && <img src={image} className="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover" />}
             <button onClick={() => { setResult(null); setImage(null); }} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={18} /></button>
@@ -263,7 +222,6 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
         </div>
 
         <div className="p-6 space-y-6 max-w-lg mx-auto">
-          {/* ... Content ... */}
           <div className="animate-in fade-in slide-in-from-top-4">
             <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2 text-white ${bgTheme}`}>{result.severity} Severity • {result.confidence}% Conf.</span>
             <h1 className={`text-3xl font-black leading-tight ${themeColor}`}>{result.diagnosis}</h1>
@@ -297,7 +255,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
     );
   }
 
-  // 5. Initial View (Main)
+  // 4. Initial View (Main)
   return (
     <div className="bg-gray-50 h-full pb-20 overflow-y-auto w-full absolute inset-0">
       <div className="bg-white px-6 pt-12 pb-8 rounded-b-[3rem] shadow-sm mb-6">
@@ -337,11 +295,10 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
           </div>
         </div>
 
-        <button onClick={handleStartCamera} className="w-full bg-gray-900 text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-gray-200 flex items-center justify-center gap-3 active:scale-95 transition-transform"><Camera size={24} className="text-green-400" /> Scan with Camera</button>
-        <button onClick={() => galleryInputRef.current?.click()} className="w-full bg-white text-gray-600 py-4 rounded-[2rem] font-bold border border-gray-200 flex items-center justify-center gap-2"><Upload size={18} /> Upload from Gallery</button>
+        {/* UPDATED: Native Camera Triggers */}
+        <button onClick={handleStartCamera} className="w-full bg-gray-900 text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-gray-200 flex items-center justify-center gap-3 active:scale-95 transition-transform"><CameraIcon size={24} className="text-green-400" /> Scan with Camera</button>
+        <button onClick={handleGalleryUpload} className="w-full bg-white text-gray-600 py-4 rounded-[2rem] font-bold border border-gray-200 flex items-center justify-center gap-2"><Upload size={18} /> Upload from Gallery</button>
       </div>
-      <input type="file" ref={cameraInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleFileSelect} />
-      <input type="file" ref={galleryInputRef} accept="image/*" className="hidden" onChange={handleFileSelect} />
     </div>
   );
 };
