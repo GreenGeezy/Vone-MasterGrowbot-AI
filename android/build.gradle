@@ -9,12 +9,26 @@ buildscript {
     }
 }
 
-apply from: 'variables.gradle'  // FIXED: This line was missing
+apply from: 'variables.gradle'
 
 allprojects {
     repositories {
         google()
         mavenCentral()
+    }
+}
+ 
+// FORCE JAVA 17 ACROSS ALL PLUGINS
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty("android")) {
+            project.android {
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
+                }
+            }
+        }
     }
 }
 
