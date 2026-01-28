@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, Check, Shield, Star, Zap, ArrowRight, Lock, 
-  LifeBuoy, Headphones, Book, Dna, Clock 
+import {
+  X, Check, Shield, Star, Zap, ArrowRight, Lock,
+  LifeBuoy, Headphones, Dna, Clock
 } from 'lucide-react';
 import { Purchases, PurchasesPackage, PACKAGE_TYPE } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
@@ -29,20 +29,20 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
         if (!Capacitor.isNativePlatform()) {
           // Web Mock for Testing UI/UX
           const mockPackages = [
-            { 
-              identifier: 'mg_weekly', 
-              packageType: PACKAGE_TYPE.WEEKLY, 
-              product: { priceString: '$7.99', title: 'Weekly Access', description: 'Short term help' } 
+            {
+              identifier: 'mg_weekly',
+              packageType: PACKAGE_TYPE.WEEKLY,
+              product: { priceString: '$7.99', title: 'Weekly Access', description: 'Short term help' }
             } as any,
-            { 
-              identifier: 'mg_monthly', 
-              packageType: PACKAGE_TYPE.MONTHLY, 
-              product: { priceString: '$29.99', title: 'Monthly Pro', description: 'Ongoing optimization' } 
+            {
+              identifier: 'mg_monthly',
+              packageType: PACKAGE_TYPE.MONTHLY,
+              product: { priceString: '$29.99', title: 'Monthly Pro', description: 'Ongoing optimization' }
             } as any,
-            { 
-              identifier: 'mg_annual', 
-              packageType: PACKAGE_TYPE.ANNUAL, 
-              product: { priceString: '$199.99', title: 'Annual Saver', description: 'Best value year round' } 
+            {
+              identifier: 'mg_annual',
+              packageType: PACKAGE_TYPE.ANNUAL,
+              product: { priceString: '$199.99', title: 'Annual Saver', description: 'Best value year round' }
             } as any,
           ];
           setPackages(mockPackages);
@@ -57,7 +57,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
           const offerings = await Purchases.getOfferings();
           if (offerings.current && offerings.current.availablePackages.length > 0) {
             setPackages(offerings.current.availablePackages);
-            
+
             // Smart Pre-selection: Default to Monthly, fallback to first available
             const monthly = offerings.current.availablePackages.find(p => p.packageType === PACKAGE_TYPE.MONTHLY);
             setSelectedPkgIdentifier(monthly ? monthly.identifier : offerings.current.availablePackages[0].identifier);
@@ -140,11 +140,11 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
   // --- 3. HELPER VARS FOR DYNAMIC TEXT ---
 
   const selectedPkg = packages.find(p => p.identifier === selectedPkgIdentifier);
-  
+
   // Dynamic Price Formatting (Compliance Requirement)
   const getTrialText = () => {
     if (!selectedPkg) return "Select a plan";
-    
+
     const price = selectedPkg.product.priceString;
     let period = "month";
     if (selectedPkg.packageType === PACKAGE_TYPE.WEEKLY) period = "week";
@@ -163,149 +163,147 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
 
   return (
     <div className="fixed inset-0 bg-white z-[60] flex flex-col overflow-hidden">
-      
+
       {/* HEADER IMAGE & CLOSE */}
       <div className="relative h-64 bg-green-900 flex-shrink-0">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1596791836043-982c75908b89?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80')] bg-cover bg-center opacity-40"></div>
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white"></div>
-        
-        <button 
-          onClick={onSkip} 
+
+        <button
+          onClick={onSkip}
           className="absolute top-12 right-6 bg-black/20 hover:bg-black/40 text-white p-2 rounded-full backdrop-blur-md z-50 transition-colors"
         >
           <X size={20} />
         </button>
 
         <div className="absolute bottom-4 left-6 right-6">
-           <div className="flex items-center gap-2 mb-2">
-              <span className="bg-black/80 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 backdrop-blur-md">
-                 <Shield size={10} className="text-green-400" /> Official Release
-              </span>
-           </div>
-           <h1 className="text-3xl font-black text-gray-900 leading-tight">
-             Unlock Your Best Harvest with Expert AI
-           </h1>
-           <p className="text-sm font-medium text-gray-600 mt-1">
-             Mitigate risks and optimize yields to avoid crop losses.
-           </p>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="bg-black/80 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 backdrop-blur-md">
+              <Shield size={10} className="text-green-400" /> Trusted by Elite Growers Worldwide
+            </span>
+          </div>
+          <h1 className="text-3xl font-black text-gray-900 leading-tight">
+            Rescue Your Grow Instantly with AI Power
+          </h1>
+          <p className="text-sm font-medium text-gray-600 mt-1">
+            Snap a pic for pest detection, get voice-guided fixes, and boost your yields without guesswork.
+          </p>
         </div>
       </div>
 
       {/* SCROLLABLE CONTENT (Increased Padding for Footer) */}
       <div className="flex-1 overflow-y-auto px-6 pb-48 pt-2">
-        
+
         {/* BENEFITS LIST */}
         <div className="space-y-5 mb-8">
-           {/* Benefit 1 */}
-           <div className="flex gap-4 items-start">
-              <div className="p-3 bg-red-50 text-red-500 rounded-2xl flex-shrink-0"><LifeBuoy size={24} /></div>
-              <div>
-                 <h3 className="font-bold text-gray-900 text-sm">Unlimited AI Diagnosis</h3>
-                 <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Stop guessing—identify pests, diseases, and deficiencies instantly to prevent crop loss.</p>
-              </div>
-           </div>
+          {/* Benefit 1 */}
+          <div className="flex gap-4 items-start">
+            <div className="p-3 bg-red-50 text-red-500 rounded-2xl flex-shrink-0"><LifeBuoy size={24} /></div>
+            <div>
+              <h3 className="font-bold text-gray-900 text-sm">Unlimited AI Diagnosis</h3>
+              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Stop guessing—identify pests, diseases, and deficiencies instantly to prevent crop loss.</p>
+            </div>
+          </div>
 
-           {/* Benefit 2 */}
-           <div className="flex gap-4 items-start">
-              <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl flex-shrink-0"><Headphones size={24} /></div>
-              <div>
-                 <h3 className="font-bold text-gray-900 text-sm">24/7 Expert Chatbot</h3>
-                 <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Hands-free voice coach for real-time answers during grows, saving time and effort.</p>
-              </div>
-           </div>
+          {/* Benefit 2 */}
+          <div className="flex gap-4 items-start">
+            <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl flex-shrink-0"><Headphones size={24} /></div>
+            <div>
+              <h3 className="font-bold text-gray-900 text-sm">24/7 Expert Chatbot</h3>
+              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Hands-free voice coach for real-time answers during grows, saving time and effort.</p>
+            </div>
+          </div>
 
-           {/* Benefit 3 */}
-           <div className="flex gap-4 items-start">
-              <div className="p-3 bg-yellow-50 text-yellow-600 rounded-2xl flex-shrink-0"><Zap size={24} /></div>
-              <div>
-                 <h3 className="font-bold text-gray-900 text-sm">Personalized Grow Plan</h3>
-                 <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Tailored tasks to your setup—avoid mistakes and maximize your harvest potential.</p>
-              </div>
-           </div>
+          {/* Benefit 3 */}
+          <div className="flex gap-4 items-start">
+            <div className="p-3 bg-yellow-50 text-yellow-600 rounded-2xl flex-shrink-0"><Zap size={24} /></div>
+            <div>
+              <h3 className="font-bold text-gray-900 text-sm">Personalized Grow Plan</h3>
+              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Tailored tasks to your setup—avoid mistakes and maximize your harvest potential.</p>
+            </div>
+          </div>
 
-           {/* Benefit 4 */}
-           <div className="flex gap-4 items-start">
-              <div className="p-3 bg-purple-50 text-purple-500 rounded-2xl flex-shrink-0"><Book size={24} /></div>
-              <div>
-                 <h3 className="font-bold text-gray-900 text-sm">Digital Living Journal</h3>
-                 <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Track trends and predict yields—turn data into insights for better grows.</p>
-              </div>
-           </div>
+          {/* Benefit 4 (UPDATED) */}
+          <div className="flex gap-4 items-start">
+            <div className="p-3 bg-purple-50 text-purple-500 rounded-2xl flex-shrink-0"><Dna size={24} /></div>
+            <div>
+              <h3 className="font-bold text-gray-900 text-sm">Searchable Strain Database</h3>
+              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Over 100 profiles to grow award-winning buds.</p>
+            </div>
+          </div>
 
-           {/* Benefit 5 */}
-           <div className="flex gap-4 items-start">
-              <div className="p-3 bg-green-50 text-green-500 rounded-2xl flex-shrink-0"><Dna size={24} /></div>
-              <div>
-                 <h3 className="font-bold text-gray-900 text-sm">Verified Strain Intelligence</h3>
-                 <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Strain-specific advice to handle variations ensuring peak potency.</p>
-              </div>
-           </div>
+          {/* Benefit 5 */}
+          <div className="flex gap-4 items-start">
+            <div className="p-3 bg-green-50 text-green-500 rounded-2xl flex-shrink-0"><Dna size={24} /></div>
+            <div>
+              <h3 className="font-bold text-gray-900 text-sm">Verified Strain Intelligence</h3>
+              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Strain-specific advice to handle variations ensuring peak potency.</p>
+            </div>
+          </div>
         </div>
 
         {/* PLAN CARDS */}
         <h2 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 text-center">Select Your Plan</h2>
         <div className="grid grid-cols-1 gap-4">
-           {packages.map((pkg) => {
-             const isSelected = selectedPkgIdentifier === pkg.identifier;
-             const isMonthly = pkg.packageType === PACKAGE_TYPE.MONTHLY;
-             const isAnnual = pkg.packageType === PACKAGE_TYPE.ANNUAL;
-             
-             return (
-               <div 
-                 key={pkg.identifier}
-                 onClick={() => setSelectedPkgIdentifier(pkg.identifier)}
-                 className={`relative rounded-2xl border-2 p-4 transition-all active:scale-[0.98] ${
-                   isSelected ? 'border-green-500 bg-green-50/50' : 'border-gray-100 bg-white'
-                 }`}
-               >
-                 {isMonthly && (
-                   <div className="absolute -top-3 left-4 bg-green-500 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full flex items-center gap-1 shadow-md">
-                     <Star size={10} fill="currentColor" /> Most Popular
-                   </div>
-                 )}
-                 {isAnnual && (
-                   <div className="absolute -top-3 left-4 bg-black text-white text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-md">
-                     Best Value
-                   </div>
-                 )}
+          {packages.map((pkg) => {
+            const isSelected = selectedPkgIdentifier === pkg.identifier;
+            const isMonthly = pkg.packageType === PACKAGE_TYPE.MONTHLY;
+            const isAnnual = pkg.packageType === PACKAGE_TYPE.ANNUAL;
 
-                 <div className="flex justify-between items-center">
-                    <div>
-                       <h3 className={`font-black text-base ${isSelected ? 'text-green-800' : 'text-gray-800'}`}>
-                         {pkg.product.title}
-                       </h3>
-                       <p className="text-xs text-gray-500 font-medium mt-1">
-                          {isMonthly ? "Flexible. Cancel anytime." : isAnnual ? "Save 45% vs Monthly" : "Short-term access"}
-                       </p>
+            return (
+              <div
+                key={pkg.identifier}
+                onClick={() => setSelectedPkgIdentifier(pkg.identifier)}
+                className={`relative rounded-2xl border-2 p-4 transition-all active:scale-[0.98] ${isSelected ? 'border-green-500 bg-green-50/50' : 'border-gray-100 bg-white'
+                  }`}
+              >
+                {isMonthly && (
+                  <div className="absolute -top-3 left-4 bg-green-500 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full flex items-center gap-1 shadow-md">
+                    <Star size={10} fill="currentColor" /> Most Popular
+                  </div>
+                )}
+                {isAnnual && (
+                  <div className="absolute -top-3 left-4 bg-black text-white text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-md">
+                    Best Value
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className={`font-black text-base ${isSelected ? 'text-green-800' : 'text-gray-800'}`}>
+                      {pkg.product.title}
+                    </h3>
+                    <p className="text-xs text-gray-500 font-medium mt-1">
+                      {isMonthly ? "Flexible. Cancel anytime." : isAnnual ? "Save 45% vs Monthly" : "Short-term access"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className={`block font-black text-xl ${isSelected ? 'text-green-700' : 'text-gray-900'}`}>
+                      {pkg.product.priceString}
+                    </span>
+                    <div className={`w-5 h-5 rounded-full border-2 ml-auto mt-2 flex items-center justify-center ${isSelected ? 'border-green-500 bg-green-500' : 'border-gray-300'
+                      }`}>
+                      {isSelected && <Check size={12} className="text-white" />}
                     </div>
-                    <div className="text-right">
-                       <span className={`block font-black text-xl ${isSelected ? 'text-green-700' : 'text-gray-900'}`}>
-                         {pkg.product.priceString}
-                       </span>
-                       <div className={`w-5 h-5 rounded-full border-2 ml-auto mt-2 flex items-center justify-center ${
-                         isSelected ? 'border-green-500 bg-green-500' : 'border-gray-300'
-                       }`}>
-                         {isSelected && <Check size={12} className="text-white" />}
-                       </div>
-                    </div>
-                 </div>
-               </div>
-             );
-           })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {/* FOOTER (Sticky CTA) */}
       <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-6 pb-8 z-50 rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-        
+
         {/* Visual Timeline (Compliance) */}
         <div className="flex items-center justify-center gap-2 mb-4 text-[10px] font-bold text-gray-500 uppercase tracking-wide">
-           <span className="flex items-center gap-1 text-green-600"><Clock size={12} /> Days 1-3: Free</span>
-           <ArrowRight size={12} className="text-gray-300" />
-           <span className="flex items-center gap-1"><Lock size={12} /> Day 4+: Auto-Bill</span>
+          <span className="flex items-center gap-1 text-green-600"><Clock size={12} /> Days 1-3: Free</span>
+          <ArrowRight size={12} className="text-gray-300" />
+          <span className="flex items-center gap-1"><Lock size={12} /> Day 4+: Auto-Bill</span>
         </div>
 
-        <button 
+        <button
           onClick={handleStartTrial}
           disabled={isPurchasing || !selectedPkgIdentifier}
           className="w-full bg-green-600 text-white font-black text-lg py-4 rounded-2xl shadow-xl shadow-green-200 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:shadow-none"
@@ -316,19 +314,19 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
             <>Start Your Free 3-Day Trial Now <ArrowRight strokeWidth={3} size={20} /></>
           )}
         </button>
-        
+
         {/* Compliance Text Block */}
         <div className="text-center mt-4 space-y-3">
           {selectedPkg && (
-             <div className="bg-gray-50 rounded-lg p-2 inline-block">
-                <p className="text-[10px] text-gray-600 font-bold leading-tight">
-                  {getTrialText()} unless canceled.
-                </p>
-             </div>
+            <div className="bg-gray-50 rounded-lg p-2 inline-block">
+              <p className="text-[10px] text-gray-600 font-bold leading-tight">
+                {getTrialText()} unless canceled.
+              </p>
+            </div>
           )}
-          
+
           <p className="text-[9px] text-gray-400 font-medium leading-relaxed max-w-xs mx-auto">
-            Recurring billing. Cancel anytime in your settings. Family Sharing enabled. 
+            Recurring billing. Cancel anytime in your settings. Family Sharing enabled.
             By continuing, you agree to our Terms.
           </p>
 

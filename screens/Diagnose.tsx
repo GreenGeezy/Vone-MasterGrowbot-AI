@@ -52,7 +52,7 @@ const Diagnose: React.FC<{ plant?: Plant, onBack?: () => void }> = ({ plant, onB
     setImage(dataUrl); setLoading(true); setResult(null);
     try { const diagnosis = await diagnosePlant(dataUrl, { strain: strain === 'Leave Blank' ? undefined : strain, growMethod }); setResult(diagnosis); } catch (e) { alert("Analysis failed. Please check connection."); } finally { setLoading(false); }
   };
-  
+
   const handleStartCamera = async () => {
     try { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); streamRef.current = stream; setShowCamera(true); } catch (err) { cameraInputRef.current?.click(); }
   };
@@ -60,7 +60,16 @@ const Diagnose: React.FC<{ plant?: Plant, onBack?: () => void }> = ({ plant, onB
   const handleCapture = () => { if (videoRef.current) { const canvas = document.createElement('canvas'); canvas.width = videoRef.current.videoWidth; canvas.height = videoRef.current.videoHeight; canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0); processImage(canvas.toDataURL('image/jpeg', 0.85)); stopCamera(); } };
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files?.[0]) { const reader = new FileReader(); reader.onloadend = () => processImage(reader.result as string); reader.readAsDataURL(e.target.files[0]); } };
 
-  if (showCamera) return ( <div className="fixed inset-0 z-[60] bg-black"><video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" /><button onClick={handleCapture} className="absolute bottom-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-white rounded-full border-4 border-gray-300" /><button onClick={stopCamera} className="absolute top-6 right-6 text-white bg-black/50 p-3 rounded-full"><X /></button></div> );
+  // UPDATED: Fixed Z-Index in Camera View
+  if (showCamera) return (
+    <div className="fixed inset-0 z-[60] bg-black">
+      <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-0" />
+      <div className="relative z-10 w-full h-full"> {/* Container for controls */}
+        <button onClick={handleCapture} className="absolute bottom-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-white rounded-full border-4 border-gray-300" />
+        <button onClick={stopCamera} className="absolute top-6 right-6 text-white bg-black/50 p-3 rounded-full"><X /></button>
+      </div>
+    </div>
+  );
 
   if (result) {
     const isCritical = result.severity === 'high';
@@ -69,30 +78,30 @@ const Diagnose: React.FC<{ plant?: Plant, onBack?: () => void }> = ({ plant, onB
     return (
       <div className="bg-gray-50 min-h-screen pb-32 overflow-y-auto font-sans">
         <div className="sticky top-0 z-40 bg-white/90 backdrop-blur px-6 py-4 flex justify-between items-center shadow-sm">
-           <div className="flex items-center gap-2 text-gray-800 font-black uppercase text-xs tracking-widest"><Activity size={16} className={themeColor} /> Health Report</div>
-           <button onClick={() => { setResult(null); setImage(null); }} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={18} /></button>
+          <div className="flex items-center gap-2 text-gray-800 font-black uppercase text-xs tracking-widest"><Activity size={16} className={themeColor} /> Health Report</div>
+          <button onClick={() => { setResult(null); setImage(null); }} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={18} /></button>
         </div>
         <div className="p-6 space-y-6 max-w-lg mx-auto">
-           <div className="animate-in fade-in slide-in-from-top-4">
-              <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2 text-white ${bgTheme}`}>{result.severity} Severity • {result.confidence}% Conf.</span>
-              <h1 className={`text-3xl font-black leading-tight ${themeColor}`}>{result.diagnosis}</h1>
-              <p className="text-xs font-bold text-gray-400 mt-1 uppercase tracking-wide">Detected in {result.growthStage}</p>
-           </div>
-           <div className={`${bgTheme} text-white p-6 rounded-[2rem] shadow-xl relative overflow-hidden`}>
-              <div className="relative z-10"><div className="flex items-center gap-2 mb-2 opacity-90"><Zap size={16} fill="currentColor" /><span className="text-[10px] font-black uppercase tracking-widest">Priority Action</span></div><p className="text-lg font-bold leading-snug">{result.topAction}</p></div>
-              <Activity size={100} className="absolute -right-4 -bottom-4 opacity-10 rotate-12" />
-           </div>
-           <div className="grid grid-cols-2 gap-3 animate-in fade-in delay-100">
-              <MetricCard icon={Scale} label="Est. Yield" value={result.yieldEstimate} color="purple" />
-              <MetricCard icon={Calendar} label="Harvest In" value={result.harvestWindow} color="green" />
-              <MetricCard icon={Droplet} label="Nutrient Target" value={result.nutrientTargets?.ec || "N/A"} subValue={`pH: ${result.nutrientTargets?.ph || "--"}`} color="blue" />
-              <MetricCard icon={Wind} label="VPD Target" value={result.environmentTargets?.vpd || "N/A"} subValue={`${result.environmentTargets?.temp || "--"} / ${result.environmentTargets?.rh || "--"}`} color="cyan" />
-           </div>
-           <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
-               <div className="flex items-center gap-2 mb-2 border-b border-gray-50 pb-2"><CheckCircle size={18} className={themeColor} /><h3 className="text-xs font-black text-gray-800 uppercase tracking-widest">Recovery Protocol</h3></div>
-               <RecoveryChecklist steps={result.fixSteps} themeColor={themeColor} />
-               {result.preventionTips && result.preventionTips.length > 0 && <PreventionSection tips={result.preventionTips} />}
-           </div>
+          <div className="animate-in fade-in slide-in-from-top-4">
+            <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2 text-white ${bgTheme}`}>{result.severity} Severity • {result.confidence}% Conf.</span>
+            <h1 className={`text-3xl font-black leading-tight ${themeColor}`}>{result.diagnosis}</h1>
+            <p className="text-xs font-bold text-gray-400 mt-1 uppercase tracking-wide">Detected in {result.growthStage}</p>
+          </div>
+          <div className={`${bgTheme} text-white p-6 rounded-[2rem] shadow-xl relative overflow-hidden`}>
+            <div className="relative z-10"><div className="flex items-center gap-2 mb-2 opacity-90"><Zap size={16} fill="currentColor" /><span className="text-[10px] font-black uppercase tracking-widest">Priority Action</span></div><p className="text-lg font-bold leading-snug">{result.topAction}</p></div>
+            <Activity size={100} className="absolute -right-4 -bottom-4 opacity-10 rotate-12" />
+          </div>
+          <div className="grid grid-cols-2 gap-3 animate-in fade-in delay-100">
+            <MetricCard icon={Scale} label="Est. Yield" value={result.yieldEstimate} color="purple" />
+            <MetricCard icon={Calendar} label="Harvest In" value={result.harvestWindow} color="green" />
+            <MetricCard icon={Droplet} label="Nutrient Target" value={result.nutrientTargets?.ec || "N/A"} subValue={`pH: ${result.nutrientTargets?.ph || "--"}`} color="blue" />
+            <MetricCard icon={Wind} label="VPD Target" value={result.environmentTargets?.vpd || "N/A"} subValue={`${result.environmentTargets?.temp || "--"} / ${result.environmentTargets?.rh || "--"}`} color="cyan" />
+          </div>
+          <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
+            <div className="flex items-center gap-2 mb-2 border-b border-gray-50 pb-2"><CheckCircle size={18} className={themeColor} /><h3 className="text-xs font-black text-gray-800 uppercase tracking-widest">Recovery Protocol</h3></div>
+            <RecoveryChecklist steps={result.fixSteps} themeColor={themeColor} />
+            {result.preventionTips && result.preventionTips.length > 0 && <PreventionSection tips={result.preventionTips} />}
+          </div>
         </div>
       </div>
     );
@@ -100,41 +109,44 @@ const Diagnose: React.FC<{ plant?: Plant, onBack?: () => void }> = ({ plant, onB
 
   return (
     <div className="bg-gray-50 h-full pb-20 overflow-y-auto">
-       <div className="bg-white px-6 pt-12 pb-8 rounded-b-[3rem] shadow-sm mb-6">
-          <div className="flex justify-between items-center mb-4">{onBack && <button onClick={onBack}><ChevronRight className="rotate-180 text-gray-400" /></button>}<Growbot size="lg" mood="happy" /><div className="w-6" /></div>
-          <h1 className="text-3xl font-black text-gray-900 mb-2 tracking-tight">AI Plant Doctor</h1>
-          <p className="text-sm text-gray-500 font-medium">Hyper-personalized diagnosis & yield prediction.</p>
-       </div>
-       <div className="px-6 space-y-6 max-w-md mx-auto">
-          <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 space-y-5">
-             <div className="relative">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Genetics</label>
-                <div onClick={() => setShowStrainMenu(!showStrainMenu)} className="w-full bg-gray-50 p-4 rounded-xl font-bold text-gray-800 flex justify-between items-center cursor-pointer border border-transparent hover:border-green-200 transition-all">{strain || "Select Strain / Auto-Detect"}<ChevronRight size={16} className={`text-gray-400 transition-transform ${showStrainMenu ? 'rotate-90' : ''}`} /></div>
-                {showStrainMenu && (
-                   <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 p-2 max-h-64 overflow-y-auto animate-in fade-in slide-in-from-top-2">
-                      <div className="grid grid-cols-2 gap-2 mb-2 pb-2 border-b border-gray-50">
-                         <button onClick={() => { setStrain("Auto-Detect"); setShowStrainMenu(false); }} className="p-2 bg-green-50 text-green-700 rounded-lg text-xs font-bold text-center">✨ Auto-Detect</button>
-                         <button onClick={() => { setStrain("Custom Strain"); setShowStrainMenu(false); }} className="p-2 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold text-center">+ Custom</button>
-                      </div>
-                      <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest px-2 mb-1">Popular Presets</p>
-                      {['Indica Dominant', 'Sativa Dominant', 'Hybrid', 'Auto-Flower'].map(s => (<button key={s} onClick={() => { setStrain(s); setShowStrainMenu(false); }} className="w-full text-left p-2 hover:bg-gray-50 rounded-lg text-xs font-bold text-gray-600 block">{s}</button>))}
-                      <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest px-2 mt-2 mb-1">Database</p>
-                      {STRAIN_DATABASE.map(s => (<button key={s.name} onClick={() => { setStrain(s.name); setShowStrainMenu(false); }} className="w-full text-left p-2 hover:bg-gray-50 rounded-lg text-sm font-bold text-gray-800 block">{s.name}</button>))}
-                   </div>
-                )}
-             </div>
-             <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Environment</label>
-                <div className="flex bg-gray-100 p-1 rounded-xl">
-                   {['Indoor', 'Outdoor', 'Greenhouse'].map((env) => (<button key={env} onClick={() => setGrowMethod(env as any)} className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase transition-all ${growMethod === env ? 'bg-white text-green-600 shadow-sm' : 'text-gray-400'}`}>{env}</button>))}
+      <div className="bg-white px-6 pt-12 pb-8 rounded-b-[3rem] shadow-sm mb-6">
+        <div className="flex justify-between items-center mb-4">{onBack && <button onClick={onBack}><ChevronRight className="rotate-180 text-gray-400" /></button>}<Growbot size="lg" mood="happy" /><div className="w-6" /></div>
+        {/* UPDATED: Headline */}
+        <h1 className="text-3xl font-black text-gray-900 mb-2 tracking-tight">Analyze Your Plant's Health with AI</h1>
+        {/* UPDATED: Subheadline */}
+        <p className="text-sm text-gray-500 font-medium">Scan or upload a photo for instant report on plant health and actions to take to save your grow from pests, diseases, and fix deficiencies.</p>
+      </div>
+      <div className="px-6 space-y-6 max-w-md mx-auto">
+        <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 space-y-5">
+          <div className="relative">
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Genetics</label>
+            <div onClick={() => setShowStrainMenu(!showStrainMenu)} className="w-full bg-gray-50 p-4 rounded-xl font-bold text-gray-800 flex justify-between items-center cursor-pointer border border-transparent hover:border-green-200 transition-all">{strain || "Select Strain / Auto-Detect"}<ChevronRight size={16} className={`text-gray-400 transition-transform ${showStrainMenu ? 'rotate-90' : ''}`} /></div>
+            {showStrainMenu && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 p-2 max-h-64 overflow-y-auto animate-in fade-in slide-in-from-top-2">
+                <div className="grid grid-cols-2 gap-2 mb-2 pb-2 border-b border-gray-50">
+                  <button onClick={() => { setStrain("Auto-Detect"); setShowStrainMenu(false); }} className="p-2 bg-green-50 text-green-700 rounded-lg text-xs font-bold text-center">✨ Auto-Detect</button>
+                  <button onClick={() => { setStrain("Custom Strain"); setShowStrainMenu(false); }} className="p-2 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold text-center">+ Custom</button>
                 </div>
-             </div>
+                <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest px-2 mb-1">Popular Presets</p>
+                {['Indica Dominant', 'Sativa Dominant', 'Hybrid', 'Auto-Flower'].map(s => (<button key={s} onClick={() => { setStrain(s); setShowStrainMenu(false); }} className="w-full text-left p-2 hover:bg-gray-50 rounded-lg text-xs font-bold text-gray-600 block">{s}</button>))}
+                <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest px-2 mt-2 mb-1">Database</p>
+                {STRAIN_DATABASE.map(s => (<button key={s.name} onClick={() => { setStrain(s.name); setShowStrainMenu(false); }} className="w-full text-left p-2 hover:bg-gray-50 rounded-lg text-sm font-bold text-gray-800 block">{s.name}</button>))}
+              </div>
+            )}
           </div>
-          <button onClick={handleStartCamera} className="w-full bg-gray-900 text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-gray-200 flex items-center justify-center gap-3 active:scale-95 transition-transform"><Camera size={24} className="text-green-400" /> Start Scan</button>
-          <button onClick={() => galleryInputRef.current?.click()} className="w-full bg-white text-gray-600 py-4 rounded-[2rem] font-bold border border-gray-200 flex items-center justify-center gap-2"><Upload size={18} /> Upload from Gallery</button>
-       </div>
-       <input type="file" ref={cameraInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleFileSelect} />
-       <input type="file" ref={galleryInputRef} accept="image/*" className="hidden" onChange={handleFileSelect} />
+          <div>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Environment</label>
+            <div className="flex bg-gray-100 p-1 rounded-xl">
+              {['Indoor', 'Outdoor', 'Greenhouse'].map((env) => (<button key={env} onClick={() => setGrowMethod(env as any)} className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase transition-all ${growMethod === env ? 'bg-white text-green-600 shadow-sm' : 'text-gray-400'}`}>{env}</button>))}
+            </div>
+          </div>
+        </div>
+        {/* UPDATED: Button Text */}
+        <button onClick={handleStartCamera} className="w-full bg-gray-900 text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-gray-200 flex items-center justify-center gap-3 active:scale-95 transition-transform"><Camera size={24} className="text-green-400" /> Scan with Camera</button>
+        <button onClick={() => galleryInputRef.current?.click()} className="w-full bg-white text-gray-600 py-4 rounded-[2rem] font-bold border border-gray-200 flex items-center justify-center gap-2"><Upload size={18} /> Upload from Gallery</button>
+      </div>
+      <input type="file" ref={cameraInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleFileSelect} />
+      <input type="file" ref={galleryInputRef} accept="image/*" className="hidden" onChange={handleFileSelect} />
     </div>
   );
 };
