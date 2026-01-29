@@ -7,6 +7,7 @@ import Home from './screens/Home';
 import Diagnose from './screens/Diagnose';
 import Chat from './screens/Chat';
 import Journal from './screens/Journal';
+import Profile from './screens/Profile'; // Import Profile
 import Paywall from './screens/Paywall';
 import PostPaymentAuth from './screens/PostPaymentAuth';
 import BottomNav from './components/BottomNav';
@@ -16,19 +17,6 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { supabase } from './services/supabaseClient';
 import { STRAIN_DATABASE } from './data/strains';
-import { User, LogOut, Shield } from 'lucide-react';
-
-const ProfileScreen: React.FC<{ userProfile: UserProfile | null; onSignOut: () => void; }> = ({ userProfile, onSignOut }) => (
-    <div className="p-6 pt-12 h-full overflow-y-auto bg-surface">
-        <h1 className="text-2xl font-bold mb-6 text-text-main">Profile</h1>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center mb-6">
-            <div className="w-20 h-20 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-4"><User size={32} /></div>
-            <h2 className="text-lg font-bold text-text-main">{userProfile?.experience || "Grower"}</h2>
-            <div className="inline-flex items-center gap-1 bg-green-50 px-2 py-1 rounded-md mt-1"><Shield size={12} className="text-primary" /><p className="text-xs font-bold text-primary">Pro Member</p></div>
-        </div>
-        <button onClick={onSignOut} className="w-full py-4 bg-red-50 text-red-500 font-bold rounded-xl flex items-center justify-center gap-2"><LogOut size={20} /> Sign Out</button>
-    </div>
-);
 
 const App: React.FC = () => {
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
@@ -38,22 +26,22 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
-   
+
   useEffect(() => {
     const initApp = async () => {
       await SplashScreen.hide();
-      
+
       if (Capacitor.getPlatform() === 'android') {
-          await Purchases.configure({ apiKey: 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' });
+        await Purchases.configure({ apiKey: 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' });
       }
 
       CapacitorApp.addListener('appUrlOpen', async (data) => {
-          if (data.url.includes('code=')) {
-              const { data: sessionData } = await supabase.auth.exchangeCodeForSession(new URL(data.url).searchParams.get('code')!);
-              if (sessionData.session) handleAuthSuccess();
-          }
+        if (data.url.includes('code=')) {
+          const { data: sessionData } = await supabase.auth.exchangeCodeForSession(new URL(data.url).searchParams.get('code')!);
+          if (sessionData.session) handleAuthSuccess();
+        }
       });
-      
+
       const savedProfile = localStorage.getItem('mastergrowbot_profile');
       if (savedProfile) setUserProfile(JSON.parse(savedProfile));
       loadUserData();
@@ -62,22 +50,35 @@ const App: React.FC = () => {
   }, []);
 
   const loadUserData = async () => {
-      const mockStrain = STRAIN_DATABASE[0];
-      setPlants([{ id: '1', name: 'Project Alpha', strain: mockStrain.name, strainDetails: mockStrain, stage: 'Veg', healthScore: 92, age_days: 24, imageUri: 'https://images.unsplash.com/photo-1603796846097-b36976ea2851', totalDays: 24, journal: [], tasks: [] }]);
-      setTasks([{ id: '1', title: 'Check pH', completed: false }, { id: '2', title: 'CalMag', completed: false }]);
+    const mockStrain = STRAIN_DATABASE[0];
+    setPlants([{ id: '1', name: 'Project Alpha', strain: mockStrain.name, strainDetails: mockStrain, stage: 'Veg', healthScore: 92, daysInStage: 24, imageUri: 'https://images.unsplash.com/photo-1603796846097-b36976ea2851', totalDays: 24, journal: [], tasks: [], streak: 5, weeklySummaries: [] }]);
+    setTasks([{ id: '1', title: 'Check pH', completed: false, type: 'check' }, { id: '2', title: 'CalMag', completed: false, type: 'feed' }]);
   };
 
-  const handleAuthSuccess = async () => { 
-      setShowAuth(false); 
-      setShowPaywall(false); 
-      setOnboardingStatus(OnboardingStep.COMPLETED); 
-      loadUserData(); 
+  const handleAuthSuccess = async () => {
+    setShowAuth(false);
+    setShowPaywall(false);
+    setOnboardingStatus(OnboardingStep.COMPLETED);
+    loadUserData();
   };
-  
+
   const handleAddJournalEntry = (entry: any) => {
-      const newEntry = { ...entry, id: Date.now().toString(), date: new Date().toLocaleDateString() };
-      setPlants(prev => { prev[0].journal.unshift(newEntry); return [...prev]; });
-      setCurrentTab(AppScreen.JOURNAL);
+    const newEntry = { ...entry, id: Date.now().toString(), date: new Date().toLocaleDateString() };
+    setPlants(prev => {
+      if (prev[0]) {
+        prev[0].journal.unshift(newEntry);
+        return [...prev];
+      }
+      return prev;
+    });
+    setCurrentTab(AppScreen.JOURNAL);
+  };
+
+  const handleUpdateProfile = (updates: Partial<UserProfile>) => {
+    if (!userProfile) return;
+    const updated = { ...userProfile, ...updates };
+    setUserProfile(updated);
+    localStorage.setItem('mastergrowbot_profile', JSON.stringify(updated));
   };
 
   if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={() => setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE)} />;
@@ -87,18 +88,17 @@ const App: React.FC = () => {
   return (
     <div className="h-screen w-screen bg-surface overflow-hidden relative">
       <div className="h-full w-full overflow-y-auto pb-24">
-          {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={(id:string) => setTasks(t => t.map(x => x.id === id ? {...x, completed: !x.completed} : x))} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
-          {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} plant={plants[0]} />}
-          {currentTab === AppScreen.CHAT && <Chat onSaveToJournal={handleAddJournalEntry} plant={plants[0]} userProfile={userProfile} />}
-          {currentTab === AppScreen.JOURNAL && <Journal plants={plants} onAddEntry={handleAddJournalEntry} onUpdatePlant={(id:string, u:any) => setPlants(p => p.map(x => x.id === id ? {...x, ...u} : x))} />}
-          {currentTab === AppScreen.PROFILE && <ProfileScreen userProfile={userProfile} onSignOut={() => window.location.reload()} />}
+        {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={(id: string) => setTasks(t => t.map(x => x.id === id ? { ...x, completed: !x.completed } : x))} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
+        {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} plant={plants[0]} defaultProfile={userProfile} />}
+        {currentTab === AppScreen.CHAT && <Chat onSaveToJournal={handleAddJournalEntry} plant={plants[0]} userProfile={userProfile} />}
+        {currentTab === AppScreen.JOURNAL && <Journal plants={plants} onAddEntry={handleAddJournalEntry} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
+        {currentTab === AppScreen.PROFILE && <Profile userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onSignOut={() => window.location.reload()} />}
       </div>
-      
-      {/* UPDATED: Route to Auth on Purchase Success */}
+
       {showPaywall && <Paywall onClose={() => setShowPaywall(false)} onPurchase={() => { setShowPaywall(false); setShowAuth(true); }} onSkip={() => setShowPaywall(false)} />}
-      
+
       {showAuth && <PostPaymentAuth onComplete={handleAuthSuccess} onSkip={handleAuthSuccess} userProfile={userProfile} />}
-      
+
       <BottomNav currentScreen={currentTab} onNavigate={(tab) => setCurrentTab(tab)} />
     </div>
   );

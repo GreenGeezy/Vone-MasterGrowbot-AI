@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Camera as CameraIcon, Upload, X, Zap, Activity, CheckSquare, Square, ChevronRight, Droplet, Calendar, Scale, ShieldAlert, Wind, CheckCircle, Share2, Save, RotateCcw, ScanLine } from 'lucide-react';
 import { diagnosePlant, ExtendedDiagnosisResult } from '../services/geminiService';
 import { Plant, UserProfile } from '../types';
@@ -55,6 +55,7 @@ interface DiagnoseProps {
   plant?: Plant;
   onBack?: () => void;
   onSaveToJournal?: (entry: any) => void;
+  defaultProfile?: UserProfile | null;
 }
 
 const LOADING_PHRASES = [
@@ -67,18 +68,19 @@ const LOADING_PHRASES = [
   "Building your custom care plan..."
 ];
 
-const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) => {
+const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, defaultProfile }) => {
   const [image, setImage] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ExtendedDiagnosisResult | null>(null);
-  const [strain, setStrain] = useState<string>(plant?.strain || '');
-  const [growMethod, setGrowMethod] = useState<'Indoor' | 'Outdoor' | 'Greenhouse'>('Indoor');
+
+  // LOCAL STATE OVERRIDES (Initialized from Global Defaults)
+  const [strain, setStrain] = useState<string>(plant?.strain || 'Generic');
+  // Initialize from defaultProfile, fallback to Indoor if undefined
+  const [growMethod, setGrowMethod] = useState<'Indoor' | 'Outdoor' | 'Greenhouse'>(defaultProfile?.grow_mode || 'Indoor');
+
   const [showStrainMenu, setShowStrainMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // User Profile State (Default to Novice as requested)
-  const [userProfile] = useState<UserProfile>({ experience: 'Novice' } as UserProfile);
 
   const [loadingText, setLoadingText] = useState(LOADING_PHRASES[0]);
   const [timeLeft, setTimeLeft] = useState(15);
@@ -90,13 +92,11 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
       let phraseIndex = 0;
       setLoadingText(LOADING_PHRASES[0]);
 
-      // Cycle phrases every 4 seconds
       const phraseInterval = setInterval(() => {
         phraseIndex = (phraseIndex + 1) % LOADING_PHRASES.length;
         setLoadingText(LOADING_PHRASES[phraseIndex]);
       }, 4000);
 
-      // Countdown timer
       setTimeLeft(15);
       interval = setInterval(() => setTimeLeft(prev => prev > 0 ? prev - 1 : 0), 1000);
 
@@ -113,10 +113,11 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
     setLoading(true);
     setResult(null);
     try {
+      // Use LOCAL STATE `growMethod` for the analysis, preserving global default separately
       const diagnosis = await diagnosePlant(dataUrl, {
         strain: strain === 'Leave Blank' ? undefined : strain,
         growMethod,
-        userProfile
+        userProfile: defaultProfile || { experience: 'Novice' } as UserProfile // Fallback
       });
       setResult(diagnosis);
     } catch (e) {
@@ -126,9 +127,6 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
     }
   };
 
-  // ----------------------------------------------------
-  // NATIVE CAMERA & UPLOAD LOGIC (Capacitor)
-  // ----------------------------------------------------
   const handleStartCamera = async () => {
     try {
       const photo = await Camera.getPhoto({
@@ -137,14 +135,8 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
         resultType: CameraResultType.DataUrl,
         source: CameraSource.Camera
       });
-
-      if (photo.dataUrl) {
-        // DIRECT ANALYSIS (Skip Preview)
-        await processImage(photo.dataUrl);
-      }
-    } catch (err) {
-      console.log("Camera cancelled");
-    }
+      if (photo.dataUrl) await processImage(photo.dataUrl);
+    } catch (err) { console.log("Camera cancelled"); }
   };
 
   const handleGalleryUpload = async () => {
@@ -153,17 +145,11 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
         quality: 90,
         allowEditing: false,
         resultType: CameraResultType.DataUrl,
-        source: CameraSource.Photos // Force Gallery
+        source: CameraSource.Photos
       });
-
-      if (photo.dataUrl) {
-        setPreviewImage(photo.dataUrl); // Keep preview for Gallery uploads (optional, but safer to keep for now)
-      }
-    } catch (err) {
-      console.log("Gallery cancelled");
-    }
+      if (photo.dataUrl) setPreviewImage(photo.dataUrl);
+    } catch (err) { console.log("Gallery cancelled"); }
   };
-
 
   const handleShare = async () => {
     if (!result) return;
@@ -173,13 +159,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
         text: `My plant health is rated '${result.healthLabel || getHealthRating(result.healthScore || 0)}'. Diagnose yours with MasterGrowbot AI!`,
         dialogTitle: 'Share Result'
       });
-    } catch (e) {
-      if (navigator.share) {
-        navigator.share({ title: 'Diagnosis', text: `My plant is ${result.healthLabel}` });
-      } else {
-        alert("Sharing not supported on this browser.");
-      }
-    }
+    } catch (e) { }
   };
 
   const handleSave = () => {
@@ -197,40 +177,32 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
     }
   };
 
-  // Filter Strains
   const filteredStrains = STRAIN_DATABASE.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // 1. Loading State (Fullscreen)
+  // 1. Loading State
   if (loading) return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center">
       {image && <img src={image} className="absolute inset-0 w-full h-full object-cover opacity-50" />}
       <div className="absolute inset-0 bg-green-500/10 animate-pulse"></div>
       <div className="absolute top-0 left-0 w-full h-2 bg-green-400 shadow-[0_0_20px_rgba(74,222,128,1)] animate-[scan_2s_ease-in-out_infinite] z-10"></div>
-
       <div className="relative z-20 text-center p-8 bg-black/60 rounded-3xl backdrop-blur-md border border-white/10 m-6 w-[80%]">
         <Growbot size="lg" mood="thinking" className="mb-4 mx-auto" />
         <h2 className="text-2xl font-black uppercase tracking-widest text-green-400 mb-2">Analyzing Photo</h2>
-        <p className="text-white/80 text-xs font-bold uppercase tracking-wider mb-6 min-h-[3rem] flex items-center justify-center">
-          {loadingText}
-        </p>
+        <p className="text-white/80 text-xs font-bold uppercase tracking-wider mb-6 min-h-[3rem] flex items-center justify-center">{loadingText}</p>
         <div className="text-4xl font-mono text-white font-black">{timeLeft}s</div>
       </div>
     </div>
   );
 
-  // 2. Review Step (Only for Gallery Uploads now)
+  // 2. Review Step
   if (previewImage) return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center h-screen w-screen overflow-hidden">
       <div className="flex-1 w-full bg-black flex items-center justify-center overflow-hidden relative">
         <img src={previewImage} className="max-w-full max-h-full object-contain" />
       </div>
       <div className="w-full bg-gray-900/90 backdrop-blur-md p-6 pb-12 flex items-center justify-between gap-4 shrink-0 absolute bottom-0 left-0 right-0 z-[110]">
-        <button onClick={() => { setPreviewImage(null); }} className="flex-1 py-4 bg-gray-800 text-white rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform">
-          <RotateCcw size={18} /> Cancel
-        </button>
-        <button onClick={() => processImage(previewImage)} className="flex-[2] py-4 bg-green-500 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,197,94,0.4)] active:scale-95 transition-transform">
-          <ScanLine size={20} /> Analyze
-        </button>
+        <button onClick={() => { setPreviewImage(null); }} className="flex-1 py-4 bg-gray-800 text-white rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform"><RotateCcw size={18} /> Cancel</button>
+        <button onClick={() => processImage(previewImage)} className="flex-[2] py-4 bg-green-500 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,197,94,0.4)] active:scale-95 transition-transform"><ScanLine size={20} /> Analyze</button>
       </div>
     </div>
   );
@@ -241,9 +213,9 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
     const themeColor = isCritical ? 'text-red-500' : result.severity === 'medium' ? 'text-orange-500' : 'text-green-500';
     const bgTheme = isCritical ? 'bg-red-500' : result.severity === 'medium' ? 'bg-orange-500' : 'bg-green-600';
 
-    // Adaptive Display Logic
-    const isNovice = userProfile.experience === 'Novice';
-    const healthDisplay = formatMetricDisplay(result.healthScore, 'health', userProfile.experience);
+    // Adaptive Logic
+    const isNovice = (defaultProfile?.experience || 'Novice') === 'Novice';
+    const healthDisplay = formatMetricDisplay(result.healthScore, 'health', defaultProfile?.experience);
 
     return (
       <div className="bg-gray-50 min-h-screen pb-[120px] overflow-y-auto font-sans">
@@ -266,21 +238,16 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
             <Activity size={100} className="absolute -right-4 -bottom-4 opacity-10 rotate-12" />
           </div>
 
-          {/* Metric Cards */}
+          {/* Metric Cards - Context Aware Display */}
           <div className="grid grid-cols-2 gap-3 animate-in fade-in delay-100">
-            {/* Health Card (Adaptive: Progress Bar for Novice) */}
             {isNovice ? (
               <div className="bg-white/60 backdrop-blur-md p-3 rounded-2xl border border-purple-100 shadow-sm flex flex-col items-center text-center h-full justify-between">
                 <div className="p-2 bg-purple-50 text-purple-600 rounded-full mb-1"><Scale size={16} /></div>
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Health Status</span>
-
                 <div className="w-full mt-2">
                   <div className="text-lg font-black text-purple-700 mb-1">{healthDisplay}</div>
                   <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${result.healthScore >= 75 ? 'bg-green-500' : result.healthScore >= 50 ? 'bg-orange-500' : 'bg-red-500'}`}
-                      style={{ width: `${result.healthScore}%` }}
-                    />
+                    <div className={`h-full ${result.healthScore >= 75 ? 'bg-green-500' : result.healthScore >= 50 ? 'bg-orange-500' : 'bg-red-500'}`} style={{ width: `${result.healthScore}%` }} />
                   </div>
                 </div>
               </div>
@@ -288,9 +255,25 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
               <MetricCard icon={Scale} label="Health Score" value={healthDisplay} color="purple" />
             )}
 
-            <MetricCard icon={Calendar} label="Harvest In" value={formatMetricDisplay(result.harvestWindow, 'harvest', userProfile.experience)} color="green" />
-            <MetricCard icon={Droplet} label="Nutrients" value={formatMetricDisplay(result.nutrientTargets?.ec, 'nutrient', userProfile.experience)} subValue={userProfile.experience === 'Expert' ? `pH: ${result.nutrientTargets?.ph || "--"}` : undefined} color="blue" />
-            <MetricCard icon={Wind} label="VPD" value={formatMetricDisplay(result.environmentTargets?.vpd, 'vpd', userProfile.experience)} subValue={userProfile.experience === 'Expert' ? `${result.environmentTargets?.temp || "--"} / ${result.environmentTargets?.rh || "--"}` : undefined} color="cyan" />
+            <MetricCard icon={Calendar} label="Harvest In" value={formatMetricDisplay(result.harvestWindow, 'harvest', defaultProfile?.experience)} color="green" />
+
+            {/* CONTEXT-AWARE: Nutrients */}
+            <MetricCard
+              icon={Droplet}
+              label={growMethod === 'Outdoor' ? "Watering Needs" : "Nutrients"}
+              value={formatMetricDisplay(result.nutrientTargets?.ec, 'nutrient', defaultProfile?.experience, growMethod)}
+              subValue={defaultProfile?.experience === 'Expert' && growMethod !== 'Outdoor' ? `pH: ${result.nutrientTargets?.ph || "--"}` : undefined}
+              color="blue"
+            />
+
+            {/* CONTEXT-AWARE: VPD / Environment */}
+            <MetricCard
+              icon={Wind}
+              label={growMethod === 'Outdoor' ? "Env. Risk" : growMethod === 'Greenhouse' ? "VPD / Mold Risk" : "VPD Target"}
+              value={formatMetricDisplay(result.environmentTargets?.vpd, 'vpd', defaultProfile?.experience, growMethod)}
+              subValue={defaultProfile?.experience === 'Expert' && growMethod !== 'Outdoor' ? `${result.environmentTargets?.temp || "--"} / ${result.environmentTargets?.rh || "--"}` : undefined}
+              color="cyan"
+            />
           </div>
 
           <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
@@ -299,16 +282,12 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
             {result.preventionTips && result.preventionTips.length > 0 && <PreventionSection tips={result.preventionTips} />}
           </div>
 
-          {/* Analyzed Image (New Position: 80% width, centered above buttons) */}
           {image && (
             <div className="flex justify-center py-4">
-              <div className="w-[80%] rounded-2xl overflow-hidden border-2 border-white shadow-lg rotate-1">
-                <img src={image} className="w-full h-full object-cover" />
-              </div>
+              <div className="w-[80%] rounded-2xl overflow-hidden border-2 border-white shadow-lg rotate-1"><img src={image} className="w-full h-full object-cover" /></div>
             </div>
           )}
 
-          {/* Action Buttons */}
           <div className="grid grid-cols-2 gap-4 pb-4">
             <button onClick={handleSave} className="py-4 bg-gray-900 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"><Save size={18} /> Save to Journal</button>
             <button onClick={handleShare} className="py-4 bg-gray-100 text-gray-900 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-gray-200"><Share2 size={18} /> Share Result</button>
@@ -332,14 +311,14 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
           <div className="relative">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Genetics</label>
             <div onClick={() => setShowStrainMenu(!showStrainMenu)} className="w-full bg-gray-50 p-4 rounded-xl font-bold text-gray-800 flex justify-between items-center cursor-pointer border border-transparent hover:border-green-200 transition-all">
-              {strain || "Select Strain / Auto-Detect"}
+              {strain || "Select Strain / Generic"}
               <ChevronRight size={16} className={`text-gray-400 transition-transform ${showStrainMenu ? 'rotate-90' : ''}`} />
             </div>
             {showStrainMenu && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 p-2 max-h-64 overflow-y-auto animate-in fade-in slide-in-from-top-2">
                 <input className="w-full text-xs p-3 bg-gray-50 rounded-lg mb-2 outline-none font-bold" placeholder="Search Strains..." autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                 <div className="grid grid-cols-2 gap-2 mb-2 pb-2 border-b border-gray-50">
-                  <button onClick={() => { setStrain("Auto-Detect"); setShowStrainMenu(false); }} className="p-2 bg-green-50 text-green-700 rounded-lg text-xs font-bold text-center">✨ Auto-Detect</button>
+                  <button onClick={() => { setStrain("Generic"); setShowStrainMenu(false); }} className="p-2 bg-green-50 text-green-700 rounded-lg text-xs font-bold text-center">✨ Generic</button>
                   <button onClick={() => { setStrain("Custom Strain"); setShowStrainMenu(false); }} className="p-2 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold text-center">+ Custom</button>
                 </div>
                 {filteredStrains.map(s => (
@@ -351,19 +330,17 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
             )}
           </div>
           <div>
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Environment</label>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Growing Environment</label>
             <div className="flex bg-gray-100 p-1 rounded-xl">
               {['Indoor', 'Outdoor', 'Greenhouse'].map((env) => (<button key={env} onClick={() => setGrowMethod(env as any)} className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase transition-all ${growMethod === env ? 'bg-white text-green-600 shadow-sm' : 'text-gray-400'}`}>{env}</button>))}
             </div>
           </div>
         </div>
 
-        {/* UPDATED: Native Camera Triggers */}
         <button onClick={handleStartCamera} className="w-full bg-gray-900 text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-gray-200 flex items-center justify-center gap-3 active:scale-95 transition-transform"><CameraIcon size={24} className="text-green-400" /> Scan with Camera</button>
         <button onClick={handleGalleryUpload} className="w-full bg-white text-gray-600 py-4 rounded-[2rem] font-bold border border-gray-200 flex items-center justify-center gap-2"><Upload size={18} /> Upload from Gallery</button>
       </div>
     </div>
   );
 };
-
 export default Diagnose;

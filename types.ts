@@ -14,12 +14,14 @@ export enum AppScreen {
   DIAGNOSE = 'diagnose',
   CHAT = 'chat',
   PAYWALL = 'paywall',
-  ACCOUNT = 'account'
+  ACCOUNT = 'account',
+  PROFILE = 'profile'
 }
 
 export enum OnboardingStep {
   SPLASH = 'splash',
   QUIZ = 'quiz',
+  QUIZ_EXPERIENCE = 'quiz_experience',
   SUMMARY = 'summary',
   TRIAL_PAYWALL = 'trial_paywall',
   POST_PAYMENT_AUTH = 'post_payment_auth',

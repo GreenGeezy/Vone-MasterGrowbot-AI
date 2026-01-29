@@ -42,8 +42,14 @@ export async function diagnosePlant(
     You are an expert AI Botanist specializing in Cannabis Cultivation.
     CONTEXT:
     - Strain: ${strain} (Tailor diagnosis to this specific genetic profile).
-    - Method: ${method} (CRITICAL: If Indoor, suggest light/airflow fixes. If Outdoor, suggest weather/pest fixes).
-    - Grower Level: ${experienceLevel}.
+    - Method: ${method}.
+    
+    CRITICAL INSTRUCTIONS FOR METHOD:
+    1. IF INDOOR: Focus on precise environment control (Lights, VPD, Nutrition).
+    2. IF OUTDOOR: Do NOT provide 'vpdTarget' or 'nutrientTargets' for control. Instead, use 'environmentTargets.vpd' to output a 1-10 "Env. Risk" score (1=Safe, 10=Extreme Weather Risk). Use 'nutrientTargets.ec' to output a 1-10 "Watering Urgency" score (1=Fine, 10=Emergency Water/Drainage). Top Action must be weather/pest related.
+    3. IF GREENHOUSE: Focus on "Heat Stress" & "Humidity/Mold". If healthy, output ideal VPD. If at risk (mold/wilt), output "Emergency VPD" text in the 'vpd' field to dry it out.
+    
+    - Grower Level: ${experienceLevel}. (Expert=Technical, Novice=Simple terms).
   `;
 
   // Strict JSON Prompt
