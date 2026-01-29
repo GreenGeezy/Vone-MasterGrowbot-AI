@@ -14,7 +14,7 @@ export interface ExtendedDiagnosisResult extends DiagnosisResult {
 
 // --- Helpers ---
 
-const cleanBase64 = (data: string) => 
+const cleanBase64 = (data: string) =>
   data.includes('base64,') ? data.split('base64,')[1] : data;
 
 // --- Core Functions ---
@@ -24,15 +24,15 @@ const cleanBase64 = (data: string) =>
  * Uses 'gemini-3-pro-preview' via Gateway
  */
 export async function diagnosePlant(
-  base64Image: string, 
-  context: { 
-    strain?: string; 
-    growMethod?: 'Indoor' | 'Outdoor' | 'Greenhouse'; 
-    stage?: string; 
-    userProfile?: UserProfile; 
+  base64Image: string,
+  context: {
+    strain?: string;
+    growMethod?: 'Indoor' | 'Outdoor' | 'Greenhouse';
+    stage?: string;
+    userProfile?: UserProfile;
   }
 ): Promise<ExtendedDiagnosisResult> {
-  
+
   const cleanImage = cleanBase64(base64Image);
   const experienceLevel = context.userProfile?.experience || 'Novice';
   const method = context.growMethod || 'Indoor';
@@ -46,6 +46,7 @@ export async function diagnosePlant(
     - Grower Level: ${experienceLevel}.
   `;
 
+  // Strict JSON Prompt
   const prompt = `
     Analyze this plant image strictly.
     REQUIRED OUTPUT (JSON ONLY):
@@ -53,15 +54,16 @@ export async function diagnosePlant(
       "diagnosis": "Precise identification of the main issue (or 'Healthy')",
       "severity": "low" | "medium" | "high",
       "healthScore": 0-100,
+      "healthLabel": "Struggling" | "Poor" | "Suboptimal" | "Average" | "Good" | "Great" | "Thriving",
       "growthStage": "Seedling" | "Vegetative" | "Early Flower" | "Late Flower" | "Harvest",
       "confidence": 0-100,
       "topAction": "The single most important immediate action",
       "fixSteps": ["Step 1", "Step 2", "Step 3"],
       "preventionTips": ["Proactive tip 1", "Proactive tip 2"],
-      "yieldEstimate": "Estimate dry weight based on visual bud density (e.g. '3-4oz') or 'N/A' if veg",
-      "harvestWindow": "Predicted time to harvest (e.g. '3 weeks') or 'N/A'",
-      "nutrientTargets": { "ec": "Target EC", "ph": "Target pH" },
-      "environmentTargets": { "vpd": "Target VPD", "temp": "Target Temp", "rh": "Target Humidity" },
+      "yieldEstimate": "Estimate dry weight or 'N/A' if veg",
+      "harvestWindow": "Predicted time to harvest (e.g. '3-4 Weeks') or 'N/A'",
+      "nutrientTargets": { "ec": "1.8", "ph": "6.0" },
+      "environmentTargets": { "vpd": "1.2", "temp": "75F", "rh": "45%" },
       "riskScore": 0-100
     }
   `;
@@ -81,6 +83,7 @@ export async function diagnosePlant(
 
   try {
     const rawText = data.result || "";
+    // Sanitize and Parse JSON
     const jsonString = rawText.replace(/```json|```/g, '').trim();
     const result: ExtendedDiagnosisResult = JSON.parse(jsonString);
 
@@ -92,6 +95,7 @@ export async function diagnosePlant(
 
   } catch (e) {
     console.error("AI Parsing Failed:", e);
+    // Fallback logic if JSON fails
     return {
       diagnosis: "Analysis Inconclusive",
       severity: "low",
@@ -99,7 +103,10 @@ export async function diagnosePlant(
       topAction: "Retake photo with better lighting",
       fixSteps: ["Ensure clear focus", "Check internet connection"],
       healthScore: 0,
-      growthStage: "Unknown"
+      growthStage: "Unknown",
+      healthLabel: "Struggling",
+      yieldTips: [],
+      qualityTips: [],
     } as ExtendedDiagnosisResult;
   }
 }
@@ -112,10 +119,10 @@ export async function sendMessage(message: string, isVoice: boolean = false) {
   const { data, error } = await supabase.functions.invoke('gemini-gateway', {
     body: { mode: isVoice ? 'voice' : 'chat', prompt: message }
   });
-  
+
   if (error) {
-      console.error(error);
-      return "I'm having trouble connecting to the network right now.";
+    console.error(error);
+    return "I'm having trouble connecting to the network right now.";
   }
   return data?.result || "I didn't catch that.";
 }
@@ -127,7 +134,7 @@ export async function sendMessage(message: string, isVoice: boolean = false) {
 export async function getDailyInsight(userProfile?: UserProfile): Promise<string> {
   const experience = userProfile?.experience || 'General';
   const prompt = `Generate a single, short (under 15 words), motivating cannabis cultivation tip for a ${experience} grower. No hashtags.`;
-  
+
   try {
     const response = await sendMessage(prompt);
     return response.replace(/"/g, ''); // Remove quotes if AI adds them

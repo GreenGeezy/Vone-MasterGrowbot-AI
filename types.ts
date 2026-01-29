@@ -51,17 +51,17 @@ export interface DiagnosisResult {
   // Core Identity
   diagnosis: string;         // e.g. "Nitrogen Deficiency"
   confidence: number;        // 0-100
-  
+
   // Health Metrics
   severity: 'low' | 'medium' | 'high';
   healthScore: number;       // 0-100 (For UI Gauge)
-  healthLabel?: 'Poor' | 'Fair' | 'Good' | 'Great' | 'Excellent'; // (For Text Badge)
+  healthLabel?: 'Struggling' | 'Poor' | 'Suboptimal' | 'Average' | 'Good' | 'Great' | 'Thriving' | 'Excellent'; // (For Text Badge)
   growthStage: string;       // e.g. "Vegetative"
-  
+
   // Actionable Advice
   topAction: string;         // The #1 priority
   fixSteps: string[];        // Step-by-step cure
-  
+
   // Advanced Optimization (New Gemini 3 Features)
   yieldTips: string[];       // How to get more weight
   qualityTips: string[];     // How to get better terps/thc
@@ -89,24 +89,24 @@ export interface JournalEntry {
   date: string;
   type: JournalEntryType;
   title: string;
-  
+
   // Content
   notes?: string;
   originalQuestion?: string; // If this came from Chat
-  
+
   // Media
   imageUri?: string;
   drawingUri?: string;
-  
+
   // Data Points
   diagnosisData?: DiagnosisResult;
   envTemp?: number;
   envHumidity?: number;
   tags?: ('water' | 'feed' | 'prune' | 'env' | 'photo' | 'training')[];
-  
+
   // AI Insights
   aiAnalysis?: LogAnalysis;
-  
+
   // Social
   isPublic?: boolean;
   publicUrl?: string;
@@ -128,18 +128,18 @@ export interface Plant {
   name: string;
   strain: string;
   strainDetails?: Strain;
-  
+
   // Timing
   stage: PlantStage | string;
   daysInStage: number;
   totalDays: number;
   nextHarvestDate?: string;
-  
+
   // Health & Stats
   healthScore: number;
   imageUri: string;
   streak: number; // Gamification: Consecutive days logged
-  
+
   // Collections
   tasks: Task[];
   journal: JournalEntry[];
@@ -158,13 +158,13 @@ export interface ChatMessage {
 export interface UserProfile {
   id?: string;
   email?: string;
-  
+
   // Cultivation Profile
   experience: 'Novice' | 'Intermediate' | 'Expert' | 'Pro';
   grow_mode?: 'Indoor' | 'Outdoor' | 'Greenhouse';
   goal?: 'Maximize Yield' | 'Improve Quality' | 'Learn Skills';
   space?: 'Small' | 'Medium' | 'Large';
-  
+
   // App State
   isOnboarded?: boolean;
 }

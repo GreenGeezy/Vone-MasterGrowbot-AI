@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Camera as CameraIcon, Upload, X, Zap, Activity, CheckSquare, Square, ChevronRight, Droplet, Calendar, Scale, ShieldAlert, Wind, CheckCircle, Share2, Save, RotateCcw, ScanLine } from 'lucide-react';
 import { diagnosePlant, ExtendedDiagnosisResult } from '../services/geminiService';
-import { Plant } from '../types';
+import { Plant, UserProfile } from '../types';
 import Growbot from '../components/Growbot';
 import { STRAIN_DATABASE } from '../data/strains';
 import { Share } from '@capacitor/share';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { formatMetricDisplay } from '../utils/diagnosisFormatter';
 
 /**
  * Health Score Mapping help
@@ -21,7 +22,7 @@ const getHealthRating = (score: number) => {
 };
 
 const MetricCard = ({ icon: Icon, label, value, subValue, color = "blue" }: any) => (
-  <div className={`bg-white/60 backdrop-blur-md p-3 rounded-2xl border border-${color}-100 shadow-sm flex flex-col items-center text-center`}>
+  <div className={`bg-white/60 backdrop-blur-md p-3 rounded-2xl border border-${color}-100 shadow-sm flex flex-col items-center text-center h-full justify-between`}>
     <div className={`p-2 bg-${color}-50 text-${color}-600 rounded-full mb-1`}><Icon size={16} /></div>
     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</span>
     <span className="text-sm font-black text-gray-800 leading-tight">{value || "--"}</span>
@@ -56,6 +57,16 @@ interface DiagnoseProps {
   onSaveToJournal?: (entry: any) => void;
 }
 
+const LOADING_PHRASES = [
+  "Processing Plant Genetics...",
+  "Customizing to your growing goals...",
+  "Analyzing with your growing environment...",
+  "Checking leaf color and vibrancy...",
+  "Scanning for hidden stress...",
+  "Identifying nutrient needs...",
+  "Building your custom care plan..."
+];
+
 const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) => {
   const [image, setImage] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -66,15 +77,34 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
   const [showStrainMenu, setShowStrainMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // User Profile State (Default to Novice as requested)
+  const [userProfile] = useState<UserProfile>({ experience: 'Novice' } as UserProfile);
+
+  const [loadingText, setLoadingText] = useState(LOADING_PHRASES[0]);
   const [timeLeft, setTimeLeft] = useState(15);
 
+  // Loading Animation Loop
   useEffect(() => {
     let interval: any;
     if (loading) {
+      let phraseIndex = 0;
+      setLoadingText(LOADING_PHRASES[0]);
+
+      // Cycle phrases every 4 seconds
+      const phraseInterval = setInterval(() => {
+        phraseIndex = (phraseIndex + 1) % LOADING_PHRASES.length;
+        setLoadingText(LOADING_PHRASES[phraseIndex]);
+      }, 4000);
+
+      // Countdown timer
       setTimeLeft(15);
       interval = setInterval(() => setTimeLeft(prev => prev > 0 ? prev - 1 : 0), 1000);
+
+      return () => {
+        clearInterval(phraseInterval);
+        clearInterval(interval);
+      };
     }
-    return () => clearInterval(interval);
   }, [loading]);
 
   const processImage = async (dataUrl: string) => {
@@ -83,7 +113,11 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
     setLoading(true);
     setResult(null);
     try {
-      const diagnosis = await diagnosePlant(dataUrl, { strain: strain === 'Leave Blank' ? undefined : strain, growMethod });
+      const diagnosis = await diagnosePlant(dataUrl, {
+        strain: strain === 'Leave Blank' ? undefined : strain,
+        growMethod,
+        userProfile
+      });
       setResult(diagnosis);
     } catch (e) {
       alert("Analysis failed. Please check connection.");
@@ -99,16 +133,16 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
     try {
       const photo = await Camera.getPhoto({
         quality: 90,
-        allowEditing: false, // Set to true if you want native crop
+        allowEditing: false,
         resultType: CameraResultType.DataUrl,
         source: CameraSource.Camera
       });
 
       if (photo.dataUrl) {
-        setPreviewImage(photo.dataUrl);
+        // DIRECT ANALYSIS (Skip Preview)
+        await processImage(photo.dataUrl);
       }
     } catch (err) {
-      // User cancelled or no permissions
       console.log("Camera cancelled");
     }
   };
@@ -123,7 +157,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
       });
 
       if (photo.dataUrl) {
-        setPreviewImage(photo.dataUrl);
+        setPreviewImage(photo.dataUrl); // Keep preview for Gallery uploads (optional, but safer to keep for now)
       }
     } catch (err) {
       console.log("Gallery cancelled");
@@ -136,12 +170,12 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
     try {
       await Share.share({
         title: 'MasterGrowbot Diagnosis',
-        text: `My plant health is rated '${getHealthRating(result.healthScore || 0)}'. Diagnose yours with MasterGrowbot AI!`,
+        text: `My plant health is rated '${result.healthLabel || getHealthRating(result.healthScore || 0)}'. Diagnose yours with MasterGrowbot AI!`,
         dialogTitle: 'Share Result'
       });
     } catch (e) {
       if (navigator.share) {
-        navigator.share({ title: 'Diagnosis', text: `My plant is ${getHealthRating(result.healthScore || 0)}` });
+        navigator.share({ title: 'Diagnosis', text: `My plant is ${result.healthLabel}` });
       } else {
         alert("Sharing not supported on this browser.");
       }
@@ -150,12 +184,11 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
 
   const handleSave = () => {
     if (onSaveToJournal && result && image) {
-      const rating = getHealthRating(result.healthScore || 0);
       onSaveToJournal({
         id: Date.now().toString(),
         date: new Date().toLocaleDateString(),
         type: 'Health Check',
-        notes: `AI Analysis: ${result.diagnosis}. Health: ${rating}. Action: ${result.topAction}`,
+        notes: `AI Analysis: ${result.diagnosis}. Health: ${result.healthLabel}. Action: ${result.topAction}`,
         image: image,
       });
       alert("Saved to Journal! 📝");
@@ -174,31 +207,29 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
       <div className="absolute inset-0 bg-green-500/10 animate-pulse"></div>
       <div className="absolute top-0 left-0 w-full h-2 bg-green-400 shadow-[0_0_20px_rgba(74,222,128,1)] animate-[scan_2s_ease-in-out_infinite] z-10"></div>
 
-      <div className="relative z-20 text-center p-8 bg-black/60 rounded-3xl backdrop-blur-md border border-white/10 m-6">
+      <div className="relative z-20 text-center p-8 bg-black/60 rounded-3xl backdrop-blur-md border border-white/10 m-6 w-[80%]">
         <Growbot size="lg" mood="thinking" className="mb-4 mx-auto" />
         <h2 className="text-2xl font-black uppercase tracking-widest text-green-400 mb-2">Analyzing Photo</h2>
-        <p className="text-white/80 text-xs font-bold uppercase tracking-wider mb-6">Processing Plant Genetics...</p>
+        <p className="text-white/80 text-xs font-bold uppercase tracking-wider mb-6 min-h-[3rem] flex items-center justify-center">
+          {loadingText}
+        </p>
         <div className="text-4xl font-mono text-white font-black">{timeLeft}s</div>
       </div>
     </div>
   );
 
-  // 2. Review Step (Retake vs Analyze)
-  // Ensure strict Z-Index and Layout
+  // 2. Review Step (Only for Gallery Uploads now)
   if (previewImage) return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center h-screen w-screen overflow-hidden">
-      {/* Main Image */}
       <div className="flex-1 w-full bg-black flex items-center justify-center overflow-hidden relative">
         <img src={previewImage} className="max-w-full max-h-full object-contain" />
       </div>
-
-      {/* Bottom Controls */}
       <div className="w-full bg-gray-900/90 backdrop-blur-md p-6 pb-12 flex items-center justify-between gap-4 shrink-0 absolute bottom-0 left-0 right-0 z-[110]">
-        <button onClick={() => { setPreviewImage(null); handleStartCamera(); }} className="flex-1 py-4 bg-gray-800 text-white rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform">
-          <RotateCcw size={18} /> Retake
+        <button onClick={() => { setPreviewImage(null); }} className="flex-1 py-4 bg-gray-800 text-white rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform">
+          <RotateCcw size={18} /> Cancel
         </button>
         <button onClick={() => processImage(previewImage)} className="flex-[2] py-4 bg-green-500 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,197,94,0.4)] active:scale-95 transition-transform">
-          <ScanLine size={20} /> Analyze Plant
+          <ScanLine size={20} /> Analyze
         </button>
       </div>
     </div>
@@ -209,35 +240,57 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
     const isCritical = result.severity === 'high';
     const themeColor = isCritical ? 'text-red-500' : result.severity === 'medium' ? 'text-orange-500' : 'text-green-500';
     const bgTheme = isCritical ? 'bg-red-500' : result.severity === 'medium' ? 'bg-orange-500' : 'bg-green-600';
-    const healthRating = getHealthRating(result.healthScore || 0);
+
+    // Adaptive Display Logic
+    const isNovice = userProfile.experience === 'Novice';
+    const healthDisplay = formatMetricDisplay(result.healthScore, 'health', userProfile.experience);
 
     return (
-      <div className="bg-gray-50 min-h-screen pb-32 overflow-y-auto font-sans">
+      <div className="bg-gray-50 min-h-screen pb-[120px] overflow-y-auto font-sans">
         <div className="sticky top-0 z-[60] bg-white/90 backdrop-blur px-6 py-4 flex justify-between items-center shadow-sm">
           <div className="flex items-center gap-2 text-gray-800 font-black uppercase text-xs tracking-widest"><Activity size={16} className={themeColor} /> Health Report</div>
-          <div className="flex items-center gap-3">
-            {image && <img src={image} className="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover" />}
-            <button onClick={() => { setResult(null); setImage(null); }} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={18} /></button>
-          </div>
+          <button onClick={() => { setResult(null); setImage(null); }} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={18} /></button>
         </div>
 
         <div className="p-6 space-y-6 max-w-lg mx-auto">
+          {/* Header */}
           <div className="animate-in fade-in slide-in-from-top-4">
             <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2 text-white ${bgTheme}`}>{result.severity} Severity • {result.confidence}% Conf.</span>
             <h1 className={`text-3xl font-black leading-tight ${themeColor}`}>{result.diagnosis}</h1>
             <p className="text-xs font-bold text-gray-400 mt-1 uppercase tracking-wide">Detected in {result.growthStage}</p>
           </div>
 
+          {/* Priority Action */}
           <div className={`${bgTheme} text-white p-6 rounded-[2rem] shadow-xl relative overflow-hidden`}>
             <div className="relative z-10"><div className="flex items-center gap-2 mb-2 opacity-90"><Zap size={16} fill="currentColor" /><span className="text-[10px] font-black uppercase tracking-widest">Priority Action</span></div><p className="text-lg font-bold leading-snug">{result.topAction}</p></div>
             <Activity size={100} className="absolute -right-4 -bottom-4 opacity-10 rotate-12" />
           </div>
 
+          {/* Metric Cards */}
           <div className="grid grid-cols-2 gap-3 animate-in fade-in delay-100">
-            <MetricCard icon={Scale} label="Health Score" value={healthRating} color="purple" />
-            <MetricCard icon={Calendar} label="Harvest In" value={result.harvestWindow} color="green" />
-            <MetricCard icon={Droplet} label="Nutrient Target" value={result.nutrientTargets?.ec || "N/A"} subValue={`pH: ${result.nutrientTargets?.ph || "--"}`} color="blue" />
-            <MetricCard icon={Wind} label="VPD Target" value={result.environmentTargets?.vpd || "N/A"} subValue={`${result.environmentTargets?.temp || "--"} / ${result.environmentTargets?.rh || "--"}`} color="cyan" />
+            {/* Health Card (Adaptive: Progress Bar for Novice) */}
+            {isNovice ? (
+              <div className="bg-white/60 backdrop-blur-md p-3 rounded-2xl border border-purple-100 shadow-sm flex flex-col items-center text-center h-full justify-between">
+                <div className="p-2 bg-purple-50 text-purple-600 rounded-full mb-1"><Scale size={16} /></div>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Health Status</span>
+
+                <div className="w-full mt-2">
+                  <div className="text-lg font-black text-purple-700 mb-1">{healthDisplay}</div>
+                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full ${result.healthScore >= 75 ? 'bg-green-500' : result.healthScore >= 50 ? 'bg-orange-500' : 'bg-red-500'}`}
+                      style={{ width: `${result.healthScore}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <MetricCard icon={Scale} label="Health Score" value={healthDisplay} color="purple" />
+            )}
+
+            <MetricCard icon={Calendar} label="Harvest In" value={formatMetricDisplay(result.harvestWindow, 'harvest', userProfile.experience)} color="green" />
+            <MetricCard icon={Droplet} label="Nutrients" value={formatMetricDisplay(result.nutrientTargets?.ec, 'nutrient', userProfile.experience)} subValue={userProfile.experience === 'Expert' ? `pH: ${result.nutrientTargets?.ph || "--"}` : undefined} color="blue" />
+            <MetricCard icon={Wind} label="VPD" value={formatMetricDisplay(result.environmentTargets?.vpd, 'vpd', userProfile.experience)} subValue={userProfile.experience === 'Expert' ? `${result.environmentTargets?.temp || "--"} / ${result.environmentTargets?.rh || "--"}` : undefined} color="cyan" />
           </div>
 
           <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
@@ -246,7 +299,17 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal }) =
             {result.preventionTips && result.preventionTips.length > 0 && <PreventionSection tips={result.preventionTips} />}
           </div>
 
-          <div className="grid grid-cols-2 gap-4 pt-4">
+          {/* Analyzed Image (New Position: 80% width, centered above buttons) */}
+          {image && (
+            <div className="flex justify-center py-4">
+              <div className="w-[80%] rounded-2xl overflow-hidden border-2 border-white shadow-lg rotate-1">
+                <img src={image} className="w-full h-full object-cover" />
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="grid grid-cols-2 gap-4 pb-4">
             <button onClick={handleSave} className="py-4 bg-gray-900 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"><Save size={18} /> Save to Journal</button>
             <button onClick={handleShare} className="py-4 bg-gray-100 text-gray-900 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-gray-200"><Share2 size={18} /> Share Result</button>
           </div>

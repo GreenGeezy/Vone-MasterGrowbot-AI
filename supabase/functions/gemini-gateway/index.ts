@@ -18,8 +18,8 @@ serve(async (req) => {
 
     // --- 1. DEFAULT MODEL (Chat/Voice) ---
     // STRICTLY USING GEMINI 3 FLASH
-    let modelName = "gemini-3-flash-preview"; 
-    
+    let modelName = "gemini-3-flash-preview";
+
     // "Golden Rules" System Prompt (No Markdown, Friendly Coach)
     let systemInstruction = `
       You are MasterGrowbot AI, an expert cannabis cultivation coach.
@@ -39,8 +39,8 @@ serve(async (req) => {
     // --- 2. DIAGNOSIS MODE ---
     if (mode === 'diagnosis') {
       // STRICTLY USING GEMINI 3 PRO (Multimodal Vision)
-      modelName = "gemini-3-pro-preview"; 
-      
+      modelName = "gemini-3-pro-preview";
+
       // Strict JSON Schema for Predictive Analysis
       systemInstruction = `
         You are an expert plant pathologist. Analyze this cannabis plant image.
@@ -49,6 +49,7 @@ serve(async (req) => {
           "diagnosis": "string",
           "severity": "low" | "medium" | "high",
           "healthScore": number,
+          "healthLabel": "Struggling" | "Poor" | "Suboptimal" | "Average" | "Good" | "Great" | "Thriving",
           "growthStage": "string",
           "topAction": "string",
           "fixSteps": ["string"],
@@ -77,13 +78,13 @@ serve(async (req) => {
       resultText = result.response.text();
     }
 
-    return new Response(JSON.stringify({ result: resultText }), { 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    return new Response(JSON.stringify({ result: resultText }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), { 
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
