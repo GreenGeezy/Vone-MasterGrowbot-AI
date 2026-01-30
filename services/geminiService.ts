@@ -55,6 +55,12 @@ export async function diagnosePlant(
   // Strict JSON Prompt
   const prompt = `
     Analyze this plant image strictly.
+    Analyze the image for abiotic environmental stress. Determine the PRIORITY issue among:
+    1. Lighting (Bleaching/Stretching)
+    2. Temperature (Heat Stress/Tacoing)
+    3. Humidity (Mold/Droop)
+    If no stress is visible, the priority is 'Optimal'.
+
     REQUIRED OUTPUT (JSON ONLY):
     {
       "diagnosis": "Precise identification of the main issue (or 'Healthy')",
@@ -70,6 +76,7 @@ export async function diagnosePlant(
       "harvestWindow": "Predicted time to harvest (e.g. '3-4 Weeks') or 'N/A'",
       "nutrientTargets": { "ec": "1.8", "ph": "6.0" },
       "environmentTargets": { "vpd": "1.2", "temp": "75F", "rh": "45%" },
+      "environmentSummary": "Light Stress (Adjust Intensity) | Heat Risk (Check Venting) | High Humidity (Risk) | Optimal Climate",
       "riskScore": 0-100
     }
   `;

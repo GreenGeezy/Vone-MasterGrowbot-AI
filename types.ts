@@ -39,13 +39,21 @@ export interface Strain {
   description: string;
 }
 
-export interface Task {
+export interface GrowTask {
   id: string;
+  plantId?: string; // Optional for now to support global tasks
   title: string;
-  completed: boolean;
-  date?: string;
-  type: 'water' | 'feed' | 'check' | 'train' | 'other';
+  completed: boolean; // Keeping 'completed' for backward compat, or I can map it. 
+  // Wait, prompt asked for 'isCompleted'. I should add that and maybe keep 'completed' as legacy or refactor.
+  // Prompt: isCompleted, source, createdAt.
+  isCompleted: boolean;
+  dueDate: string; // ISO string
+  source: 'user' | 'ai_diagnosis';
+  createdAt: string;
+  type?: 'water' | 'feed' | 'check' | 'train' | 'other'; // Keep for legacy compatibility
 }
+
+export type Task = GrowTask; // Alias for backward compatibility
 
 // --- AI Analysis & Diagnosis ---
 
@@ -68,6 +76,7 @@ export interface DiagnosisResult {
   yieldTips: string[];       // How to get more weight
   qualityTips: string[];     // How to get better terps/thc
   generalAdvice?: string;    // Contextual summary
+  environmentSummary?: string; // e.g. "Light Stress Detected" or "Optimal Climate"
 }
 
 export interface LogAnalysis {

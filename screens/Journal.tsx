@@ -1,16 +1,22 @@
 import React, { useState } from 'react';
-import { Calendar, Plus, Search, X } from 'lucide-react';
+import { Calendar, Plus, Search, X, CheckCircle2 } from 'lucide-react';
 import NoteCreator from '../components/NoteCreator';
 import StrainCard from '../components/StrainCard';
 import { analyzeGrowLog } from '../services/geminiService';
 import { STRAIN_DATABASE } from '../data/strains';
 
-const Journal: React.FC<any> = ({ plants, onAddEntry, onUpdatePlant }) => {
+const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onUpdatePlant }) => {
   const [showCreator, setShowCreator] = useState(false);
+  const [showTaskCreator, setShowTaskCreator] = useState(false); // New Task Modal
   const [showStrainSearch, setShowStrainSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const plant = plants[0]; // Assuming single plant focus for now, consistent with existing
+  const [showFabMenu, setShowFabMenu] = useState(false); // Speed dial toggle
 
+  // Task Form State
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDate, setNewTaskDate] = useState(new Date().toISOString().split('T')[0]);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const plant = plants[0];
   const filteredStrains = STRAIN_DATABASE.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const handleSaveWrapper = async (entry: any) => {
@@ -18,6 +24,21 @@ const Journal: React.FC<any> = ({ plants, onAddEntry, onUpdatePlant }) => {
     onAddEntry({ ...entry, aiAnalysis: { summary: aiData } });
     setShowCreator(false);
   };
+
+  const handleCreateTask = async () => {
+    if (newTaskTitle.trim()) {
+      await onAddTask(newTaskTitle, newTaskDate, 'user');
+      setShowTaskCreator(false);
+      setNewTaskTitle('');
+      setShowFabMenu(false);
+    }
+  };
+
+  // Combine and Sort Feed
+  const feedItems = [
+    ...(plant?.journal || []).map((j: any) => ({ ...j, feedType: 'journal' })),
+    ...tasks.map((t: any) => ({ ...t, feedType: 'task', date: t.dueDate })) // Map dueDate to date for sorting
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
     <div className="bg-surface min-h-screen pb-32 pt-12 relative px-6">
@@ -40,32 +61,44 @@ const Journal: React.FC<any> = ({ plants, onAddEntry, onUpdatePlant }) => {
       </div>
 
       <div className="space-y-4">
-        {plant?.journal.map((entry: any) => (
-          <div key={entry.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">{entry.date}</span>
-              <span className="text-[10px] font-black bg-gray-100 px-2 py-1 rounded-md text-gray-600 uppercase">{entry.type}</span>
+        {feedItems.map((item: any) => {
+          if (item.feedType === 'task') {
+            return (
+              <div key={`task-${item.id}`} className="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-blue-400 flex items-center justify-between opacity-80">
+                <div>
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{item.date} • Task</div>
+                  <div className={`font-bold ${item.isCompleted ? 'line-through text-gray-400' : 'text-gray-800'}`}>{item.title}</div>
+                </div>
+                {item.isCompleted && <CheckCircle2 size={18} className="text-green-500" />}
+              </div>
+            );
+          }
+          // Journal Entry Render
+          return (
+            <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">{item.date}</span>
+                <span className="text-[10px] font-black bg-gray-100 px-2 py-1 rounded-md text-gray-600 uppercase">{item.type}</span>
+              </div>
+              {item.notes && <div className="text-sm text-gray-700 leading-relaxed font-medium">{item.notes}</div>}
+
+              {item.imageUri && ( // Fixed imageUri property access
+                <div className="mt-3 relative rounded-xl overflow-hidden group">
+                  <img src={item.imageUri} className="w-full h-40 object-cover transform transition-transform group-hover:scale-105" alt="Journal entry" />
+                </div>
+              )}
+
+              {item.aiAnalysis && (
+                <div className="mt-3 p-3 bg-green-50 rounded-xl text-xs text-green-800 font-medium flex gap-2">
+                  <div className="mt-0.5"><Sparkles size={12} /></div>
+                  {item.aiAnalysis.summary.replace(/"/g, '')}
+                </div>
+              )}
             </div>
-            {entry.notes && <div className="text-sm text-gray-700 leading-relaxed font-medium">{entry.notes}</div>}
+          );
+        })}
 
-            {/* Journal Image Rendering */}
-            {entry.image && (
-              <div className="mt-3 relative rounded-xl overflow-hidden group">
-                <img src={entry.image} className="w-full h-40 object-cover transform transition-transform group-hover:scale-105" alt="Journal entry" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              </div>
-            )}
-
-            {/* AI Analysis Summary */}
-            {entry.aiAnalysis && (
-              <div className="mt-3 p-3 bg-green-50 rounded-xl text-xs text-green-800 font-medium flex gap-2">
-                <div className="mt-0.5"><Sparkles size={12} /></div>
-                {entry.aiAnalysis.summary.replace(/"/g, '')}
-              </div>
-            )}
-          </div>
-        ))}
-        {plant?.journal.length === 0 && (
+        {feedItems.length === 0 && (
           <div className="text-center py-10 text-gray-400 text-sm">
             <p>No entries yet.</p>
             <p className="text-xs mt-1">Tap the + button to start log.</p>
@@ -73,9 +106,22 @@ const Journal: React.FC<any> = ({ plants, onAddEntry, onUpdatePlant }) => {
         )}
       </div>
 
-      <button onClick={() => setShowCreator(true)} className="fixed bottom-24 right-6 w-14 h-14 bg-gray-900 text-white rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform z-40">
-        <Plus size={28} />
-      </button>
+      {/* FAB with Speed Dial */}
+      <div className="fixed bottom-24 right-6 z-40 flex flex-col items-end gap-3">
+        {showFabMenu && (
+          <>
+            <button onClick={() => { setShowFabMenu(false); setShowTaskCreator(true); }} className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-full font-bold shadow-lg animate-in slide-in-from-bottom-2">
+              <span className="text-xs">Add Task</span> <CheckCircle2 size={18} />
+            </button>
+            <button onClick={() => { setShowFabMenu(false); setShowCreator(true); }} className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-full font-bold shadow-lg animate-in slide-in-from-bottom-2 delay-75">
+              <span className="text-xs">Add Note</span> <Calendar size={18} />
+            </button>
+          </>
+        )}
+        <button onClick={() => setShowFabMenu(!showFabMenu)} className={`w-14 h-14 ${showFabMenu ? 'bg-gray-800' : 'bg-gray-900'} text-white rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform`}>
+          {showFabMenu ? <X size={24} /> : <Plus size={28} />}
+        </button>
+      </div>
 
       {/* Strain Search Modal */}
       {showStrainSearch && (
@@ -100,11 +146,21 @@ const Journal: React.FC<any> = ({ plants, onAddEntry, onUpdatePlant }) => {
                 <StrainCard strain={s} compact />
               </div>
             ))}
-            {filteredStrains.length === 0 && (
-              <div className="text-center py-10 opacity-50">
-                <p>No strains found matching "{searchQuery}"</p>
-              </div>
-            )}
+          </div>
+        </div>
+      )}
+
+      {/* Task Creator Modal */}
+      {showTaskCreator && (
+        <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-in zoom-in-95">
+            <h3 className="text-lg font-black text-gray-800 mb-4">New Grow Task</h3>
+            <input className="w-full bg-gray-50 p-3 rounded-xl font-bold text-gray-800 mb-3 outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="Task Title (e.g. Flush Today)" value={newTaskTitle} autoFocus onChange={(e) => setNewTaskTitle(e.target.value)} />
+            <input type="date" className="w-full bg-gray-50 p-3 rounded-xl font-bold text-gray-800 mb-6 outline-none" value={newTaskDate} onChange={(e) => setNewTaskDate(e.target.value)} />
+            <div className="flex gap-3">
+              <button onClick={() => setShowTaskCreator(false)} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold">Cancel</button>
+              <button onClick={handleCreateTask} className="flex-1 py-3 bg-blue-500 text-white rounded-xl font-bold shadow-lg shadow-blue-200">Schedule</button>
+            </div>
           </div>
         </div>
       )}

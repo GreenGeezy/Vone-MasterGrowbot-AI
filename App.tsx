@@ -16,6 +16,7 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { supabase } from './services/supabaseClient';
+import { getPendingTasksForToday, toggleTaskCompletion, addNewTask } from './services/dbService';
 import { STRAIN_DATABASE } from './data/strains';
 
 const App: React.FC = () => {
@@ -52,7 +53,10 @@ const App: React.FC = () => {
   const loadUserData = async () => {
     const mockStrain = STRAIN_DATABASE[0];
     setPlants([{ id: '1', name: 'Project Alpha', strain: mockStrain.name, strainDetails: mockStrain, stage: 'Veg', healthScore: 92, daysInStage: 24, imageUri: 'https://images.unsplash.com/photo-1603796846097-b36976ea2851', totalDays: 24, journal: [], tasks: [], streak: 5, weeklySummaries: [] }]);
-    setTasks([{ id: '1', title: 'Check pH', completed: false, type: 'check' }, { id: '2', title: 'CalMag', completed: false, type: 'feed' }]);
+
+    // Fetch real tasks
+    const pendingTasks = await getPendingTasksForToday();
+    if (pendingTasks) setTasks(pendingTasks);
   };
 
   const handleAuthSuccess = async () => {
@@ -81,6 +85,64 @@ const App: React.FC = () => {
     localStorage.setItem('mastergrowbot_profile', JSON.stringify(updated));
   };
 
+  const handleToggleTask = async (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const newStatus = !task.isCompleted;
+
+    // Optimistic Update
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCompleted: newStatus, completed: newStatus } : t));
+
+    await toggleTaskCompletion(taskId, newStatus);
+  };
+
+  const handleAddTask = async (title: string, date: string, source: 'user' | 'ai_diagnosis' = 'user') => {
+    const tempId = Date.now().toString();
+    const optimisticTask: Task = {
+      id: tempId,
+      title,
+      dueDate: date,
+      isCompleted: false,
+      completed: false, // Legacy
+      source,
+      createdAt: new Date().toISOString()
+    };
+
+    setTasks(prev => [...prev, optimisticTask]);
+
+    const savedTask = await addNewTask({
+      title,
+      dueDate: date,
+      source,
+      type: 'other' // Default
+    });
+
+    if (savedTask) {
+      setTasks(prev => prev.map(t => t.id === tempId ? savedTask : t));
+    }
+  };
+
+  const handleAddPlant = (strain: any) => {
+    const newPlant: Plant = {
+      id: Date.now().toString(),
+      name: `My ${strain.name}`,
+      strain: strain.name,
+      strainDetails: strain,
+      stage: 'Seedling',
+      healthScore: 100,
+      daysInStage: 1,
+      imageUri: strain.image || 'https://images.unsplash.com/photo-1603796846097-b36976ea2851', // Fallback or strain image
+      totalDays: 1,
+      journal: [],
+      tasks: [],
+      streak: 0,
+      weeklySummaries: []
+    };
+    setPlants(prev => [...prev, newPlant]);
+    // Optionally create a starter task?
+    handleAddTask(`Start journal for ${strain.name}`, new Date().toISOString().split('T')[0], 'user');
+  };
+
   if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={() => setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE)} />;
   if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) return <Onboarding onComplete={(p) => { setUserProfile(p); setOnboardingStatus(OnboardingStep.SUMMARY); }} />;
   if (onboardingStatus === OnboardingStep.SUMMARY) return <OnboardingSummary profile={userProfile!} onContinue={() => { setOnboardingStatus(OnboardingStep.COMPLETED); setShowPaywall(true); }} />;
@@ -88,10 +150,10 @@ const App: React.FC = () => {
   return (
     <div className="h-screen w-screen bg-surface overflow-hidden relative">
       <div className="h-full w-full overflow-y-auto pb-24">
-        {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={(id: string) => setTasks(t => t.map(x => x.id === id ? { ...x, completed: !x.completed } : x))} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
-        {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} plant={plants[0]} defaultProfile={userProfile} />}
+        {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onAddPlant={handleAddPlant} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
+        {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} onAddTask={handleAddTask} plant={plants[0]} defaultProfile={userProfile} />}
         {currentTab === AppScreen.CHAT && <Chat onSaveToJournal={handleAddJournalEntry} plant={plants[0]} userProfile={userProfile} />}
-        {currentTab === AppScreen.JOURNAL && <Journal plants={plants} onAddEntry={handleAddJournalEntry} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
+        {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
         {currentTab === AppScreen.PROFILE && <Profile userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onSignOut={() => window.location.reload()} />}
       </div>
 

@@ -37,26 +37,38 @@ const PreventionSection = ({ tips }: { tips: string[] }) => (
   </div>
 );
 
-const RecoveryChecklist = ({ steps, themeColor }: { steps: string[], themeColor: string }) => {
+interface DiagnoseProps {
+  plant?: Plant;
+  onBack?: () => void;
+  onSaveToJournal?: (entry: any) => void;
+  onAddTask?: (title: string, date: string, source: 'ai_diagnosis' | 'user') => void;
+  defaultProfile?: UserProfile | null;
+}
+
+const RecoveryChecklist = ({ steps, themeColor, onAddTask }: { steps: string[], themeColor: string, onAddTask?: (t: string) => void }) => {
   const [checkedState, setCheckedState] = useState<boolean[]>(new Array(steps.length).fill(false));
   return (
     <div className="space-y-2 mt-3">
       {steps.map((step, idx) => (
-        <div key={idx} onClick={() => { const updated = [...checkedState]; updated[idx] = !updated[idx]; setCheckedState(updated); }} className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${checkedState[idx] ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-100 shadow-sm'}`}>
-          <div className={`mt-0.5 transition-colors ${checkedState[idx] ? 'text-gray-300' : themeColor}`}>{checkedState[idx] ? <CheckSquare size={18} /> : <Square size={18} />}</div>
-          <p className={`text-xs sm:text-sm leading-snug transition-all ${checkedState[idx] ? 'text-gray-400 line-through' : 'text-gray-700 font-semibold'}`}>{step}</p>
+        <div key={idx} className={`flex items-start gap-2 p-3 rounded-xl border transition-all ${checkedState[idx] ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-100 shadow-sm'}`}>
+          <div onClick={() => { const updated = [...checkedState]; updated[idx] = !updated[idx]; setCheckedState(updated); }} className="flex gap-3 flex-1 cursor-pointer">
+            <div className={`mt-0.5 transition-colors ${checkedState[idx] ? 'text-gray-300' : themeColor}`}>{checkedState[idx] ? <CheckSquare size={18} /> : <Square size={18} />}</div>
+            <p className={`text-xs sm:text-sm leading-snug transition-all ${checkedState[idx] ? 'text-gray-400 line-through' : 'text-gray-700 font-semibold'}`}>{step}</p>
+          </div>
+          {!checkedState[idx] && onAddTask && (
+            <button
+              onClick={() => onAddTask(step)}
+              className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 active:scale-90 transition-transform"
+              title="Add to Daily Tasks"
+            >
+              <Calendar size={14} />
+            </button>
+          )}
         </div>
       ))}
     </div>
   );
 };
-
-interface DiagnoseProps {
-  plant?: Plant;
-  onBack?: () => void;
-  onSaveToJournal?: (entry: any) => void;
-  defaultProfile?: UserProfile | null;
-}
 
 const LOADING_PHRASES = [
   "Processing Plant Genetics...",
@@ -68,7 +80,7 @@ const LOADING_PHRASES = [
   "Building your custom care plan..."
 ];
 
-const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, defaultProfile }) => {
+const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onAddTask, defaultProfile }) => {
   const [image, setImage] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -171,7 +183,16 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, def
         notes: `AI Analysis: ${result.diagnosis}. Health: ${result.healthLabel}. Action: ${result.topAction}`,
         image: image,
       });
-      alert("Saved to Journal! 📝");
+
+      // Auto-Task Logic for Low Health
+      if (result.healthScore < 70 && onAddTask) {
+        const today = new Date().toISOString().split('T')[0];
+        onAddTask(`Review Diagnosis: ${result.diagnosis}`, today, 'ai_diagnosis');
+        alert("Saved to Journal + Follow-up Task Created! 📝✅");
+      } else {
+        alert("Saved to Journal! 📝");
+      }
+
     } else {
       alert("Could not save entry.");
     }
@@ -266,19 +287,24 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, def
               color="blue"
             />
 
-            {/* CONTEXT-AWARE: VPD / Environment */}
+            {/* CONTEXT-AWARE: Environment */}
             <MetricCard
               icon={Wind}
-              label={growMethod === 'Outdoor' ? "Env. Risk" : growMethod === 'Greenhouse' ? "VPD / Mold Risk" : "VPD Target"}
-              value={formatMetricDisplay(result.environmentTargets?.vpd, 'vpd', defaultProfile?.experience, growMethod)}
-              subValue={defaultProfile?.experience === 'Expert' && growMethod !== 'Outdoor' ? `${result.environmentTargets?.temp || "--"} / ${result.environmentTargets?.rh || "--"}` : undefined}
-              color="cyan"
+              label="Environment"
+              value={result.environmentSummary || formatMetricDisplay(result.environmentTargets?.vpd, 'vpd', defaultProfile?.experience, growMethod)}
+              subValue={(!result.environmentSummary && defaultProfile?.experience === 'Expert' && growMethod !== 'Outdoor') ? `${result.environmentTargets?.temp || "--"} / ${result.environmentTargets?.rh || "--"}` : undefined}
+              color={(() => {
+                const s = result.environmentSummary || "";
+                if (/Stress|Risk|Burn|Warning/i.test(s)) return "orange";
+                if (/Optimal|Ideal/i.test(s)) return "green";
+                return "cyan";
+              })()}
             />
           </div>
 
           <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
             <div className="flex items-center gap-2 mb-2 border-b border-gray-50 pb-2"><CheckCircle size={18} className={themeColor} /><h3 className="text-xs font-black text-gray-800 uppercase tracking-widest">Recovery Protocol</h3></div>
-            <RecoveryChecklist steps={result.fixSteps} themeColor={themeColor} />
+            <RecoveryChecklist steps={result.fixSteps} themeColor={themeColor} onAddTask={onAddTask} />
             {result.preventionTips && result.preventionTips.length > 0 && <PreventionSection tips={result.preventionTips} />}
           </div>
 
