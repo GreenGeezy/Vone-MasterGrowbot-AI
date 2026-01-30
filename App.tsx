@@ -96,7 +96,7 @@ const App: React.FC = () => {
     await toggleTaskCompletion(taskId, newStatus);
   };
 
-  const handleAddTask = async (title: string, date: string, source: 'user' | 'ai_diagnosis' = 'user') => {
+  const handleAddTask = async (title: string, date: string, source: 'user' | 'ai_diagnosis' = 'user', options?: { recurrence?: 'daily' | 'weekly', notes?: string }) => {
     const tempId = Date.now().toString();
     const optimisticTask: Task = {
       id: tempId,
@@ -105,6 +105,8 @@ const App: React.FC = () => {
       isCompleted: false,
       completed: false, // Legacy
       source,
+      recurrence: options?.recurrence,
+      notes: options?.notes,
       createdAt: new Date().toISOString()
     };
 
@@ -114,7 +116,9 @@ const App: React.FC = () => {
       title,
       dueDate: date,
       source,
-      type: 'other' // Default
+      type: 'other', // Default
+      recurrence: options?.recurrence,
+      notes: options?.notes
     });
 
     if (savedTask) {

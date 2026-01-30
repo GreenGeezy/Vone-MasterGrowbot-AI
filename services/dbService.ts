@@ -154,6 +154,8 @@ export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCo
       due_date: task.dueDate,
       source: task.source,
       type: task.type || 'other',
+      recurrence: task.recurrence || null, // New Field
+      notes: task.notes || null,           // New Field
       created_at: new Date().toISOString()
     };
 
@@ -177,7 +179,9 @@ export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCo
       dueDate: data.due_date,
       source: data.source,
       createdAt: data.created_at,
-      type: data.type
+      type: data.type,
+      recurrence: data.recurrence, // Return new field
+      notes: data.notes            // Return new field
     };
 
   } catch (e) {

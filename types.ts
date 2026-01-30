@@ -51,6 +51,8 @@ export interface GrowTask {
   source: 'user' | 'ai_diagnosis';
   createdAt: string;
   type?: 'water' | 'feed' | 'check' | 'train' | 'other'; // Keep for legacy compatibility
+  recurrence?: 'daily' | 'weekly';
+  notes?: string;
 }
 
 export type Task = GrowTask; // Alias for backward compatibility
@@ -169,6 +171,8 @@ export interface ChatMessage {
 export interface UserProfile {
   id?: string;
   email?: string;
+  name?: string;
+  avatarUri?: string;
 
   // Cultivation Profile
   experience: 'Novice' | 'Intermediate' | 'Expert' | 'Pro';

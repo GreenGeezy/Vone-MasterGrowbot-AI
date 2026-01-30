@@ -303,8 +303,19 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
           </div>
 
           <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
-            <div className="flex items-center gap-2 mb-2 border-b border-gray-50 pb-2"><CheckCircle size={18} className={themeColor} /><h3 className="text-xs font-black text-gray-800 uppercase tracking-widest">Recovery Protocol</h3></div>
-            <RecoveryChecklist steps={result.fixSteps} themeColor={themeColor} onAddTask={onAddTask} />
+            <div className="flex items-center gap-2 mb-2 border-b border-gray-50 pb-2"><CheckCircle size={18} className={themeColor} /><h3 className="text-xs font-black text-gray-800 uppercase tracking-widest">Personalized Grow and Recovery Tips</h3></div>
+            <RecoveryChecklist
+              steps={result.fixSteps}
+              themeColor={themeColor}
+              onAddTask={(stepTitle) => {
+                // Logic to add task for TODAY directly
+                if (onAddTask) {
+                  const today = new Date().toISOString().split('T')[0];
+                  onAddTask(stepTitle, today, 'ai_diagnosis');
+                  alert("Task Added to Today's Plan! 📅");
+                }
+              }}
+            />
             {result.preventionTips && result.preventionTips.length > 0 && <PreventionSection tips={result.preventionTips} />}
           </div>
 

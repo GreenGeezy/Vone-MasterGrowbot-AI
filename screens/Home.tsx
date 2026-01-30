@@ -53,8 +53,8 @@ const Home: React.FC<any> = ({ plants, tasks, onToggleTask, onNavigateToPlant, o
       <div className="mt-8">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold text-text-main">Your Plants</h2>
-          <button onClick={() => setShowStrainSearch(true)} className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-full text-xs font-bold shadow-lg shadow-green-200 active:scale-95 transition-transform">
-            <Plus size={14} /> Add
+          <button onClick={() => setShowStrainSearch(true)} className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-full text-xs font-bold shadow-lg shadow-green-200 active:scale-95 transition-transform">
+            <Search size={14} /> Search Strain Database
           </button>
         </div>
         <div className="space-y-4">
