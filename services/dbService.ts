@@ -211,3 +211,57 @@ export const toggleTaskCompletion = async (taskId: string, isCompleted: boolean)
     return false;
   }
 };
+
+// --- Support & Feedback ---
+
+export const createSupportTicket = async (ticket: { name: string, email: string, issue: string, message: string }) => {
+  if (!supabase) return null;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase
+      .from('support_tickets')
+      .insert({
+        user_id: user?.id || null, // Allow generic support even if auth fails, ideally
+        name: ticket.name,
+        email: ticket.email,
+        issue: ticket.issue,
+        message: ticket.message,
+        status: 'open',
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error creating support ticket:', error);
+    return null;
+  }
+};
+
+export const submitUserFeedback = async (feedback: { rating: number, message: string }) => {
+  if (!supabase) return null;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from('user_feedback')
+      .insert({
+        user_id: user.id,
+        rating: feedback.rating,
+        message: feedback.message,
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error submitting feedback:', error);
+    return null;
+  }
+};

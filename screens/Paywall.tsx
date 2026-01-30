@@ -164,15 +164,10 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
   return (
     <div className="fixed inset-0 bg-white z-[60] flex flex-col overflow-hidden">
 
-      {/* HERO IMAGE */}
-      <div className="relative h-[30vh] w-full flex-shrink-0">
-        {/* Placeholder until generation succeeds - using a backup gradient/image if file missing */}
-        <img
-          src="/assets/hero_before_after.png"
-          className="w-full h-full object-cover"
-          alt="Before (Sick) vs After (Healthy) - MasterGrowbot Results"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white/90"></div>
+      {/* HEADER IMAGE & CLOSE */}
+      <div className="relative h-64 bg-green-900 flex-shrink-0">
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1596791836043-982c75908b89?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80')] bg-cover bg-center opacity-40"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white"></div>
 
         <button
           onClick={onSkip}
@@ -180,94 +175,122 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
         >
           <X size={20} />
         </button>
-      </div>
 
-      {/* SCROLLABLE CONTENT */}
-      <div className="flex-1 overflow-y-auto px-6 pb-64 -mt-8 relative z-10">
-
-        {/* HEADLINE */}
-        <div className="mb-8 text-center">
-          <span className="bg-green-100 text-green-800 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full inline-flex items-center gap-1 mb-3">
-            <Shield size={10} className="text-green-600" /> Trusted by Elite Growers
-          </span>
-          <h1 className="text-3xl font-black text-gray-900 leading-none mb-2">
-            Rescue Your Grow
+        <div className="absolute bottom-4 left-6 right-6">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="bg-black/80 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 backdrop-blur-md">
+              <Shield size={10} className="text-green-400" /> Trusted by Elite Growers Worldwide
+            </span>
+          </div>
+          <h1 className="text-3xl font-black text-gray-900 leading-tight">
+            Rescue Your Grow Instantly with AI Power
           </h1>
-          <p className="text-sm font-medium text-gray-500 max-w-xs mx-auto">
-            Identify problems instantly, get expert fixes, and maximize your potency.
+          <p className="text-sm font-medium text-gray-600 mt-1">
+            Snap a pic for pest detection, get voice-guided fixes, and boost your yields without guesswork.
           </p>
         </div>
+      </div>
 
-        {/* TOP 3 FEATURES */}
+      {/* SCROLLABLE CONTENT (Increased Padding for Footer) */}
+      <div className="flex-1 overflow-y-auto px-6 pb-64 pt-2">
+
+        {/* BENEFITS LIST */}
         <div className="space-y-5 mb-8">
+          {/* Benefit 1 */}
           <div className="flex gap-4 items-start">
             <div className="p-3 bg-red-50 text-red-500 rounded-2xl flex-shrink-0"><LifeBuoy size={24} /></div>
             <div>
               <h3 className="font-bold text-gray-900 text-sm">Unlimited AI Diagnosis</h3>
-              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Identify pests & deficiencies instantly.</p>
+              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Stop guessing—identify pests, diseases, and deficiencies instantly to prevent crop loss.</p>
             </div>
           </div>
+
+          {/* Benefit 2 */}
           <div className="flex gap-4 items-start">
             <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl flex-shrink-0"><Headphones size={24} /></div>
             <div>
               <h3 className="font-bold text-gray-900 text-sm">24/7 Expert Chatbot</h3>
-              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Real-time answers for your specific setup.</p>
+              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Hands-free voice coach for real-time answers during grows, saving time and effort.</p>
             </div>
           </div>
+
+          {/* Benefit 3 */}
           <div className="flex gap-4 items-start">
             <div className="p-3 bg-yellow-50 text-yellow-600 rounded-2xl flex-shrink-0"><Zap size={24} /></div>
             <div>
               <h3 className="font-bold text-gray-900 text-sm">Personalized Grow Plan</h3>
-              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Tailored tasks to maximize harvest.</p>
+              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Tailored tasks to your setup—avoid mistakes and maximize your harvest potential.</p>
             </div>
           </div>
-        </div>
 
-        {/* PLAN SELECTION (Repositon) */}
-        <div className="mb-8">
-          <h2 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 text-center">Select Your Plan</h2>
-          <div className="grid grid-cols-1 gap-3">
-            {packages.map((pkg) => {
-              const isSelected = selectedPkgIdentifier === pkg.identifier;
-              const isMonthly = pkg.packageType === PACKAGE_TYPE.MONTHLY;
-              const isAnnual = pkg.packageType === PACKAGE_TYPE.ANNUAL;
-
-              return (
-                <div
-                  key={pkg.identifier}
-                  onClick={() => setSelectedPkgIdentifier(pkg.identifier)}
-                  className={`relative rounded-2xl border-2 p-4 transition-all active:scale-[0.98] ${isSelected ? 'border-green-500 bg-green-50/50' : 'border-gray-100 bg-white'
-                    }`}
-                >
-                  {isMonthly && <div className="absolute -top-2.5 left-4 bg-green-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm"><Star size={8} fill="currentColor" /> Popular</div>}
-                  {isAnnual && <div className="absolute -top-2.5 left-4 bg-black text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow-sm">Best Value</div>}
-
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h3 className={`font-black text-sm ${isSelected ? 'text-green-900' : 'text-gray-800'}`}>{pkg.product.title}</h3>
-                      <p className="text-[10px] text-gray-500 font-bold mt-0.5">{isMonthly ? "Flexible. Cancel anytime." : isAnnual ? "Save 45% vs Monthly" : "Short-term access"}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className={`block font-black text-lg ${isSelected ? 'text-green-700' : 'text-gray-900'}`}>{pkg.product.priceString}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* REMAINING FEATURES (Combined Strain) */}
-        <div className="space-y-5 mb-12">
+          {/* Benefit 4 (UPDATED) */}
           <div className="flex gap-4 items-start">
             <div className="p-3 bg-purple-50 text-purple-500 rounded-2xl flex-shrink-0"><Dna size={24} /></div>
             <div>
-              <h3 className="font-bold text-gray-900 text-sm">Strain-Specific Intelligence</h3>
-              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Over 100 verified profiles for tailored advice to grow award-winning buds at peak potency.</p>
+              <h3 className="font-bold text-gray-900 text-sm">Searchable Strain Database</h3>
+              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Over 100 profiles to grow award-winning buds.</p>
+            </div>
+          </div>
+
+          {/* Benefit 5 */}
+          <div className="flex gap-4 items-start">
+            <div className="p-3 bg-green-50 text-green-500 rounded-2xl flex-shrink-0"><Dna size={24} /></div>
+            <div>
+              <h3 className="font-bold text-gray-900 text-sm">Verified Strain Intelligence</h3>
+              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Strain-specific advice to handle variations ensuring peak potency.</p>
             </div>
           </div>
         </div>
 
+        {/* PLAN CARDS */}
+        <h2 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 text-center">Select Your Plan</h2>
+        <div className="grid grid-cols-1 gap-4">
+          {packages.map((pkg) => {
+            const isSelected = selectedPkgIdentifier === pkg.identifier;
+            const isMonthly = pkg.packageType === PACKAGE_TYPE.MONTHLY;
+            const isAnnual = pkg.packageType === PACKAGE_TYPE.ANNUAL;
+
+            return (
+              <div
+                key={pkg.identifier}
+                onClick={() => setSelectedPkgIdentifier(pkg.identifier)}
+                className={`relative rounded-2xl border-2 p-4 transition-all active:scale-[0.98] ${isSelected ? 'border-green-500 bg-green-50/50' : 'border-gray-100 bg-white'
+                  }`}
+              >
+                {isMonthly && (
+                  <div className="absolute -top-3 left-4 bg-green-500 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full flex items-center gap-1 shadow-md">
+                    <Star size={10} fill="currentColor" /> Most Popular
+                  </div>
+                )}
+                {isAnnual && (
+                  <div className="absolute -top-3 left-4 bg-black text-white text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-md">
+                    Best Value
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className={`font-black text-base ${isSelected ? 'text-green-800' : 'text-gray-800'}`}>
+                      {pkg.product.title}
+                    </h3>
+                    <p className="text-xs text-gray-500 font-medium mt-1">
+                      {isMonthly ? "Flexible. Cancel anytime." : isAnnual ? "Save 45% vs Monthly" : "Short-term access"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className={`block font-black text-xl ${isSelected ? 'text-green-700' : 'text-gray-900'}`}>
+                      {pkg.product.priceString}
+                    </span>
+                    <div className={`w-5 h-5 rounded-full border-2 ml-auto mt-2 flex items-center justify-center ${isSelected ? 'border-green-500 bg-green-500' : 'border-gray-300'
+                      }`}>
+                      {isSelected && <Check size={12} className="text-white" />}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* FOOTER (Sticky CTA) */}

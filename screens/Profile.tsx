@@ -222,7 +222,18 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                             <h2 className="text-lg font-black text-gray-900">Contact Support</h2>
                             <button onClick={() => setShowSupportModal(false)} className="p-2 bg-gray-100 rounded-full"><X size={18} /></button>
                         </div>
-                        <form onSubmit={handleContactSupport} className="space-y-3">
+                        <form onSubmit={async (e) => {
+                            e.preventDefault();
+                            const { createSupportTicket } = await import('../services/dbService');
+                            const result = await createSupportTicket(supportForm);
+                            if (result) {
+                                alert(`Ticket #${result.id.slice(0, 8)} Created! We will contact you shortly.`);
+                                setShowSupportModal(false);
+                                setSupportForm({ name: '', email: '', issue: '', message: '' });
+                            } else {
+                                alert("Error creating ticket. Please try again.");
+                            }
+                        }} className="space-y-3">
                             <input
                                 required placeholder="Your Name"
                                 className="w-full bg-gray-50 p-4 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-green-500/20"
@@ -260,13 +271,55 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                                 <MessageSquare size={28} />
                             </div>
                             <h2 className="text-lg font-black text-gray-900">We Value Your Voice</h2>
-                            <p className="text-xs text-gray-500 font-medium mt-2 leading-relaxed">
+                            <p className="text-xs text-gray-500 font-medium mt-2 leading-relaxed px-4">
                                 "Thank You for Being Part of Our Elite MasterGrowbot AI Growers Community..."
                             </p>
                         </div>
-                        <button onClick={handleShareFeedback} className="w-full py-4 bg-gray-900 text-white rounded-xl font-black shadow-xl active:scale-95 transition-transform mb-3">
-                            Open Email App
+
+                        {/* Feedback Fields */}
+                        <div className="space-y-4 mb-6">
+                            {/* Simple Star Rating */}
+                            <div className="flex justify-center gap-2">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                    <button
+                                        key={star}
+                                        onClick={() => setSupportForm(prev => ({ ...prev, rating: star } as any))}
+                                        className={`p-2 rounded-full transition-colors ${(supportForm as any).rating >= star ? 'text-yellow-400 bg-yellow-50' : 'text-gray-200'}`}
+                                    >
+                                        <Shield size={24} fill={(supportForm as any).rating >= star ? "currentColor" : "none"} />
+                                    </button>
+                                ))}
+                            </div>
+
+                            <textarea
+                                placeholder="Share your thoughts..."
+                                rows={4}
+                                className="w-full bg-gray-50 p-4 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-yellow-500/20 resize-none"
+                                value={(supportForm as any).feedbackMessage || ''}
+                                onChange={e => setSupportForm(prev => ({ ...prev, feedbackMessage: e.target.value } as any))}
+                            />
+                        </div>
+
+                        <button
+                            onClick={async () => {
+                                const { submitUserFeedback } = await import('../services/dbService');
+                                const result = await submitUserFeedback({
+                                    rating: (supportForm as any).rating || 5,
+                                    message: (supportForm as any).feedbackMessage || ''
+                                });
+                                if (result) {
+                                    alert("Feedback Sent! Thank you for helping us grow. 🌱");
+                                    setShowFeedbackModal(false);
+                                    setSupportForm({ name: '', email: '', issue: '', message: '' }); // Reset
+                                } else {
+                                    alert("Failed to send feedback. Please try again.");
+                                }
+                            }}
+                            className="w-full py-4 bg-gray-900 text-white rounded-xl font-black shadow-xl active:scale-95 transition-transform mb-3"
+                        >
+                            Submit Feedback
                         </button>
+
                         <button onClick={() => setShowFeedbackModal(false)} className="w-full py-4 text-gray-500 font-bold text-xs uppercase tracking-widest">
                             Cancel
                         </button>
