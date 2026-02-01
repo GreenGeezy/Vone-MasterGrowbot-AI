@@ -136,17 +136,14 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   };
 
   const speakResponse = async (text: string) => {
-    await TextToSpeech.stop(); // Clear queue
-
-    // Remove emojis/asterisks for cleaner speech
+    // 1. Immediately update UI (Fixes "Thinking..." loop)
     const cleanText = text.replace(/[\u{1F600}-\u{1F6FF}|[\u{2600}-\u{26FF}]/gu, '').replace(/\*/g, '');
-
-    // Update UI to show what is being spoken
     if (isLive) setLiveTranscript(cleanText);
 
-    const config = VOICE_OPTIONS.find(v => v.id === selectedVoiceId) || VOICE_OPTIONS[0];
-
     try {
+      await TextToSpeech.stop(); // Clear queue
+      const config = VOICE_OPTIONS.find(v => v.id === selectedVoiceId) || VOICE_OPTIONS[0];
+
       await TextToSpeech.speak({
         text: cleanText,
         lang: 'en-US',
@@ -156,25 +153,26 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
         category: 'ambient',
       });
 
-      // When finished speaking (this await waits for completion on some platforms, or returns immediately)
-      // Note: Capacitor TTS plugin 6.0 speak() promise resolves when speech STARTS or ENDS depending on platform.
-      // Usually we want to restart listening.
-      // For robustness, we can just restart listenting after a delay or assume the user will press again.
-      // Better yet, just restart listening if "continuous" behavior is desired.
-
+      // Keep listing loop logic if desired (timeout based)
       if (isLive) {
+        // Simple reset after estimated speech time + buffer
+        const estimatedTime = (cleanText.length * 60) + 1500;
         setTimeout(() => {
-          setLiveTranscript("Listening...");
-          try { recognitionRef.current.start(); } catch (e) { }
-        }, cleanText.length * 50 + 1000); // Rough estimate wait or just rely on user interaction?
-        // Actually, let's keep it simple. User speaks, AI speaks. Session stays open. 
-        // The user has to tap mic to speak again? Original code tried to auto-start.
-        // Auto-start is risky with speakers. Let's just reset state.
-        setLiveTranscript("Tap to Speak");
+          if (isLive) {
+            setLiveTranscript("Tap to Speak");
+            // Optional: Auto-restart listening? 
+            // try { recognitionRef.current.start(); } catch (e) {} 
+          }
+        }, estimatedTime);
       }
 
     } catch (e) {
       console.error("Native TTS failed", e);
+      // Fallback: Web Speech API (for testing in browser)
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        window.speechSynthesis.speak(utterance);
+      }
     }
   };
 

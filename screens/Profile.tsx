@@ -280,15 +280,22 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                         </div>
                         <form onSubmit={async (e) => {
                             e.preventDefault();
+
+                            // 1. Construct Email
+                            const ticketId = `MG-${Math.floor(1000 + Math.random() * 9000)}`;
+                            const subject = `Support Ticket ${ticketId}: ${supportForm.issue}`;
+                            const body = `Name: ${supportForm.name}\nEmail: ${supportForm.email}\n\nMessage:\n${supportForm.message}`;
+                            const mailtoLink = `mailto:Agcomsol@gmail.com,Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+                            // 2. Try Background Save (Fire & Forget)
                             const { createSupportTicket } = await import('../services/dbService');
-                            const result = await createSupportTicket(supportForm);
-                            if (result) {
-                                alert("Thanks for reaching out! 📨 We review every message personally and will get back to you as soon as possible.");
-                                setShowSupportModal(false);
-                                setSupportForm({ name: '', email: '', issue: '', message: '' });
-                            } else {
-                                alert("Error creating ticket. Please try again.");
-                            }
+                            createSupportTicket(supportForm).catch(console.error);
+
+                            // 3. Perfect Experience
+                            window.location.href = mailtoLink;
+                            alert(`Ticket #${ticketId} Created! 📨 Opening your email client...`);
+                            setShowSupportModal(false);
+                            setSupportForm({ name: '', email: '', issue: '', message: '' });
                         }} className="space-y-3">
                             <input
                                 required placeholder="Your Name"
@@ -358,28 +365,31 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
 
                         <button
                             onClick={async () => {
-                                const { submitUserFeedback } = await import('../services/dbService');
                                 const rating = (supportForm as any).rating || 5;
                                 const message = (supportForm as any).feedbackMessage || '';
 
-                                const result = await submitUserFeedback({ rating, message });
+                                // 1. Construct Email
+                                const subject = "App Feedback - MasterGrowbot AI";
+                                const body = `Rating: ${rating} Stars\n\nFeedback:\n${message}`;
+                                const mailtoLink = `mailto:Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-                                if (result) {
-                                    alert("Feedback Sent! Thank you for helping us grow. 🌱");
+                                // 2. Try Background Save (Fire & Forget)
+                                const { submitUserFeedback } = await import('../services/dbService');
+                                submitUserFeedback({ rating, message }).catch(console.error);
 
-                                    // Prompt for Review if 5 stars and wrote a message
-                                    if (rating === 5 && message.length > 0) {
-                                        if (window.confirm("Hi! 👋 We’re a small team building MasterGrowbot AI. If you enjoy using it, a quick rating makes a massive difference to us.")) {
-                                            // Open Play Store
-                                            window.open("https://play.google.com/store/apps/details?id=com.futuristiccannabis.mastergrowbot", "_blank");
-                                        }
+                                // 3. Perfect Experience
+                                alert("Feedback Sent! Thank you for helping us grow. 🌱");
+                                window.location.href = mailtoLink;
+
+                                // Prompt for Review if 5 stars and wrote a message
+                                if (rating === 5 && message.length > 0) {
+                                    if (window.confirm("Hi! 👋 We’re a small team building MasterGrowbot AI. If you enjoy using it, a quick rating makes a massive difference to us.")) {
+                                        window.open("https://play.google.com/store/apps/details?id=com.futuristiccannabis.mastergrowbot", "_blank");
                                     }
-
-                                    setShowFeedbackModal(false);
-                                    setSupportForm({ name: '', email: '', issue: '', message: '' }); // Reset
-                                } else {
-                                    alert("Failed to send feedback. Please try again.");
                                 }
+
+                                setShowFeedbackModal(false);
+                                setSupportForm({ name: '', email: '', issue: '', message: '' }); // Reset
                             }}
                             className="w-full py-4 bg-gray-900 text-white rounded-xl font-black shadow-xl active:scale-95 transition-transform mb-3"
                         >
