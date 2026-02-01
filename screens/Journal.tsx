@@ -14,22 +14,32 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
   // Task Form State
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDate, setNewTaskDate] = useState(new Date().toISOString().split('T')[0]);
+  const [taskRecurrence, setTaskRecurrence] = useState<'Once' | 'Daily' | 'Weekly'>('Once');
+
+  // Note View State
+  const [selectedEntry, setSelectedEntry] = useState<any | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const plant = plants[0];
   const filteredStrains = STRAIN_DATABASE.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const handleSaveWrapper = async (entry: any) => {
+    // Ensure image property is correctly passed from NoteCreator
+    const finalEntry = {
+      ...entry,
+      imageUri: entry.image || entry.imageUri // Handle potential property name mismatch
+    };
     const aiData = await analyzeGrowLog(entry.notes);
-    onAddEntry({ ...entry, aiAnalysis: { summary: aiData } });
+    onAddEntry({ ...finalEntry, aiAnalysis: { summary: aiData } });
     setShowCreator(false);
   };
 
   const handleCreateTask = async () => {
     if (newTaskTitle.trim()) {
-      await onAddTask(newTaskTitle, newTaskDate, 'user');
+      await onAddTask(newTaskTitle, newTaskDate, 'user', { recurrence: taskRecurrence.toLowerCase() }); // Pass recurrence
       setShowTaskCreator(false);
       setNewTaskTitle('');
+      setTaskRecurrence('Once'); // Reset
       setShowFabMenu(false);
     }
   };
@@ -75,16 +85,16 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
           }
           // Journal Entry Render
           return (
-            <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+            <div key={item.id} onClick={() => setSelectedEntry(item)} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 active:scale-[0.98] transition-transform cursor-pointer">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">{item.date}</span>
                 <span className="text-[10px] font-black bg-gray-100 px-2 py-1 rounded-md text-gray-600 uppercase">{item.type}</span>
               </div>
-              {item.notes && <div className="text-sm text-gray-700 leading-relaxed font-medium">{item.notes}</div>}
+              {item.notes && <div className="text-sm text-gray-700 leading-relaxed font-medium line-clamp-3">{item.notes}</div>}
 
-              {item.imageUri && ( // Fixed imageUri property access
+              {(item.image || item.imageUri) && (
                 <div className="mt-3 relative rounded-xl overflow-hidden group">
-                  <img src={item.imageUri} className="w-full h-40 object-cover transform transition-transform group-hover:scale-105" alt="Journal entry" />
+                  <img src={item.image || item.imageUri} className="w-full h-40 object-cover transform transition-transform group-hover:scale-105" alt="Journal entry" />
                 </div>
               )}
 
@@ -170,8 +180,8 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
               {['Once', 'Daily', 'Weekly'].map((opt) => (
                 <button
                   key={opt}
-                  onClick={() => { /* Store recurrence in local state, assumed defined below or mocked for now */ }}
-                  className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase border ${opt === 'Once' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-100 text-gray-400'}`}
+                  onClick={() => setTaskRecurrence(opt as any)}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase border ${taskRecurrence === opt ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-100 text-gray-400'}`}
                 >
                   {opt}
                 </button>
@@ -193,13 +203,10 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
                 onClick={async () => {
                   if (newTaskTitle.trim()) {
                     const notes = (document.getElementById('task-notes-input') as HTMLTextAreaElement)?.value || '';
-                    // Defaulting to "Once" logic for UI simplicity in this replace block, 
-                    // or I should have added state. For now, passing 'daily' if they clicked it would require state. 
-                    // Since I can't easily inject new useState hooks in a partial replace, 
-                    // I'll just pass simplified args for now or assume they want to add it for today.
-                    await onAddTask(newTaskTitle, new Date().toISOString().split('T')[0], 'user', { notes });
+                    await onAddTask(newTaskTitle, new Date().toISOString().split('T')[0], 'user', { notes, recurrence: taskRecurrence.toLowerCase() });
                     setShowTaskCreator(false);
                     setNewTaskTitle('');
+                    setTaskRecurrence('Once');
                     setShowFabMenu(false);
                   }
                 }}
@@ -213,6 +220,59 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
       )}
 
       {showCreator && <NoteCreator onSave={handleSaveWrapper} onClose={() => setShowCreator(false)} />}
+
+      {/* Expanded Entry Modal */}
+      {selectedEntry && (
+        <div className="fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[85vh]">
+
+            {/* Image Header if present */}
+            {(selectedEntry.image || selectedEntry.imageUri) && (
+              <div className="relative h-64 bg-black">
+                <img
+                  src={selectedEntry.image || selectedEntry.imageUri}
+                  className="w-full h-full object-cover opacity-90"
+                  alt="Full view"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              </div>
+            )}
+
+            <div className="p-8 flex-1 overflow-y-auto">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{selectedEntry.date}</span>
+                  <h2 className="text-2xl font-black text-gray-900 mt-1">{selectedEntry.type}</h2>
+                </div>
+                <button onClick={() => setSelectedEntry(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              {selectedEntry.notes && (
+                <div className="text-base text-gray-700 leading-relaxed font-medium mb-6">
+                  {selectedEntry.notes}
+                </div>
+              )}
+
+              {selectedEntry.aiAnalysis && (
+                <div className="p-5 bg-green-50 rounded-2xl border border-green-100">
+                  <div className="flex items-center gap-2 mb-2 text-green-700 font-bold uppercase text-xs tracking-wider">
+                    <Sparkles size={14} /> AI Analysis
+                  </div>
+                  <p className="text-sm text-green-800 leading-relaxed font-medium">
+                    {selectedEntry.aiAnalysis.summary.replace(/"/g, '')}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end">
+              <button onClick={() => setSelectedEntry(null)} className="px-6 py-3 bg-gray-900 text-white rounded-xl font-bold">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

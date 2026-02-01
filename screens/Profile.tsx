@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import {
     User, LogOut, Shield, Settings, ChevronRight, Camera,
-    MessageSquare, HelpCircle, FileText, Trash2, Mail, X, Check
+    MessageSquare, HelpCircle, FileText, Trash2, Mail, X, Check, Star
 } from 'lucide-react';
 import { Browser } from '@capacitor/browser';
 
@@ -227,7 +227,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                             const { createSupportTicket } = await import('../services/dbService');
                             const result = await createSupportTicket(supportForm);
                             if (result) {
-                                alert(`Ticket #${result.id.slice(0, 8)} Created! We will contact you shortly.`);
+                                alert("Thanks for reaching out! 📨 We review every message personally and will get back to you as soon as possible.");
                                 setShowSupportModal(false);
                                 setSupportForm({ name: '', email: '', issue: '', message: '' });
                             } else {
@@ -286,7 +286,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                                         onClick={() => setSupportForm(prev => ({ ...prev, rating: star } as any))}
                                         className={`p-2 rounded-full transition-colors ${(supportForm as any).rating >= star ? 'text-yellow-400 bg-yellow-50' : 'text-gray-200'}`}
                                     >
-                                        <Shield size={24} fill={(supportForm as any).rating >= star ? "currentColor" : "none"} />
+                                        <Star size={24} fill={(supportForm as any).rating >= star ? "currentColor" : "none"} />
                                     </button>
                                 ))}
                             </div>
@@ -300,34 +300,44 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                             />
                         </div>
 
-                        <button
-                            onClick={async () => {
-                                const { submitUserFeedback } = await import('../services/dbService');
-                                const result = await submitUserFeedback({
-                                    rating: (supportForm as any).rating || 5,
-                                    message: (supportForm as any).feedbackMessage || ''
-                                });
-                                if (result) {
-                                    alert("Feedback Sent! Thank you for helping us grow. 🌱");
-                                    setShowFeedbackModal(false);
-                                    setSupportForm({ name: '', email: '', issue: '', message: '' }); // Reset
-                                } else {
-                                    alert("Failed to send feedback. Please try again.");
+                        onClick={async () => {
+                            const { submitUserFeedback } = await import('../services/dbService');
+                            const rating = (supportForm as any).rating || 5;
+                            const message = (supportForm as any).feedbackMessage || '';
+
+                            const result = await submitUserFeedback({ rating, message });
+
+                            if (result) {
+                                alert("Feedback Sent! Thank you for helping us grow. 🌱");
+
+                                // Prompt for Review if 5 stars and wrote a message
+                                if (rating === 5 && message.length > 0) {
+                                    if (window.confirm("Hi! 👋 We’re a small team building MasterGrowbot AI. If you enjoy using it, a quick rating makes a massive difference to us.")) {
+                                        // Open Play Store
+                                        window.open("https://play.google.com/store/apps/details?id=com.futuristiccannabis.mastergrowbot", "_blank");
+                                    }
                                 }
-                            }}
-                            className="w-full py-4 bg-gray-900 text-white rounded-xl font-black shadow-xl active:scale-95 transition-transform mb-3"
+
+                                setShowFeedbackModal(false);
+                                setSupportForm({ name: '', email: '', issue: '', message: '' }); // Reset
+                            } else {
+                                alert("Failed to send feedback. Please try again.");
+                            }
+                        }}
+                        className="w-full py-4 bg-gray-900 text-white rounded-xl font-black shadow-xl active:scale-95 transition-transform mb-3"
                         >
-                            Submit Feedback
-                        </button>
+                        Submit Feedback
+                    </button>
 
-                        <button onClick={() => setShowFeedbackModal(false)} className="w-full py-4 text-gray-500 font-bold text-xs uppercase tracking-widest">
-                            Cancel
-                        </button>
-                    </div>
+                    <button onClick={() => setShowFeedbackModal(false)} className="w-full py-4 text-gray-500 font-bold text-xs uppercase tracking-widest">
+                        Cancel
+                    </button>
                 </div>
-            )}
+                </div>
+    )
+}
 
-        </div>
+        </div >
     );
 };
 

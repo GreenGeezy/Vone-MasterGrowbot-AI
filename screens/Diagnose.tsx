@@ -43,6 +43,7 @@ interface DiagnoseProps {
   onSaveToJournal?: (entry: any) => void;
   onAddTask?: (title: string, date: string, source: 'ai_diagnosis' | 'user') => void;
   defaultProfile?: UserProfile | null;
+  onAddPlant?: (strain: any) => void;
 }
 
 const RecoveryChecklist = ({ steps, themeColor, onAddTask }: { steps: string[], themeColor: string, onAddTask?: (t: string) => void }) => {
@@ -80,7 +81,7 @@ const LOADING_PHRASES = [
   "Building your custom care plan..."
 ];
 
-const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onAddTask, defaultProfile }) => {
+const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onAddTask, defaultProfile, onAddPlant }) => {
   const [image, setImage] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -92,7 +93,12 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   const [growMethod, setGrowMethod] = useState<'Indoor' | 'Outdoor' | 'Greenhouse'>(defaultProfile?.grow_mode || 'Indoor');
 
   const [showStrainMenu, setShowStrainMenu] = useState(false);
+  const [showCustomUi, setShowCustomUi] = useState(false); // Toggle for Custom UI
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Custom Strain Form State
+  const [customStrainName, setCustomStrainName] = useState('');
+  const [customStrainType, setCustomStrainType] = useState<'Indica' | 'Sativa' | 'Hybrid'>('Hybrid');
 
   const [loadingText, setLoadingText] = useState(LOADING_PHRASES[0]);
   const [timeLeft, setTimeLeft] = useState(15);
@@ -352,17 +358,77 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
               <ChevronRight size={16} className={`text-gray-400 transition-transform ${showStrainMenu ? 'rotate-90' : ''}`} />
             </div>
             {showStrainMenu && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 p-2 max-h-64 overflow-y-auto animate-in fade-in slide-in-from-top-2">
-                <input className="w-full text-xs p-3 bg-gray-50 rounded-lg mb-2 outline-none font-bold" placeholder="Search Strains..." autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-                <div className="grid grid-cols-2 gap-2 mb-2 pb-2 border-b border-gray-50">
-                  <button onClick={() => { setStrain("Generic"); setShowStrainMenu(false); }} className="p-2 bg-green-50 text-green-700 rounded-lg text-xs font-bold text-center">✨ Generic</button>
-                  <button onClick={() => { setStrain("Custom Strain"); setShowStrainMenu(false); }} className="p-2 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold text-center">+ Custom</button>
-                </div>
-                {filteredStrains.map(s => (
-                  <button key={s.id} onClick={() => { setStrain(s.name); setShowStrainMenu(false); }} className="w-full text-left p-3 hover:bg-gray-50 rounded-lg text-sm font-bold text-gray-800 flex justify-between items-center group">
-                    {s.name}
-                  </button>
-                ))}
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 p-2 max-h-[22rem] overflow-y-auto animate-in fade-in slide-in-from-top-2">
+
+                {/* Custom Strain Creation UI */}
+                {showCustomUi ? (
+                  <div className="p-2 bg-gray-50 rounded-xl mb-2">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs font-black uppercase text-gray-500">New Custom Strain</span>
+                      <button onClick={() => setShowCustomUi(false)} className="text-xs text-blue-500 font-bold">Cancel</button>
+                    </div>
+                    <input
+                      className="w-full text-sm p-3 bg-white border border-gray-200 rounded-lg mb-3 font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                      placeholder="Strain Name (e.g. Purple Haze)"
+                      value={customStrainName}
+                      onChange={(e) => setCustomStrainName(e.target.value)}
+                      autoFocus
+                    />
+                    <div className="flex gap-2 mb-4">
+                      {['Indica', 'Hybrid', 'Sativa'].map(type => (
+                        <button
+                          key={type}
+                          onClick={() => setCustomStrainType(type as any)}
+                          className={`flex-1 py-2 text-[10px] font-bold uppercase rounded-md border transition-all ${customStrainType === type ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-400 border-gray-200'}`}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => {
+                          if (!customStrainName) return;
+                          setStrain(customStrainName);
+                          setShowCustomUi(false);
+                          setShowStrainMenu(false);
+                        }}
+                        className="py-3 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold"
+                      >
+                        Select Only
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!customStrainName) return;
+                          setStrain(customStrainName);
+                          if (onAddPlant) {
+                            onAddPlant({ name: customStrainName, type: customStrainType, image: null }); // Placeholder image null
+                            alert(`Added ${customStrainName} to Your Plants!`);
+                          }
+                          setShowCustomUi(false);
+                          setShowStrainMenu(false);
+                        }}
+                        className="py-3 bg-blue-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-blue-200"
+                      >
+                        Select & Add
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Standard Search UI */
+                  <>
+                    <input className="w-full text-xs p-3 bg-gray-50 rounded-lg mb-2 outline-none font-bold" placeholder="Search Strains..." autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                    <div className="grid grid-cols-2 gap-2 mb-2 pb-2 border-b border-gray-50">
+                      <button onClick={() => { setStrain("Generic"); setShowStrainMenu(false); }} className="p-2 bg-green-50 text-green-700 rounded-lg text-xs font-bold text-center">✨ Generic</button>
+                      <button onClick={() => { setShowCustomUi(true); setCustomStrainName(''); }} className="p-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold text-center border border-blue-100">+ Custom Strain</button>
+                    </div>
+                    {filteredStrains.map(s => (
+                      <button key={s.id} onClick={() => { setStrain(s.name); setShowStrainMenu(false); }} className="w-full text-left p-3 hover:bg-gray-50 rounded-lg text-sm font-bold text-gray-800 flex justify-between items-center group">
+                        {s.name}
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>

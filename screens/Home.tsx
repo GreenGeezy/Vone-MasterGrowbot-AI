@@ -44,7 +44,14 @@ const Home: React.FC<any> = ({ plants, tasks, onToggleTask, onNavigateToPlant, o
               {task.isCompleted ? <CheckCircle2 className="text-green-500" fill="currentColor" color="white" size={24} /> : <Circle className="text-gray-300" size={24} />}
               <div className="flex-1">
                 <span className={`block text-sm font-bold transition-all ${task.isCompleted ? "line-through text-gray-400" : "text-text-main"}`}>{task.title}</span>
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{task.source === 'ai_diagnosis' ? 'AI Recommended' : 'Routine'}</span>
+                <div className="flex gap-2 mt-0.5">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{task.source === 'ai_diagnosis' ? 'AI Recommended' : 'Routine'}</span>
+                  {task.recurrence && task.recurrence !== 'once' && (
+                    <span className="text-[10px] text-blue-500 font-black uppercase tracking-wider bg-blue-50 px-1.5 rounded-md">
+                      {task.recurrence}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           ))
