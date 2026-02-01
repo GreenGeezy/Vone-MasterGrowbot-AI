@@ -300,42 +300,43 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                             />
                         </div>
 
-                        onClick={async () => {
-                            const { submitUserFeedback } = await import('../services/dbService');
-                            const rating = (supportForm as any).rating || 5;
-                            const message = (supportForm as any).feedbackMessage || '';
+                        <button
+                            onClick={async () => {
+                                const { submitUserFeedback } = await import('../services/dbService');
+                                const rating = (supportForm as any).rating || 5;
+                                const message = (supportForm as any).feedbackMessage || '';
 
-                            const result = await submitUserFeedback({ rating, message });
+                                const result = await submitUserFeedback({ rating, message });
 
-                            if (result) {
-                                alert("Feedback Sent! Thank you for helping us grow. 🌱");
+                                if (result) {
+                                    alert("Feedback Sent! Thank you for helping us grow. 🌱");
 
-                                // Prompt for Review if 5 stars and wrote a message
-                                if (rating === 5 && message.length > 0) {
-                                    if (window.confirm("Hi! 👋 We’re a small team building MasterGrowbot AI. If you enjoy using it, a quick rating makes a massive difference to us.")) {
-                                        // Open Play Store
-                                        window.open("https://play.google.com/store/apps/details?id=com.futuristiccannabis.mastergrowbot", "_blank");
+                                    // Prompt for Review if 5 stars and wrote a message
+                                    if (rating === 5 && message.length > 0) {
+                                        if (window.confirm("Hi! 👋 We’re a small team building MasterGrowbot AI. If you enjoy using it, a quick rating makes a massive difference to us.")) {
+                                            // Open Play Store
+                                            window.open("https://play.google.com/store/apps/details?id=com.futuristiccannabis.mastergrowbot", "_blank");
+                                        }
                                     }
+
+                                    setShowFeedbackModal(false);
+                                    setSupportForm({ name: '', email: '', issue: '', message: '' }); // Reset
+                                } else {
+                                    alert("Failed to send feedback. Please try again.");
                                 }
-
-                                setShowFeedbackModal(false);
-                                setSupportForm({ name: '', email: '', issue: '', message: '' }); // Reset
-                            } else {
-                                alert("Failed to send feedback. Please try again.");
-                            }
-                        }}
-                        className="w-full py-4 bg-gray-900 text-white rounded-xl font-black shadow-xl active:scale-95 transition-transform mb-3"
+                            }}
+                            className="w-full py-4 bg-gray-900 text-white rounded-xl font-black shadow-xl active:scale-95 transition-transform mb-3"
                         >
-                        Submit Feedback
-                    </button>
+                            Submit Feedback
+                        </button>
 
-                    <button onClick={() => setShowFeedbackModal(false)} className="w-full py-4 text-gray-500 font-bold text-xs uppercase tracking-widest">
-                        Cancel
-                    </button>
+                        <button onClick={() => setShowFeedbackModal(false)} className="w-full py-4 text-gray-500 font-bold text-xs uppercase tracking-widest">
+                            Cancel
+                        </button>
+                    </div>
                 </div>
-                </div>
-    )
-}
+            )
+            }
 
         </div >
     );
