@@ -70,7 +70,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
     setLoading(true);
 
     try {
-      const contextPrefix = plant
+      const contextPrefix = (plant && !activeVoiceMode)
         ? `[Context: Plant=${plant.name}, Stage=${plant.stage}, Strain=${plant.strain}] `
         : '';
       const finalPrompt = contextPrefix + text;
