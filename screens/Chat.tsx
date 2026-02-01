@@ -56,9 +56,13 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
     };
   }, []);
 
-  const handleSend = async (text: string = input) => {
+  const handleSend = async (text: string = input, forceVoice: boolean = false) => {
     // Native TTS doesn't need priming like Web Speech does!
     if (!text.trim()) return;
+
+    // Use forceVoice (from callback) or current state (if available correctly)
+    // Fix: referencing isLive directly here might be stale if called from startLiveSession closure
+    const activeVoiceMode = forceVoice || isLive;
 
     const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text, timestamp: Date.now() };
     setMessages(prev => [...prev, userMsg]);
@@ -71,13 +75,14 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
         : '';
       const finalPrompt = contextPrefix + text;
 
-      const responseText = await sendMessage(finalPrompt, isLive);
+      // Pass the effective voice mode
+      const responseText = await sendMessage(finalPrompt, activeVoiceMode);
 
       const botMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: responseText, timestamp: Date.now() };
       setMessages(prev => [...prev, botMsg]);
 
-      // Always speak if Live, or if this function was called from a speech recognition result
-      if (isLive) {
+      // Always speak if Live/Forced
+      if (activeVoiceMode) {
         speakResponse(responseText);
       }
 
@@ -117,7 +122,8 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       if (event.results[0].isFinal) {
         setIsUserSpeaking(false);
         setLiveTranscript("Thinking...");
-        handleSend(transcript);
+        // FIXED: Explicitly pass true for forceVoice
+        handleSend(transcript, true);
       }
     };
 

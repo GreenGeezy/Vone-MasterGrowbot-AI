@@ -6,7 +6,7 @@ import Growbot from '../components/Growbot';
 import { STRAIN_DATABASE } from '../data/strains';
 import { Share } from '@capacitor/share';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
-import { formatMetricDisplay } from '../utils/diagnosisFormatter';
+import { formatMetricDisplay, formatDiagnosisReport } from '../utils/diagnosisFormatter';
 
 /**
  * Health Score Mapping help
@@ -172,9 +172,10 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   const handleShare = async () => {
     if (!result) return;
     try {
+      const reportText = formatDiagnosisReport(result);
       await Share.share({
         title: 'MasterGrowbot Diagnosis',
-        text: `My plant health is rated '${result.healthLabel || getHealthRating(result.healthScore || 0)}'. Diagnose yours with MasterGrowbot AI!`,
+        text: reportText,
         dialogTitle: 'Share Result'
       });
     } catch (e) { }
@@ -186,7 +187,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
         id: Date.now().toString(),
         date: new Date().toLocaleDateString(),
         type: 'Health Check',
-        notes: `AI Analysis: ${result.diagnosis}. Health: ${result.healthLabel}. Action: ${result.topAction}`,
+        notes: formatDiagnosisReport(result),
         image: image,
       });
 

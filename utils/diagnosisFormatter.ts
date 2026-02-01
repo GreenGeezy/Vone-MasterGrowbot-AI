@@ -88,3 +88,56 @@ const getHealthWord = (score: number): string => {
     if (score >= 15) return "Poor";
     return "Struggling";
 };
+
+export const formatDiagnosisReport = (result: any): string => {
+    if (!result) return "";
+
+    const lines = [];
+
+    // Header
+    lines.push(`🌿 **MasterGrowbot Diagnosis**`);
+    lines.push(`📅 Date: ${new Date().toLocaleDateString()}`);
+    lines.push("");
+
+    // Core Diagnosis
+    lines.push(`🩺 **Diagnosis**: ${result.diagnosis}`);
+    lines.push(`📊 **Severity**: ${result.severity?.toUpperCase() || 'UNKNOWN'}`);
+    lines.push(`❤️ **Health Score**: ${result.healthScore || 0}/100 (${result.healthLabel || 'Analyzed'})`);
+    lines.push("");
+
+    // Priority Action
+    if (result.topAction) {
+        lines.push(`⚡ **Top Priority Action**`);
+        lines.push(`${result.topAction}`);
+        lines.push("");
+    }
+
+    // Fix Steps
+    if (result.fixSteps && result.fixSteps.length > 0) {
+        lines.push(`✅ **Recovery Steps**`);
+        result.fixSteps.forEach((step: string) => lines.push(`• ${step}`));
+        lines.push("");
+    }
+
+    // Prevention
+    if (result.preventionTips && result.preventionTips.length > 0) {
+        lines.push(`🛡️ **Prevention Tips**`);
+        result.preventionTips.forEach((tip: string) => lines.push(`• ${tip}`));
+        lines.push("");
+    }
+
+    // Targets
+    if (result.nutrientTargets || result.environmentTargets) {
+        lines.push(`🎯 **Optimal Targets**`);
+        if (result.nutrientTargets?.ec) lines.push(`• EC: ${result.nutrientTargets.ec}`);
+        if (result.nutrientTargets?.ph) lines.push(`• pH: ${result.nutrientTargets.ph}`);
+        if (result.environmentTargets?.vpd) lines.push(`• VPD: ${result.environmentTargets.vpd}`);
+        if (result.environmentTargets?.temp) lines.push(`• Temp: ${result.environmentTargets.temp}`);
+        if (result.environmentTargets?.rh) lines.push(`• RH: ${result.environmentTargets.rh}`);
+        lines.push("");
+    }
+
+    lines.push(`🚀 *Diagnosed by MasterGrowbot AI*`);
+
+    return lines.join("\n");
+};
