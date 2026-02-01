@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import {
     User, LogOut, Shield, Settings, ChevronRight, Camera,
-    MessageSquare, HelpCircle, FileText, Trash2, Mail, X, Check, Star
+    MessageSquare, HelpCircle, FileText, Trash2, Mail, X, Check, Star, Edit2, Flame
 } from 'lucide-react';
 import { Browser } from '@capacitor/browser';
 
@@ -23,6 +23,8 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
     // Local state for modals
     const [showSupportModal, setShowSupportModal] = useState(false);
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+    const [isEditingName, setIsEditingName] = useState(false); // New: Name Edit State
+    const [tempName, setTempName] = useState(''); // New: Temp Name State
 
     // Support Form State
     const [supportForm, setSupportForm] = useState({ name: '', email: '', issue: '', message: '' });
@@ -135,7 +137,31 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
         <div className="bg-gray-50 h-full overflow-y-auto pb-24 font-sans relative">
 
             {/* 1. Header & Avatar */}
-            <div className="pt-12 pb-8 px-6 text-center">
+            <div className="pt-12 pb-8 px-6 text-center relative">
+
+                {/* Streak Badge (Top Right) */}
+                {userProfile.streak && userProfile.streak > 0 && (
+                    <div className="absolute top-4 right-4 animate-in fade-in slide-in-from-top-4">
+                        <div className="flex flex-col items-center">
+                            <div className="relative">
+                                <div className="bg-orange-500 text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg border-2 border-white z-10 relative">
+                                    <Flame size={24} fill="currentColor" className="animate-pulse" />
+                                </div>
+                                {/* Balloons/Confetti Effect for Milestones (CSS-only simplified) */}
+                                {(userProfile.streak % 7 === 0 || userProfile.streak === 30) && (
+                                    <div className="absolute -top-10 -left-10 text-4xl animate-bounce delay-100">🎈</div>
+                                )}
+                                {(userProfile.streak % 7 === 0 || userProfile.streak === 30) && (
+                                    <div className="absolute -top-8 -right-8 text-4xl animate-bounce delay-300">🎈</div>
+                                )}
+                            </div>
+                            <div className="bg-orange-100 text-orange-700 text-[10px] font-black px-2 py-0.5 rounded-full -mt-2 z-20 border border-white">
+                                {userProfile.streak} Day Rating
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="relative inline-block mb-4">
                     <button onClick={handleEditAvatar} className="relative group">
                         <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gray-200">
@@ -152,7 +178,37 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                         </div>
                     </button>
                 </div>
-                <h1 className="text-2xl font-black text-gray-900">{userProfile.name || 'Master Grower'}</h1>
+
+                {/* Name Editing Section */}
+                <div className="flex items-center justify-center gap-2 mb-1">
+                    {isEditingName ? (
+                        <div className="flex items-center gap-2">
+                            <input
+                                autoFocus
+                                value={tempName}
+                                onChange={(e) => setTempName(e.target.value)}
+                                className="text-xl font-black text-gray-900 bg-white border-b-2 border-green-500 outline-none text-center w-48"
+                            />
+                            <button onClick={() => {
+                                onUpdateProfile({ name: tempName });
+                                setIsEditingName(false);
+                            }} className="p-1 bg-green-100 hover:bg-green-200 text-green-700 rounded-full">
+                                <Check size={16} />
+                            </button>
+                            <button onClick={() => setIsEditingName(false)} className="p-1 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-full">
+                                <X size={16} />
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-2xl font-black text-gray-900">{userProfile.name || 'Master Grower'}</h1>
+                            <button onClick={() => { setTempName(userProfile.name || ''); setIsEditingName(true); }} className="text-gray-300 hover:text-gray-600">
+                                <Edit2 size={14} />
+                            </button>
+                        </div>
+                    )}
+                </div>
+
                 <p className="text-xs font-bold text-gray-400 mt-1">{userProfile.email || 'user@example.com'}</p>
                 <div className="mt-3 inline-flex items-center gap-1.5 bg-black/5 px-3 py-1 rounded-full">
                     <Shield size={12} className="text-green-700" />

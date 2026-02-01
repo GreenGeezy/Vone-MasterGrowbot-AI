@@ -17,7 +17,7 @@ serve(async (req) => {
     const { mode, prompt, image } = await req.json();
 
     // --- 1. DEFAULT MODEL (Chat/Voice) ---
-    // STRICTLY USING GEMINI 3 FLASH
+    // Default to strict Flash Preview (User Requested)
     let modelName = "gemini-3-flash-preview";
 
     // "Golden Rules" System Prompt (No Markdown, Friendly Coach)
@@ -62,6 +62,8 @@ serve(async (req) => {
         }
       `;
     } else if (mode === 'voice') {
+      // UPDATE: Use Gemini 2.0 Flash for Voice (Fast Response)
+      modelName = "gemini-2.0-flash-exp";
       systemInstruction += " You are speaking via voice interface. Be ultra-concise (under 3 sentences).";
     }
 

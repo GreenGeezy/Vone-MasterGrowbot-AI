@@ -53,7 +53,42 @@ const App: React.FC = () => {
 
   const loadUserData = async () => {
     const mockStrain = STRAIN_DATABASE[0];
-    setPlants([{ id: '1', name: 'Project Alpha', strain: mockStrain.name, strainDetails: mockStrain, stage: 'Veg', healthScore: 92, daysInStage: 24, imageUri: 'https://images.unsplash.com/photo-1603796846097-b36976ea2851', totalDays: 24, journal: [], tasks: [], streak: 5, weeklySummaries: [] }]);
+
+    // --- Streak Logic ---
+    const today = new Date().toISOString().split('T')[0];
+    const lastVisit = localStorage.getItem('mastergrowbot_last_visit');
+    let currentStreak = parseInt(localStorage.getItem('mastergrowbot_streak') || '0');
+
+    if (lastVisit !== today) {
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      if (lastVisit === yesterday) {
+        currentStreak += 1;
+      } else {
+        currentStreak = 1; // Reset if broken (or first time)
+      }
+      localStorage.setItem('mastergrowbot_last_visit', today);
+      localStorage.setItem('mastergrowbot_streak', currentStreak.toString());
+
+      // Update profile state if it exists
+      setUserProfile(prev => prev ? ({ ...prev, streak: currentStreak, lastVisit: today }) : null);
+    }
+
+    // Default Plant Data
+    setPlants([{
+      id: '1',
+      name: 'Project Alpha',
+      strain: mockStrain.name,
+      strainDetails: mockStrain,
+      stage: 'Veg',
+      healthScore: 92,
+      daysInStage: 24,
+      imageUri: 'https://images.unsplash.com/photo-1603796846097-b36976ea2851',
+      totalDays: 24,
+      journal: [],
+      tasks: [],
+      streak: currentStreak, // Use calculated streak
+      weeklySummaries: []
+    }]);
 
     // Fetch real tasks
     const pendingTasks = await getPendingTasksForToday();

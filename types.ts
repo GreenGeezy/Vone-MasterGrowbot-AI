@@ -182,4 +182,6 @@ export interface UserProfile {
 
   // App State
   isOnboarded?: boolean;
+  streak?: number;       // Consecutive days visited
+  lastVisit?: string;    // ISO Date of last open
 }
