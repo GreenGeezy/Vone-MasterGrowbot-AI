@@ -62,8 +62,8 @@ serve(async (req) => {
         }
       `;
     } else if (mode === 'voice') {
-      // UPDATE: Use Stable Flash for Voice to prevent 500 errors
-      modelName = "gemini-1.5-flash";
+      // UPDATE: Align Voice with Chat Model for Stability
+      modelName = "gemini-3-flash-preview";
       systemInstruction += " You are speaking via voice interface. Be ultra-concise (under 3 sentences).";
     }
 
