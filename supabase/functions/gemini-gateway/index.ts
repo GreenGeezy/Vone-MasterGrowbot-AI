@@ -62,8 +62,8 @@ serve(async (req) => {
         }
       `;
     } else if (mode === 'voice') {
-      // UPDATE: Use Gemini 2.0 Flash for Voice (Fast Response)
-      modelName = "gemini-2.0-flash-exp";
+      // UPDATE: Use Stable Flash for Voice to prevent 500 errors
+      modelName = "gemini-1.5-flash";
       systemInstruction += " You are speaking via voice interface. Be ultra-concise (under 3 sentences).";
     }
 
