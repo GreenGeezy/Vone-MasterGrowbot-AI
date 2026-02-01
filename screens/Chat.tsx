@@ -71,7 +71,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
         : '';
       const finalPrompt = contextPrefix + text;
 
-      const responseText = await sendMessage(finalPrompt);
+      const responseText = await sendMessage(finalPrompt, isLive);
 
       const botMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: responseText, timestamp: Date.now() };
       setMessages(prev => [...prev, botMsg]);
@@ -140,6 +140,10 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
 
     // Remove emojis/asterisks for cleaner speech
     const cleanText = text.replace(/[\u{1F600}-\u{1F6FF}|[\u{2600}-\u{26FF}]/gu, '').replace(/\*/g, '');
+
+    // Update UI to show what is being spoken
+    if (isLive) setLiveTranscript(cleanText);
+
     const config = VOICE_OPTIONS.find(v => v.id === selectedVoiceId) || VOICE_OPTIONS[0];
 
     try {
