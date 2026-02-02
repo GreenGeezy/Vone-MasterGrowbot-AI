@@ -28,9 +28,9 @@ const FILLER_PHRASES = [
 ];
 
 const VOICE_OPTIONS = [
-  { id: 'Mike', label: 'Coach Mike', type: 'Male', pitch: 0.9, rate: 1.05, icon: User },
-  { id: 'Kore', label: 'Coach Kore', type: 'Female', pitch: 1.2, rate: 1.0, icon: User },
-  { id: 'MasterGrowbot', label: 'MasterGrowbot', type: 'Robot', pitch: 1.3, rate: 0.95, icon: Bot },
+  { id: 'Mike', label: 'Coach Mike', type: 'Male', pitch: 1.0, rate: 1.0, icon: User },
+  { id: 'Mary', label: 'Coach Mary', type: 'Female', pitch: 1.1, rate: 1.05, icon: User },
+  { id: 'MasterGrowbot', label: 'MasterGrowbot', type: 'Robot', pitch: 0.8, rate: 0.95, icon: Bot },
 ];
 
 const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
@@ -49,6 +49,9 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   const [selectedVoiceId, setSelectedVoiceId] = useState('Mike');
 
+  // Store valid system voices
+  const [availableVoices, setAvailableVoices] = useState<any[]>([]);
+
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -57,6 +60,11 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   }, [messages, loading, isLive]);
 
   useEffect(() => {
+    // Load system voices on mount
+    TextToSpeech.getSupportedVoices().then(res => {
+      setAvailableVoices(res.voices);
+    }).catch(e => console.log("Failed to load voices", e));
+
     return () => {
       stopLiveSession();
       TextToSpeech.stop();
@@ -77,7 +85,8 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       // IMMEDIATE FEEDBACK: Play filler phrase if in voice mode
       if (activeVoiceMode) {
         const randomFiller = FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];
-        speakResponse(randomFiller);
+        // Don't await filler, let it play while we fetch
+        speakResponse(randomFiller, false);
       }
 
       // REMOVED CONTEXT: Bot receives raw text for general advice
@@ -90,7 +99,8 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
 
       // Always speak real response if Live/Forced (Interrupts filler)
       if (activeVoiceMode) {
-        speakResponse(responseText);
+        // Pass true to restart listening after this response
+        speakResponse(responseText, true);
       }
 
     } catch (error) {
@@ -129,7 +139,8 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       if (event.results[0].isFinal) {
         setIsUserSpeaking(false);
         setLiveTranscript("Thinking...");
-        // FIXED: Explicitly pass true for forceVoice
+        // Stop recognition to prevent interference while processing/speaking
+        recognitionRef.current.stop();
         handleSend(transcript, true);
       }
     };
@@ -144,18 +155,40 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   const stopLiveSession = () => {
     setIsLive(false);
     setIsUserSpeaking(false);
-    if (recognitionRef.current) recognitionRef.current.stop();
+    if (recognitionRef.current) recognitionRef.current.abort();
     TextToSpeech.stop();
   };
 
-  const speakResponse = async (text: string) => {
-    // 1. Immediately update UI (Fixes "Thinking..." loop)
+  const getVoiceIndexForPersona = (personaId: string) => {
+    if (!availableVoices.length) return -1;
+    // Filter for English voices first
+    const englishVoices = availableVoices.filter(v => v.lang.toLowerCase().includes('en'));
+    const candidates = englishVoices.length ? englishVoices : availableVoices;
+
+    if (personaId === 'Mike') {
+      // Prefer "Male" or specific known male Android identifiers
+      return availableVoices.findIndex(v => candidates.includes(v) &&
+        (v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('en-us-x-iom-local')));
+    }
+    if (personaId === 'Mary') {
+      // Prefer "Female" or specific known female Android identifiers
+      return availableVoices.findIndex(v => candidates.includes(v) &&
+        (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('en-us-x-tpf-local')));
+    }
+    // MasterGrowbot defaults to system default (but pitched down)
+    return -1;
+  };
+
+  const speakResponse = async (text: string, restartListening: boolean) => {
+    // 1. Immediately update UI
     const cleanText = text.replace(/[\u{1F600}-\u{1F6FF}|[\u{2600}-\u{26FF}]/gu, '').replace(/\*/g, '');
     if (isLive) setLiveTranscript(cleanText);
 
     try {
-      await TextToSpeech.stop(); // Clear queue (important for interrupting filler)
+      await TextToSpeech.stop(); // Clear previous audio
+
       const config = VOICE_OPTIONS.find(v => v.id === selectedVoiceId) || VOICE_OPTIONS[0];
+      const targetVoiceIndex = getVoiceIndexForPersona(selectedVoiceId);
 
       await TextToSpeech.speak({
         text: cleanText,
@@ -164,19 +197,22 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
         pitch: config.pitch,
         volume: 1.0,
         category: 'ambient',
+        voice: targetVoiceIndex >= 0 ? targetVoiceIndex : undefined,
       });
 
-      // Keep listing loop logic if desired (timeout based)
-      if (isLive) {
-        // Simple reset after estimated speech time + buffer
-        const estimatedTime = (cleanText.length * 60) + 1500;
-        setTimeout(() => {
-          if (isLive) {
-            setLiveTranscript("Tap to Speak");
-            // Optional: Auto-restart listening? 
-            // try { recognitionRef.current.start(); } catch (e) {} 
-          }
-        }, estimatedTime);
+      // 2. Restart Listening Loop (Only for final responses in Live mode)
+      if (isLive && restartListening) {
+        setLiveTranscript("Listening...");
+        try {
+          // Small delay to ensure TTS has fully released audio focus
+          setTimeout(() => {
+            if (isLive && recognitionRef.current) {
+              try { recognitionRef.current.start(); } catch (e) { }
+            }
+          }, 200);
+        } catch (e) {
+          console.error("Failed to restart listening", e);
+        }
       }
 
     } catch (e) {
@@ -185,6 +221,12 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       if ('speechSynthesis' in window) {
         const utterance = new SpeechSynthesisUtterance(cleanText);
         window.speechSynthesis.speak(utterance);
+        // Fallback loop logic
+        if (isLive && restartListening) {
+          utterance.onend = () => {
+            if (isLive && recognitionRef.current) try { recognitionRef.current.start(); } catch (e) { }
+          };
+        }
       }
     }
   };
