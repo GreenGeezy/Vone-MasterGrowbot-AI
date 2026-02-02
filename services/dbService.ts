@@ -265,3 +265,124 @@ export const submitUserFeedback = async (feedback: { rating: number, message: st
     return null;
   }
 };
+// --- Chat History System ---
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  is_pinned: boolean; // Note snake_case from DB
+  created_at: string;
+}
+
+export interface StoredMessage {
+  id: string;
+  session_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  attachment_url?: string;
+  attachment_type?: string;
+  created_at: string;
+}
+
+/**
+ * Creates a new chat session.
+ */
+export const createChatSession = async (title: string = "New Conversation"): Promise<ChatSession | null> => {
+  if (!supabase) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from('chat_sessions')
+    .insert({
+      user_id: user.id,
+      title: title
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Create Session Error:", error);
+    return null;
+  }
+  return data;
+};
+
+/**
+ * Gets all chat sessions for the user.
+ */
+export const getChatSessions = async (): Promise<ChatSession[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('chat_sessions')
+    .select('*')
+    .order('is_pinned', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (error) return [];
+  return data;
+};
+
+/**
+ * Deletes a chat session.
+ */
+export const deleteChatSession = async (sessionId: string) => {
+  if (!supabase) return;
+  await supabase.from('chat_sessions').delete().eq('id', sessionId);
+};
+
+/**
+ * Toggle Pin status.
+ */
+export const pinChatSession = async (sessionId: string, isPinned: boolean) => {
+  if (!supabase) return;
+  await supabase.from('chat_sessions').update({ is_pinned: isPinned }).eq('id', sessionId);
+};
+
+/**
+ * Saves a message to a session.
+ */
+export const saveChatMessage = async (
+  sessionId: string,
+  role: 'user' | 'assistant',
+  content: string,
+  attachmentUrl?: string,
+  attachmentType?: string
+): Promise<StoredMessage | null> => {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .insert({
+      session_id: sessionId,
+      role,
+      content,
+      attachment_url: attachmentUrl,
+      attachment_type: attachmentType
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Save Message Error:", error);
+    return null;
+  }
+  return data;
+};
+
+/**
+ * Gets messages for a specific session.
+ */
+export const getChatMessages = async (sessionId: string): Promise<StoredMessage[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true });
+
+  if (error) return [];
+  return data;
+};
