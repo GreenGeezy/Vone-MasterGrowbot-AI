@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import {
     User, LogOut, Shield, Settings, ChevronRight, Camera,
-    MessageSquare, HelpCircle, FileText, Trash2, Mail, X, Check, Star, Edit2, Flame, Image as ImageIcon, Smile
+    MessageSquare, FileText, Trash2, Mail, X, Check, Star, Edit2, Flame, Image as ImageIcon, Smile
 } from 'lucide-react';
 import { Browser } from '@capacitor/browser';
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
@@ -13,14 +13,14 @@ interface ProfileProps {
     onSignOut: () => void;
 }
 
-// "Cool" Animated/Styled Grower Avatars
+// "Cool" Animated/Styled Grower Avatars (Local Assets)
 const COOL_AVATARS = [
-    'https://img.freepik.com/premium-photo/3d-avatar-man-with-dreadlocks-green-cap-smoking-weed_1029473-228769.jpg', // Cool Grower 1
-    'https://img.freepik.com/premium-photo/lofi-girl-illustration-young-woman-looking-out-window-city-night-generative-ai_955884-2453.jpg', // Lofi Chill
-    'https://img.freepik.com/premium-photo/cool-cyberpunk-robot-wearing-hoodie-sunglasses-generative-ai_39719-72.jpg', // Cyber Bot
-    'https://img.freepik.com/premium-photo/funky-cartoon-cannabis-leaf-character-sunglasses_993596-1808.jpg', // Funky Leaf
-    'https://img.freepik.com/premium-photo/astronaut-grower-checking-plants-space-generative-ai_960782-1234.jpg', // Space Grower (Generic URL placeholder)
-    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRz-h9N3-V9j7i2i8q8q8q8q8q8q8q8q8q8q8&s' // Generic Fallback
+    '/assets/avatars/the_alchemist.png',  // The Alchemist
+    '/assets/avatars/the_bot.png',        // The Bot
+    '/assets/avatars/neon_leaf.png',      // Neon Leaf
+    '/assets/avatars/grow_tent_king.png', // Grow Tent King
+    '/assets/avatars/macro_trichome.png', // Macro Trichome
+    '/assets/avatars/hydro_bucket.png'    // Hydro Bucket
 ];
 
 const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignOut }) => {
@@ -40,7 +40,6 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
 
     // --- Actions ---
 
-    // 1. Handle Photo/Gallery via Capacitor Camera
     const handleCameraAction = async (source: CameraSource) => {
         try {
             const image = await CapacitorCamera.getPhoto({
@@ -56,7 +55,6 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
             }
         } catch (error) {
             console.error("Camera Error:", error);
-            // Ignore user cancellation errors
         }
     };
 
@@ -65,11 +63,8 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
         const ticketId = `MG-${Math.floor(1000 + Math.random() * 9000)}`;
         const subject = `Support Ticket ${ticketId}: ${supportForm.issue}`;
         const body = `Name: ${supportForm.name}\nEmail: ${supportForm.email}\n\nMessage:\n${supportForm.message}`;
-
         const mailtoLink = `mailto:Agcomsol@gmail.com,Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
         window.location.href = mailtoLink;
-
         alert(`Ticket #${ticketId} Generated! We will contact you shortly.`);
         setShowSupportModal(false);
         setSupportForm({ name: '', email: '', issue: '', message: '' });
@@ -79,7 +74,6 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
         const subject = "App Feedback - MasterGrowbot AI";
         const body = "Thank You for Being Part of Our Elite MasterGrowbot AI Growers Community...\n\n[Your Feedback Here]";
         const mailtoLink = `mailto:Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
         window.location.href = mailtoLink;
         setShowFeedbackModal(false);
     };
@@ -151,7 +145,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
             {/* 1. Header & Avatar */}
             <div className="pt-12 pb-8 px-6 text-center relative">
 
-                {/* Streak Badge (Top Right) */}
+                {/* Streak Badge */}
                 {userProfile.streak && userProfile.streak > 0 && (
                     <div className="absolute top-4 right-4 animate-in fade-in slide-in-from-top-4">
                         <div className="flex flex-col items-center">
@@ -159,12 +153,11 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                                 <div className="bg-orange-500 text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg border-2 border-white z-10 relative">
                                     <Flame size={24} fill="currentColor" className="animate-pulse" />
                                 </div>
-                                {/* Balloons/Confetti Effect for Milestones (CSS-only simplified) */}
                                 {(userProfile.streak % 7 === 0 || userProfile.streak === 30) && (
-                                    <div className="absolute -top-10 -left-10 text-4xl animate-bounce delay-100">🎈</div>
-                                )}
-                                {(userProfile.streak % 7 === 0 || userProfile.streak === 30) && (
-                                    <div className="absolute -top-8 -right-8 text-4xl animate-bounce delay-300">🎈</div>
+                                    <>
+                                        <div className="absolute -top-10 -left-10 text-4xl animate-bounce delay-100">🎈</div>
+                                        <div className="absolute -top-8 -right-8 text-4xl animate-bounce delay-300">🎈</div>
+                                    </>
                                 )}
                             </div>
                             <div className="bg-orange-100 text-orange-700 text-[10px] font-black px-2 py-0.5 rounded-full -mt-2 z-20 border border-white">
@@ -282,7 +275,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
 
             {/* --- MODALS --- */}
 
-            {/* AVATAR MENU MODAL (New) */}
+            {/* AVATAR MENU MODAL */}
             {showAvatarMenu && (
                 <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom-5">
@@ -310,7 +303,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 </div>
             )}
 
-            {/* PRESET GRID MODAL (New) */}
+            {/* PRESET GRID MODAL */}
             {showPresetGrid && (
                 <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
@@ -319,14 +312,22 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                             <button onClick={() => setShowPresetGrid(false)} className="p-2 bg-gray-50 rounded-full"><X size={16} /></button>
                         </div>
                         <div className="grid grid-cols-2 gap-3 overflow-y-auto p-1">
-                            {COOL_AVATARS.map((url, i) => (
-                                <button key={i} onClick={() => {
-                                    onUpdateProfile({ avatarUri: url });
-                                    setShowPresetGrid(false);
-                                }} className="aspect-square rounded-2xl overflow-hidden border-2 border-transparent hover:border-green-500 relative group">
-                                    <img src={url} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt={`Avatar ${i}`} />
-                                </button>
-                            ))}
+                            {COOL_AVATARS.map((url, i) => {
+                                const isSelected = userProfile.avatarUri === url;
+                                return (
+                                    <button key={i} onClick={() => {
+                                        onUpdateProfile({ avatarUri: url });
+                                        setShowPresetGrid(false);
+                                    }} className={`aspect-square rounded-2xl overflow-hidden border-4 transition-all relative group ${isSelected ? 'border-green-500 shadow-lg scale-95' : 'border-transparent hover:border-green-200'}`}>
+                                        <img src={url} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt={`Avatar ${i}`} onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/150')} />
+                                        {isSelected && (
+                                            <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full p-1 shadow-md">
+                                                <Check size={12} strokeWidth={4} />
+                                            </div>
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
@@ -342,46 +343,24 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                         </div>
                         <form onSubmit={async (e) => {
                             e.preventDefault();
-
-                            // 1. Construct Email
                             const ticketId = `MG-${Math.floor(1000 + Math.random() * 9000)}`;
                             const subject = `Support Ticket ${ticketId}: ${supportForm.issue}`;
                             const body = `Name: ${supportForm.name}\nEmail: ${supportForm.email}\n\nMessage:\n${supportForm.message}`;
                             const mailtoLink = `mailto:Agcomsol@gmail.com,Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-                            // 2. Try Background Save (Fire & Forget)
                             const { createSupportTicket } = await import('../services/dbService');
                             createSupportTicket(supportForm).catch(console.error);
 
-                            // 3. Perfect Experience
                             window.location.href = mailtoLink;
                             alert(`Ticket #${ticketId} Created! 📨 Opening your email client...`);
                             setShowSupportModal(false);
                             setSupportForm({ name: '', email: '', issue: '', message: '' });
                         }} className="space-y-3">
-                            <input
-                                required placeholder="Your Name"
-                                className="w-full bg-gray-50 p-4 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-green-500/20"
-                                value={supportForm.name} onChange={e => setSupportForm({ ...supportForm, name: e.target.value })}
-                            />
-                            <input
-                                required type="email" placeholder="Your Email"
-                                className="w-full bg-gray-50 p-4 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-green-500/20"
-                                value={supportForm.email} onChange={e => setSupportForm({ ...supportForm, email: e.target.value })}
-                            />
-                            <input
-                                required placeholder="Issue Title"
-                                className="w-full bg-gray-50 p-4 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-green-500/20"
-                                value={supportForm.issue} onChange={e => setSupportForm({ ...supportForm, issue: e.target.value })}
-                            />
-                            <textarea
-                                required placeholder="Describe your issue..." rows={4}
-                                className="w-full bg-gray-50 p-4 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-green-500/20 resize-none"
-                                value={supportForm.message} onChange={e => setSupportForm({ ...supportForm, message: e.target.value })}
-                            />
-                            <button type="submit" className="w-full py-4 bg-green-600 text-white rounded-xl font-black shadow-lg shadow-green-200 active:scale-95 transition-transform">
-                                Send Ticket
-                            </button>
+                            <input required placeholder="Your Name" className="w-full bg-gray-50 p-4 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-green-500/20" value={supportForm.name} onChange={e => setSupportForm({ ...supportForm, name: e.target.value })} />
+                            <input required type="email" placeholder="Your Email" className="w-full bg-gray-50 p-4 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-green-500/20" value={supportForm.email} onChange={e => setSupportForm({ ...supportForm, email: e.target.value })} />
+                            <input required placeholder="Issue Title" className="w-full bg-gray-50 p-4 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-green-500/20" value={supportForm.issue} onChange={e => setSupportForm({ ...supportForm, issue: e.target.value })} />
+                            <textarea required placeholder="Describe your issue..." rows={4} className="w-full bg-gray-50 p-4 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-green-500/20 resize-none" value={supportForm.message} onChange={e => setSupportForm({ ...supportForm, message: e.target.value })} />
+                            <button type="submit" className="w-full py-4 bg-green-600 text-white rounded-xl font-black shadow-lg shadow-green-200 active:scale-95 transition-transform">Send Ticket</button>
                         </form>
                     </div>
                 </div>
@@ -396,77 +375,47 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                                 <MessageSquare size={28} />
                             </div>
                             <h2 className="text-lg font-black text-gray-900">We Value Your Voice</h2>
-                            <p className="text-xs text-gray-500 font-medium mt-2 leading-relaxed px-4">
-                                "Thank You for Being Part of Our Elite MasterGrowbot AI Growers Community..."
-                            </p>
+                            <p className="text-xs text-gray-500 font-medium mt-2 leading-relaxed px-4">"Thank You for Being Part of Our Elite MasterGrowbot AI Growers Community..."</p>
                         </div>
-
-                        {/* Feedback Fields */}
                         <div className="space-y-4 mb-6">
-                            {/* Simple Star Rating */}
                             <div className="flex justify-center gap-2">
                                 {[1, 2, 3, 4, 5].map((star) => (
-                                    <button
-                                        key={star}
-                                        onClick={() => setSupportForm(prev => ({ ...prev, rating: star } as any))}
-                                        className={`p-2 rounded-full transition-colors ${(supportForm as any).rating >= star ? 'text-yellow-400 bg-yellow-50' : 'text-gray-200'}`}
-                                    >
+                                    <button key={star} onClick={() => setSupportForm(prev => ({ ...prev, rating: star } as any))} className={`p-2 rounded-full transition-colors ${(supportForm as any).rating >= star ? 'text-yellow-400 bg-yellow-50' : 'text-gray-200'}`}>
                                         <Star size={24} fill={(supportForm as any).rating >= star ? "currentColor" : "none"} />
                                     </button>
                                 ))}
                             </div>
-
-                            <textarea
-                                placeholder="Share your thoughts..."
-                                rows={4}
-                                className="w-full bg-gray-50 p-4 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-yellow-500/20 resize-none"
-                                value={(supportForm as any).feedbackMessage || ''}
-                                onChange={e => setSupportForm(prev => ({ ...prev, feedbackMessage: e.target.value } as any))}
-                            />
+                            <textarea placeholder="Share your thoughts..." rows={4} className="w-full bg-gray-50 p-4 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-yellow-500/20 resize-none" value={(supportForm as any).feedbackMessage || ''} onChange={e => setSupportForm(prev => ({ ...prev, feedbackMessage: e.target.value } as any))} />
                         </div>
 
-                        <button
-                            onClick={async () => {
-                                const rating = (supportForm as any).rating || 5;
-                                const message = (supportForm as any).feedbackMessage || '';
+                        <button onClick={async () => {
+                            const rating = (supportForm as any).rating || 5;
+                            const message = (supportForm as any).feedbackMessage || '';
+                            const subject = "App Feedback - MasterGrowbot AI";
+                            const body = `Rating: ${rating} Stars\n\nFeedback:\n${message}`;
+                            const mailtoLink = `mailto:Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-                                // 1. Construct Email
-                                const subject = "App Feedback - MasterGrowbot AI";
-                                const body = `Rating: ${rating} Stars\n\nFeedback:\n${message}`;
-                                const mailtoLink = `mailto:Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                            const { submitUserFeedback } = await import('../services/dbService');
+                            submitUserFeedback({ rating, message }).catch(console.error);
 
-                                // 2. Try Background Save (Fire & Forget)
-                                const { submitUserFeedback } = await import('../services/dbService');
-                                submitUserFeedback({ rating, message }).catch(console.error);
+                            alert("Feedback Sent! Thank you for helping us grow. 🌱");
+                            window.location.href = mailtoLink;
 
-                                // 3. Perfect Experience
-                                alert("Feedback Sent! Thank you for helping us grow. 🌱");
-                                window.location.href = mailtoLink;
-
-                                // Prompt for Review if 5 stars and wrote a message
-                                if (rating === 5 && message.length > 0) {
-                                    if (window.confirm("Hi! 👋 We’re a small team building MasterGrowbot AI. If you enjoy using it, a quick rating makes a massive difference to us.")) {
-                                        window.open("https://play.google.com/store/apps/details?id=com.futuristiccannabis.mastergrowbot", "_blank");
-                                    }
+                            if (rating === 5 && message.length > 0) {
+                                if (window.confirm("Hi! 👋 We’re a small team building MasterGrowbot AI. If you enjoy using it, a quick rating makes a massive difference to us.")) {
+                                    window.open("https://play.google.com/store/apps/details?id=com.futuristiccannabis.mastergrowbot", "_blank");
                                 }
+                            }
+                            setShowFeedbackModal(false);
+                            setSupportForm({ name: '', email: '', issue: '', message: '' });
+                        }} className="w-full py-4 bg-gray-900 text-white rounded-xl font-black shadow-xl active:scale-95 transition-transform mb-3">Submit Feedback</button>
 
-                                setShowFeedbackModal(false);
-                                setSupportForm({ name: '', email: '', issue: '', message: '' }); // Reset
-                            }}
-                            className="w-full py-4 bg-gray-900 text-white rounded-xl font-black shadow-xl active:scale-95 transition-transform mb-3"
-                        >
-                            Submit Feedback
-                        </button>
-
-                        <button onClick={() => setShowFeedbackModal(false)} className="w-full py-4 text-gray-500 font-bold text-xs uppercase tracking-widest">
-                            Cancel
-                        </button>
+                        <button onClick={() => setShowFeedbackModal(false)} className="w-full py-4 text-gray-500 font-bold text-xs uppercase tracking-widest">Cancel</button>
                     </div>
                 </div>
-            )
-            }
+            )}
 
-        </div >
+        </div>
     );
 };
 
