@@ -72,7 +72,14 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   }, []);
 
   const handleSend = async (text: string = input, forceVoice: boolean = false) => {
-    if (!text.trim()) return;
+    if (!text.trim()) {
+      // Prevent getting stuck in "Thinking..." if input is empty
+      if (forceVoice && isLive) {
+        setLiveTranscript("Listening...");
+        try { recognitionRef.current.start(); } catch (e) { }
+      }
+      return;
+    }
 
     const activeVoiceMode = forceVoice || isLive;
 
@@ -106,6 +113,10 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
     } catch (error) {
       console.error(error);
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: "I'm having trouble connecting to the garden network. Please check your internet and try again.", timestamp: Date.now() }]);
+      // Safety reset logic for error case
+      if (activeVoiceMode) {
+        speakResponse("Sorry, I had trouble connecting. Please try again.", true);
+      }
     } finally {
       setLoading(false);
     }
@@ -115,6 +126,11 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
     if (!('webkitSpeechRecognition' in window)) {
       alert("Voice features require a supported browser (Chrome/Safari/Android).");
       return;
+    }
+
+    // Stop existing instance if any
+    if (recognitionRef.current) {
+      recognitionRef.current.abort();
     }
 
     setIsLive(true);
@@ -141,7 +157,23 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
         setLiveTranscript("Thinking...");
         // Stop recognition to prevent interference while processing/speaking
         recognitionRef.current.stop();
+
+        if (!transcript.trim()) {
+          // Empty result check - restart immediately
+          setLiveTranscript("Listening...");
+          recognitionRef.current.start();
+          return;
+        }
+
         handleSend(transcript, true);
+      }
+    };
+
+    recognitionRef.current.onerror = (e: any) => {
+      console.error("Speech Error", e);
+      if (e.error === 'no-speech' && isLive) {
+        // Silent restart if no speech detected
+        try { recognitionRef.current.start(); } catch (e) { }
       }
     };
 
@@ -206,8 +238,9 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
         try {
           // Small delay to ensure TTS has fully released audio focus
           setTimeout(() => {
-            if (isLive && recognitionRef.current) {
-              try { recognitionRef.current.start(); } catch (e) { }
+            if (isLive) {
+              // Use startLiveSession instead of raw start() to get a fresh instance
+              startLiveSession();
             }
           }, 200);
         } catch (e) {
@@ -224,7 +257,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
         // Fallback loop logic
         if (isLive && restartListening) {
           utterance.onend = () => {
-            if (isLive && recognitionRef.current) try { recognitionRef.current.start(); } catch (e) { }
+            if (isLive) startLiveSession();
           };
         }
       }
