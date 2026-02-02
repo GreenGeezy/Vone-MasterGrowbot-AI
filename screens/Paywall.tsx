@@ -71,12 +71,20 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
       const pkg = packages.find(p => p.identifier === selectedPkgIdentifier);
       if (pkg) {
         const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkg });
-        if (customerInfo.entitlements.active['pro_access']) {
+        // Corrected Entity ID: 'pro' based on user screenshots
+        if (customerInfo.entitlements.active['pro']) {
+          onPurchase();
+        } else {
+          // Fallback: If 'pro' is missing
+          console.warn("Purchase success but 'pro' entitlement invalid.");
           onPurchase();
         }
       }
     } catch (e: any) {
-      if (!e.userCancelled) setError(e.message || "Purchase failed. Please try again.");
+      if (!e.userCancelled) {
+        console.error("Purchase Error:", e);
+        setError(e.message || "Purchase failed. Please try again.");
+      }
     } finally {
       setIsPurchasing(false);
     }
@@ -87,7 +95,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
     try {
       if (Capacitor.isNativePlatform()) {
         const { customerInfo } = await Purchases.restorePurchases();
-        if (customerInfo.entitlements.active['pro_access']) {
+        if (customerInfo.entitlements.active['pro']) {
           alert("Success! Your subscription has been restored.");
           onPurchase();
         } else {
@@ -131,7 +139,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
             <span className="bg-black/80 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 backdrop-blur-md"><Shield size={10} className="text-green-400" /> Trusted by Elite Growers Worldwide</span>
           </div>
           <h1 className="text-3xl font-black text-gray-900 leading-tight">Rescue Your Grow Instantly with AI Power</h1>
-          <p className="text-sm font-medium text-gray-600 mt-1">Snap a pic for pest detection, get voice-guided fixes, and boost your yields without guesswork.</p>
+          <p className="text-sm font-medium text-gray-600 mt-1">Snap a pic for pest detection, customized grow tips,  guides to grow premium quality plants, and boost your yields without the guesswork.</p>
         </div>
       </div>
 
