@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import {
     User, LogOut, Shield, Settings, ChevronRight, Camera,
-    MessageSquare, HelpCircle, FileText, Trash2, Mail, X, Check, Star, Edit2, Flame
+    MessageSquare, HelpCircle, FileText, Trash2, Mail, X, Check, Star, Edit2, Flame, Image as ImageIcon, Smile
 } from 'lucide-react';
 import { Browser } from '@capacitor/browser';
+import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
 
 interface ProfileProps {
     userProfile: UserProfile | null;
@@ -12,19 +13,25 @@ interface ProfileProps {
     onSignOut: () => void;
 }
 
-const AVATAR_PRESETS = [
-    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80',
-    'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=200&q=80',
-    'https://images.unsplash.com/photo-1633332755192-727a05c4013d?auto=format&fit=crop&w=200&q=80'
+// "Cool" Animated/Styled Grower Avatars
+const COOL_AVATARS = [
+    'https://img.freepik.com/premium-photo/3d-avatar-man-with-dreadlocks-green-cap-smoking-weed_1029473-228769.jpg', // Cool Grower 1
+    'https://img.freepik.com/premium-photo/lofi-girl-illustration-young-woman-looking-out-window-city-night-generative-ai_955884-2453.jpg', // Lofi Chill
+    'https://img.freepik.com/premium-photo/cool-cyberpunk-robot-wearing-hoodie-sunglasses-generative-ai_39719-72.jpg', // Cyber Bot
+    'https://img.freepik.com/premium-photo/funky-cartoon-cannabis-leaf-character-sunglasses_993596-1808.jpg', // Funky Leaf
+    'https://img.freepik.com/premium-photo/astronaut-grower-checking-plants-space-generative-ai_960782-1234.jpg', // Space Grower (Generic URL placeholder)
+    'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRz-h9N3-V9j7i2i8q8q8q8q8q8q8q8q8q8q8&s' // Generic Fallback
 ];
 
 const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignOut }) => {
     // Local state for modals
     const [showSupportModal, setShowSupportModal] = useState(false);
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-    const [isEditingName, setIsEditingName] = useState(false); // New: Name Edit State
-    const [tempName, setTempName] = useState(''); // New: Temp Name State
+    const [showAvatarMenu, setShowAvatarMenu] = useState(false); // Modal 1: Selection Menu
+    const [showPresetGrid, setShowPresetGrid] = useState(false); // Modal 2: Preset Grid
+
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [tempName, setTempName] = useState('');
 
     // Support Form State
     const [supportForm, setSupportForm] = useState({ name: '', email: '', issue: '', message: '' });
@@ -33,18 +40,23 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
 
     // --- Actions ---
 
-    const handleEditAvatar = () => {
-        // Simple preset toggle as requested for safety
-        const current = userProfile.avatarUri || '';
-        const index = AVATAR_PRESETS.indexOf(current);
-        const nextIndex = (index + 1) % AVATAR_PRESETS.length;
-        const nextAvatar = AVATAR_PRESETS[nextIndex];
-
+    // 1. Handle Photo/Gallery via Capacitor Camera
+    const handleCameraAction = async (source: CameraSource) => {
         try {
-            onUpdateProfile({ avatarUri: nextAvatar });
-            // alert("Avatar Updated! 📸"); 
-        } catch (e) {
-            alert("Failed to update avatar.");
+            const image = await CapacitorCamera.getPhoto({
+                quality: 90,
+                allowEditing: true,
+                resultType: CameraResultType.Uri,
+                source: source
+            });
+
+            if (image.webPath) {
+                onUpdateProfile({ avatarUri: image.webPath });
+                setShowAvatarMenu(false);
+            }
+        } catch (error) {
+            console.error("Camera Error:", error);
+            // Ignore user cancellation errors
         }
     };
 
@@ -163,7 +175,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 )}
 
                 <div className="relative inline-block mb-4">
-                    <button onClick={handleEditAvatar} className="relative group">
+                    <button onClick={() => setShowAvatarMenu(true)} className="relative group">
                         <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gray-200">
                             {userProfile.avatarUri ? (
                                 <img src={userProfile.avatarUri} className="w-full h-full object-cover" alt="Profile" />
@@ -269,6 +281,56 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
             </div>
 
             {/* --- MODALS --- */}
+
+            {/* AVATAR MENU MODAL (New) */}
+            {showAvatarMenu && (
+                <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom-5">
+                        <h3 className="text-center text-lg font-black text-gray-900 mb-6">Update Profile Picture</h3>
+
+                        <div className="space-y-3">
+                            <button onClick={() => handleCameraAction(CameraSource.Camera)} className="w-full p-4 bg-gray-50 hover:bg-gray-100 rounded-2xl flex items-center gap-3 transition-colors">
+                                <div className="bg-blue-100 text-blue-600 p-2 rounded-xl"><Camera size={20} /></div>
+                                <span className="font-bold text-gray-800">Take Photo</span>
+                            </button>
+
+                            <button onClick={() => handleCameraAction(CameraSource.Photos)} className="w-full p-4 bg-gray-50 hover:bg-gray-100 rounded-2xl flex items-center gap-3 transition-colors">
+                                <div className="bg-purple-100 text-purple-600 p-2 rounded-xl"><ImageIcon size={20} /></div>
+                                <span className="font-bold text-gray-800">Upload Image</span>
+                            </button>
+
+                            <button onClick={() => { setShowAvatarMenu(false); setShowPresetGrid(true); }} className="w-full p-4 bg-gray-50 hover:bg-gray-100 rounded-2xl flex items-center gap-3 transition-colors">
+                                <div className="bg-green-100 text-green-600 p-2 rounded-xl"><Smile size={20} /></div>
+                                <span className="font-bold text-gray-800">Select Growing Avatar</span>
+                            </button>
+                        </div>
+
+                        <button onClick={() => setShowAvatarMenu(false)} className="w-full mt-6 py-3 font-bold text-gray-400 text-sm">Cancel</button>
+                    </div>
+                </div>
+            )}
+
+            {/* PRESET GRID MODAL (New) */}
+            {showPresetGrid && (
+                <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-black text-gray-900">Choose Avatar</h3>
+                            <button onClick={() => setShowPresetGrid(false)} className="p-2 bg-gray-50 rounded-full"><X size={16} /></button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 overflow-y-auto p-1">
+                            {COOL_AVATARS.map((url, i) => (
+                                <button key={i} onClick={() => {
+                                    onUpdateProfile({ avatarUri: url });
+                                    setShowPresetGrid(false);
+                                }} className="aspect-square rounded-2xl overflow-hidden border-2 border-transparent hover:border-green-500 relative group">
+                                    <img src={url} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt={`Avatar ${i}`} />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Support Modal */}
             {showSupportModal && (

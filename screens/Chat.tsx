@@ -54,6 +54,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
 
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+  const watchdogRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -76,7 +77,9 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       // Prevent getting stuck in "Thinking..." if input is empty
       if (forceVoice && isLive) {
         setLiveTranscript("Listening...");
-        try { recognitionRef.current.start(); } catch (e) { }
+        try {
+          if (recognitionRef.current) recognitionRef.current.start();
+        } catch (e) { }
       }
       return;
     }
@@ -128,7 +131,11 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       return;
     }
 
-    // Stop existing instance if any
+    // Stop existing instance/watchdog if any
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
     if (recognitionRef.current) {
       recognitionRef.current.abort();
     }
@@ -142,7 +149,11 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
     recognitionRef.current.interimResults = true;
     recognitionRef.current.lang = 'en-US';
 
-    recognitionRef.current.onstart = () => setIsUserSpeaking(true);
+    recognitionRef.current.onstart = () => {
+      setIsUserSpeaking(true);
+      // Clear any previous watchdog
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    };
 
     recognitionRef.current.onresult = (event: any) => {
       const transcript = Array.from(event.results)
@@ -154,12 +165,23 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
 
       if (event.results[0].isFinal) {
         setIsUserSpeaking(false);
+
+        // 1. SAFETY: Start a watchdog timer. If handleSend doesn't resolve within 5s (unlikely, but possible if empty/error), reset.
+        watchdogRef.current = setTimeout(() => {
+          if (isLive && liveTranscript === "Thinking...") {
+            console.log("Watchdog: Resetting stuck session");
+            setLiveTranscript("Listening...");
+            try { recognitionRef.current.start(); } catch (e) { }
+          }
+        }, 5000);
+
         setLiveTranscript("Thinking...");
         // Stop recognition to prevent interference while processing/speaking
         recognitionRef.current.stop();
 
         if (!transcript.trim()) {
           // Empty result check - restart immediately
+          if (watchdogRef.current) clearTimeout(watchdogRef.current);
           setLiveTranscript("Listening...");
           recognitionRef.current.start();
           return;
@@ -187,6 +209,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   const stopLiveSession = () => {
     setIsLive(false);
     setIsUserSpeaking(false);
+    if (watchdogRef.current) clearTimeout(watchdogRef.current);
     if (recognitionRef.current) recognitionRef.current.abort();
     TextToSpeech.stop();
   };
@@ -212,6 +235,9 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   };
 
   const speakResponse = async (text: string, restartListening: boolean) => {
+    // Clear watchdog if we made it here
+    if (watchdogRef.current) clearTimeout(watchdogRef.current);
+
     // 1. Immediately update UI
     const cleanText = text.replace(/[\u{1F600}-\u{1F6FF}|[\u{2600}-\u{26FF}]/gu, '').replace(/\*/g, '');
     if (isLive) setLiveTranscript(cleanText);
