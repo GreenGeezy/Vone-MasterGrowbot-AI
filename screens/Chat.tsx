@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, AudioLines, X, Power, Settings2, Check, Sparkles, Mic } from 'lucide-react';
+import { Send, AudioLines, X, Power, Settings2, Check, Sparkles, Mic, User, Bot } from 'lucide-react';
 import { sendMessage } from '../services/geminiService';
 import { ChatMessage, JournalEntry, Plant, UserProfile } from '../types';
 import Growbot from '../components/Growbot';
@@ -18,11 +18,19 @@ const SUGGESTED_PROMPTS = [
   "Prevent mold 🛡️"
 ];
 
+const FILLER_PHRASES = [
+  "Let me think about that...",
+  "Checking my database...",
+  "One moment, Grower...",
+  "Analyzing your request...",
+  "Let me see...",
+  "Hold on a second..."
+];
+
 const VOICE_OPTIONS = [
-  { id: 'Kore', label: 'Coach Kore', type: 'Calm', pitch: 1.0, rate: 1.0 },
-  { id: 'Charon', label: 'Coach Mike', type: 'Bold', pitch: 0.8, rate: 1.1 },
-  { id: 'Fenrir', label: 'MasterGrowbot', type: 'Synthetic', pitch: 1.2, rate: 0.9 },
-  { id: 'Puck', label: 'Coach Puck', type: 'Energetic', pitch: 1.1, rate: 1.2 },
+  { id: 'Mike', label: 'Coach Mike', type: 'Male', pitch: 0.9, rate: 1.05, icon: User },
+  { id: 'Kore', label: 'Coach Kore', type: 'Female', pitch: 1.2, rate: 1.0, icon: User },
+  { id: 'MasterGrowbot', label: 'MasterGrowbot', type: 'Robot', pitch: 1.3, rate: 0.95, icon: Bot },
 ];
 
 const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
@@ -39,8 +47,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   const [isLive, setIsLive] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState("Initializing Uplink...");
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
-  const [selectedVoiceId, setSelectedVoiceId] = useState('Kore');
-  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
+  const [selectedVoiceId, setSelectedVoiceId] = useState('Mike');
 
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -57,11 +64,8 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   }, []);
 
   const handleSend = async (text: string = input, forceVoice: boolean = false) => {
-    // Native TTS doesn't need priming like Web Speech does!
     if (!text.trim()) return;
 
-    // Use forceVoice (from callback) or current state (if available correctly)
-    // Fix: referencing isLive directly here might be stale if called from startLiveSession closure
     const activeVoiceMode = forceVoice || isLive;
 
     const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text, timestamp: Date.now() };
@@ -70,18 +74,21 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
     setLoading(true);
 
     try {
-      const contextPrefix = (plant && !activeVoiceMode)
-        ? `[Context: Plant=${plant.name}, Stage=${plant.stage}, Strain=${plant.strain}] `
-        : '';
-      const finalPrompt = contextPrefix + text;
+      // IMMEDIATE FEEDBACK: Play filler phrase if in voice mode
+      if (activeVoiceMode) {
+        const randomFiller = FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];
+        speakResponse(randomFiller);
+      }
 
-      // Pass the effective voice mode
+      // REMOVED CONTEXT: Bot receives raw text for general advice
+      const finalPrompt = text;
+
       const responseText = await sendMessage(finalPrompt, activeVoiceMode);
 
       const botMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: responseText, timestamp: Date.now() };
       setMessages(prev => [...prev, botMsg]);
 
-      // Always speak if Live/Forced
+      // Always speak real response if Live/Forced (Interrupts filler)
       if (activeVoiceMode) {
         speakResponse(responseText);
       }
@@ -147,7 +154,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
     if (isLive) setLiveTranscript(cleanText);
 
     try {
-      await TextToSpeech.stop(); // Clear queue
+      await TextToSpeech.stop(); // Clear queue (important for interrupting filler)
       const config = VOICE_OPTIONS.find(v => v.id === selectedVoiceId) || VOICE_OPTIONS[0];
 
       await TextToSpeech.speak({
@@ -197,21 +204,6 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
             </p>
           </div>
         </div>
-        <div className="relative">
-          <button onClick={() => setShowVoiceSettings(!showVoiceSettings)} className="p-2 text-gray-400 hover:text-green-600 transition-colors bg-gray-50 rounded-full border border-gray-100">
-            <Settings2 size={20} />
-          </button>
-          {showVoiceSettings && (
-            <div className="absolute top-full right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 p-2 z-50 animate-in fade-in slide-in-from-top-2">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 py-2 border-b border-gray-50 mb-1">Select Persona</p>
-              {VOICE_OPTIONS.map(v => (
-                <button key={v.id} onClick={() => { setSelectedVoiceId(v.id); setShowVoiceSettings(false); }} className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between transition-colors ${selectedVoiceId === v.id ? 'bg-green-50 text-green-700' : 'hover:bg-gray-50 text-gray-700'}`}>
-                  {v.label} {selectedVoiceId === v.id && <Check size={14} />}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-6 z-10">
         {messages.map((msg) => (
@@ -244,6 +236,21 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
             <div className="flex items-center gap-2"><span className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span></span><span className="text-green-600 font-mono text-xs font-black uppercase tracking-widest">Live Uplink Active</span></div>
             <button onClick={stopLiveSession} className="p-3 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><X size={20} /></button>
           </div>
+
+          {/* VOICE SELECTION STRIP (NEW) */}
+          <div className="flex gap-2 mb-4 bg-gray-100/50 p-1.5 rounded-full border border-gray-100 self-center">
+            {VOICE_OPTIONS.map(v => (
+              <button
+                key={v.id}
+                onClick={() => setSelectedVoiceId(v.id)}
+                className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${selectedVoiceId === v.id ? 'bg-white text-green-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                <v.icon size={14} />
+                {v.label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex-1 flex flex-col items-center justify-center w-full">
             <div className="relative mb-12"><Growbot size="xl" mood={isUserSpeaking ? 'alert' : 'speaking'} /><div className="absolute inset-0 -m-8 border-2 border-green-500/20 rounded-full animate-ping duration-[3000ms]"></div><div className="absolute inset-0 -m-12 border border-green-500/10 rounded-full animate-ping duration-[3000ms] delay-500"></div></div>
             <div className="w-full max-w-xs text-center space-y-4"><p className="text-2xl font-bold text-gray-800 leading-tight transition-all">"{liveTranscript}"</p><div className="h-1 w-20 bg-gray-100 mx-auto rounded-full overflow-hidden">{loading && <div className="h-full bg-green-500 animate-progress"></div>}</div></div>
