@@ -142,7 +142,7 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete, onSkip, u
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col px-6 py-8 overflow-y-auto">
+    <div className="fixed inset-0 z-[60] bg-gray-50 flex flex-col px-6 py-8 overflow-y-auto">
 
       {/* 1. SUCCESS HEADER */}
       <div className="flex flex-col items-center text-center mb-8 mt-4">
