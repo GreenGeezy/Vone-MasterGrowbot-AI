@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, CheckCircle2, ScanLine, MessageSquare, X } from 'lucide-react';
+import { ChevronRight, CheckCircle2, ScanLine, MessageSquare, Database, ClipboardCheck } from 'lucide-react';
 
 interface GetStartedTutorialProps {
     onComplete: () => void;
@@ -33,8 +33,26 @@ const GetStartedTutorial: React.FC<GetStartedTutorialProps> = ({ onComplete }) =
             subtitle: "Your pocket cultivation expert.",
             icon: <MessageSquare size={64} className="text-purple-500" />,
             desc: "Upload logs, photos, or ask complex questions. The AI remembers your garden's context.",
-            action: "Start Growing",
+            action: "Next",
             color: "bg-purple-50"
+        },
+        {
+            id: 'strains',
+            title: "Unlock Genetic Intelligence",
+            subtitle: "100+ Strains at Your Fingertips",
+            icon: <Database size={64} className="text-orange-500" />,
+            desc: "Select your specific strain to calibrate the AI. Get advice tailored to your plant's unique DNA and traits.",
+            action: "Next",
+            color: "bg-orange-50"
+        },
+        {
+            id: 'journal',
+            title: "Your Grow Command Center",
+            subtitle: "Track, Log, and Optimize",
+            icon: <ClipboardCheck size={64} className="text-teal-500" />,
+            desc: "Manage daily tasks and keep a visual journal. Our AI analyzes your logs to predict yields and catch issues early.",
+            action: "Start Growing",
+            color: "bg-teal-50"
         }
     ];
 

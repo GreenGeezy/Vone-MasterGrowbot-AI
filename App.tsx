@@ -41,8 +41,15 @@ const App: React.FC = () => {
 
       CapacitorApp.addListener('appUrlOpen', async (data) => {
         if (data.url.includes('code=')) {
+          // Just exchange the code. The PostPaymentAuth component (if open) will catch the state change.
           const { data: sessionData } = await supabase.auth.exchangeCodeForSession(new URL(data.url).searchParams.get('code')!);
-          if (sessionData.session) handleAuthSuccess();
+
+          if (sessionData.session) {
+            console.log("Session established via Deep Link.");
+            // We do NOT call handleAuthSuccess() here to avoid closing the UI before profile sync.
+            // If PostPaymentAuth is NOT open (e.g. cold start via link), we should reload data.
+            loadUserData();
+          }
         }
       });
 

@@ -32,32 +32,39 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete, onSkip, u
 
   // Handle App State changes for Google Auth redirect
   useEffect(() => {
+    // 1. App State Listener (Deep Link Return)
     const handleAppStateChange = async (state: any) => {
       if (state.isActive && isProcessing) {
-        // Give time for the auth callback to process
-        setTimeout(async () => {
-          const { data } = await supabase.auth.getSession();
-          if (data.session) {
-            setStatusMessage("Sign in successful! Setting up profile...");
-            await handlePostAuthLogic(data.session.user.id);
-          } else {
-            setIsProcessing(false);
-            setAuthError("Sign-in was cancelled or incomplete. Please try again.");
-          }
-        }, 2000);
+        // Fallback: Check session if onAuthStateChange didn't fire
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          await handlePostAuthLogic(data.session.user.id);
+        }
       }
     };
 
-    const setupListener = async () => {
+    // 2. Auth State Listener (Immediate Trigger)
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session && isProcessing) {
+        setStatusMessage("Sign in successful! Setting up profile...");
+        await handlePostAuthLogic(session.user.id);
+      }
+    });
+
+    const setupAppListener = async () => {
       const listener = await CapacitorApp.addListener('appStateChange', handleAppStateChange);
       return listener;
     };
 
-    const listenerPromise = setupListener();
-    return () => { listenerPromise.then(l => l.remove()); };
+    const appListenerPromise = setupAppListener();
+
+    return () => {
+      authListener.subscription.unsubscribe();
+      appListenerPromise.then(l => l.remove());
+    };
   }, [isProcessing]);
 
-  const handlePostAuthLogic = async () => {
+  const handlePostAuthLogic = async (userId?: string) => {
     try {
       if (userProfile) {
         // Fix: updateOnboardingProfile only takes 1 argument (the updates)
