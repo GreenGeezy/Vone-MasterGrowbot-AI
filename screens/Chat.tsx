@@ -44,7 +44,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-  const [attachment, setAttachment] = useState<{ uri: string, type: 'image' | 'file', base64?: string, content?: string } | null>(null);
+  const [attachment, setAttachment] = useState<{ uri: string, type: 'image' | 'file', base64?: string, content?: string, mimeType?: string } | null>(null);
 
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -111,19 +111,25 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     const reader = new FileReader();
+    // Default to Base64 for everything (safest for PDF/Images/Excel if supported)
+    // For text files, we can also use text, but consistency helps.
+    reader.readAsDataURL(file);
+
     reader.onload = async (ev) => {
-      const text = ev.target?.result as string;
-      setAttachment({ uri: file.name, type: 'file', content: text.substring(0, 50000) });
+      const result = ev.target?.result as string;
+      // result is "data:mime;base64,....."
+      const base64 = result.split(',')[1];
+      const mimeType = result.split(';')[0].split(':')[1];
+
+      setAttachment({
+        uri: file.name,
+        type: file.type.startsWith('image') ? 'image' : 'file',
+        base64: base64,
+        mimeType: mimeType
+      });
     };
-    if (file.type.includes('image')) {
-      reader.readAsDataURL(file);
-      reader.onload = (ev) => {
-        setAttachment({ uri: file.name, type: 'image', base64: (ev.target?.result as string).split(',')[1] });
-      }
-    } else {
-      reader.readAsText(file);
-    }
   };
 
   // --- MESSAGING ---
@@ -147,7 +153,16 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
       }
     }
 
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text, attachmentUrl: attachment?.uri, timestamp: Date.now() };
+    // VISUAL UPDATE
+    const userMsg: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: text,
+      // Ensure we save the FULL data url for immediate display if it's an image
+      attachmentUrl: attachment?.type === 'image' ? `data:${attachment.mimeType};base64,${attachment.base64}` : attachment?.uri,
+      timestamp: Date.now()
+    };
+
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     const tempAttachment = attachment;
@@ -156,22 +171,27 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
 
     try {
       let uploadUrl = '';
+      // If needed, upload to Supabase Storage for persistence (Optional/Advanced)
       if (tempAttachment?.type === 'image' && tempAttachment.base64) {
-        const path = `${userProfile?.id || 'anon'}/${Date.now()}.jpg`;
-        const url = await uploadImage(tempAttachment.base64, path);
-        if (url) uploadUrl = url;
+        try {
+          const path = `${userProfile?.id || 'anon'}/${Date.now()}.jpg`;
+          const url = await uploadImage(tempAttachment.base64, path);
+          if (url) uploadUrl = url;
+        } catch (e) { console.warn("Image upload failed, using local only"); }
       }
 
-      await saveChatMessage(sessionId, 'user', text, uploadUrl, tempAttachment?.type);
+      await saveChatMessage(sessionId, 'user', text, uploadUrl || userMsg.attachmentUrl, tempAttachment?.type);
 
       const historyContext = messages.slice(-10).map(m => ({ role: m.role, content: m.content }));
 
+      // NEW SEND MESSAGE CALL
       const responseText = await sendMessage(
         text,
         historyContext,
         tempAttachment ? {
-          data: tempAttachment.type === 'image' ? tempAttachment.base64! : tempAttachment.content!,
-          type: tempAttachment.type === 'image' ? 'image' : 'text'
+          data: tempAttachment.base64!, // We stored base64 in handleFileSelect
+          type: tempAttachment.type,
+          mimeType: tempAttachment.mimeType!
         } : undefined
       );
 
@@ -227,7 +247,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
               <Growbot size="sm" mood={loading ? 'thinking' : 'happy'} />
               <div>
                 <h1 className="font-black text-gray-800 text-base leading-none">MasterGrowbot AI</h1>
-                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">{sessions.find(s => s.id === currentSessionId)?.title || 'New Session'}</p>
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">AI Cultivation Assistant</p>
               </div>
             </div>
           </div>
@@ -237,7 +257,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
         <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-4">
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
-              {msg.role === 'assistant' && (<div className="w-8 h-8 mr-2 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0"><Growbot size="xs" /></div>)}
+              {msg.role === 'assistant' && (<div className="mr-2 flex-shrink-0"><Growbot size="sm" /></div>)}
               <div className={`max-w-[85%] space-y-2`}>
                 <div className={`p-4 text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-gray-900 text-white rounded-2xl rounded-tr-sm' : 'bg-white text-gray-800 rounded-2xl rounded-tl-sm border border-gray-100'}`}>
                   {msg.attachmentUrl && (
@@ -281,7 +301,7 @@ const Chat: React.FC<ChatProps> = ({ onSaveToJournal, plant, userProfile }) => {
           <div className="flex items-end gap-2 bg-gray-50 border border-gray-200 rounded-3xl p-2 focus-within:ring-2 focus-within:ring-green-500/20 focus-within:border-green-500 transition-all">
             <button onClick={handlePickImage} className="p-3 text-gray-400 hover:text-green-600 hover:bg-white rounded-full transition-colors"><ImageIcon size={20} /></button>
             <button onClick={() => fileInputRef.current?.click()} className="p-3 text-gray-400 hover:text-blue-600 hover:bg-white rounded-full transition-colors"><Paperclip size={20} /></button>
-            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} accept=".txt,.md,.js,.py,.json,.doc,.docx" />
+            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} accept=".txt,.md,.js,.pdf,.csv,.xlsx,.doc,.docx" />
             <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} placeholder="Ask about your plants..." rows={1} className="flex-1 bg-transparent py-3 px-2 outline-none text-sm text-gray-800 placeholder-gray-400 resize-none max-h-32 min-h-[44px]" />
             <button onClick={() => handleSend()} disabled={loading || (!input.trim() && !attachment)} className={`p-3 rounded-full transition-all ${input.trim() || attachment ? 'bg-black text-white shadow-lg hover:scale-105 active:scale-95' : 'bg-gray-200 text-gray-400'}`}><Send size={18} className={input.trim() || attachment ? 'ml-0.5' : ''} /></button>
           </div>

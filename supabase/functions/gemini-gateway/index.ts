@@ -14,34 +14,36 @@ serve(async (req) => {
     if (!apiKey) throw new Error("Missing API Key");
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const { mode, prompt, image } = await req.json();
+    const { mode, prompt, image, history, mimeType, fileData } = await req.json();
 
     // --- 1. DEFAULT MODEL (Chat/Voice) ---
-    // Default to strict Flash Preview (User Requested)
     let modelName = "gemini-3-flash-preview";
 
-    // "Golden Rules" System Prompt (No Markdown, Friendly Coach)
+    // UPDATED SYSTEM PROMPT: AI Cultivation Assistant
+    // - Removed "No Markdown" restriction to allow ordered lists/bolding.
+    // - Added strict "Step-by-Step" command.
     let systemInstruction = `
-      You are MasterGrowbot AI, an expert cannabis cultivation coach.
+      You are MasterGrowbot AI, an expert AI Cultivation Assistant.
       
-      YOUR GOLDEN RULES:
-      1. TONE: Be friendly, enthusiastic, and authoritative like a supportive sports coach.
-      2. FORMATTING STRICTLY FORBIDDEN:
-         - Do NOT use Markdown headers (# or ##).
-         - Do NOT use bolding (**text**).
-         - Use simple *asterisks* for emphasis only.
-         - Use bullet points (•) for lists.
-      3. EMOJIS: Use emojis 🌿✨🌱 sparingly (max 1-2 per response).
-      4. STRUCTURE: Hook -> Lesson -> Question.
-      5. RESTRICTIONS: No promotions, no legal advice, no slang.
+      CORE IDENTITY:
+      - You are a friendly, authoritative, and precise cannabis cultivation coach.
+      - You assist with growing, harvesting, drying, and curing.
+
+      CRITICAL FORMATTING RULES:
+      1. LISTS: When asked for a guide, instructions, or steps, YOU MUST USE A NUMBERED LIST (1., 2., 3.).
+      2. MARKDOWN: Use **bold** for key terms and emphasis. Use headings for sections.
+      3. TONE: Encouraging, professional, "Pro-Grower" vibe.
+      4. EMOJIS: Use 🌿✨🌱 sparingly.
+
+      RESPONSE BEHAVIOR:
+      - If user asks for a diagnosis validation, analyze the context/image deeply.
+      - If user attaches a file (Data/Table), analyze the rows/columns and summarize trends.
+      - NEVER say "I cannot see the image" if binary data is provided.
     `;
 
-    // --- 2. DIAGNOSIS MODE ---
+    // --- 2. DIAGNOSIS MODE (Legacy Support) ---
     if (mode === 'diagnosis') {
-      // STRICTLY USING GEMINI 3 PRO (Multimodal Vision)
       modelName = "gemini-3-pro-preview";
-
-      // Strict JSON Schema for Predictive Analysis
       systemInstruction = `
         You are an expert plant pathologist. Analyze this cannabis plant image.
         Return ONLY valid JSON (no markdown) with this structure:
@@ -62,20 +64,49 @@ serve(async (req) => {
         }
       `;
     } else if (mode === 'voice') {
-      // UPDATE: Align Voice with Chat Model for Stability
-      modelName = "gemini-3-flash-preview";
-      systemInstruction += " You are speaking via voice interface. Be ultra-concise (under 3 sentences).";
+      systemInstruction += " You are speaking via voice interface. Be ultra-concise (under 3 sentences). Do not use markdown.";
     }
 
     const model = genAI.getGenerativeModel({ model: modelName, systemInstruction });
 
     // --- 3. EXECUTION ---
     let resultText;
-    if (mode === 'diagnosis' && image) {
+
+    if (mode === 'chat') {
+      // MAP HISTORY (If present)
+      // Client sends: [{ role: 'user'|'assistant', content: '...' }]
+      // Gemini expects: [{ role: 'user'|'model', parts: [{ text: '...' }] }]
+      let chatHistory = [];
+      if (history && Array.isArray(history)) {
+        chatHistory = history.map(msg => ({
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: msg.content }]
+        }));
+      }
+
+      const chat = model.startChat({ history: chatHistory });
+
+      // CONSTRUCT MESSAGE PARTS
+      let msgParts = [{ text: prompt }];
+
+      // Handle New Image/File Attachment
+      if (fileData && mimeType) {
+        msgParts.push({ inlineData: { mimeType: mimeType, data: fileData } });
+      } else if (image) {
+        // Legacy support if client sends 'image' key
+        msgParts.push({ inlineData: { mimeType: "image/jpeg", data: image } });
+      }
+
+      const result = await chat.sendMessage(msgParts);
+      resultText = result.response.text();
+    }
+    else if (mode === 'diagnosis' && image) {
       const parts = [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: image } }];
       const result = await model.generateContent({ contents: [{ role: 'user', parts }] });
       resultText = result.response.text();
-    } else {
+    }
+    else {
+      // Fallback (Voice / Simple)
       const result = await model.generateContent(prompt);
       resultText = result.response.text();
     }

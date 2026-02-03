@@ -10,8 +10,9 @@ MasterGrowbot AI is a sophisticated, high-fidelity mobile and web application de
 
 **Key Value Propositions:**
 - **Instant Diagnostics:** Computer vision trained to recognize nutrient deficiencies, pests, and environmental stress.
-- **Hands-Free Mentorship:** A low-latency voice interface for interacting with the AI "Grow Coach" while working in the garden.
-- **Genetic Context:** Deep integration with a verified strain database to provide genotype-specific advice.
+- **Secure Cloud Sync:** Google Sign-In and email authentication for cross-device synchronization and data backup.
+- **Searchable Strain Database:** Comprehensive library comprising 100+ strains with detailed genetic profiles including terpenes, THC levels, and lineage.
+- **Context-Aware Care:** Tailored logic for Indoor, Outdoor, and Greenhouse environments.
 - **Data-Driven Journaling:** Automated analysis of cultivation logs to predict yields and track plant health trends.
 
 ---
@@ -30,7 +31,7 @@ MasterGrowbot AI is a sophisticated, high-fidelity mobile and web application de
 - **UX Enhancements:** Native Splash Screen and In-App Review integration via `@capacitor-community/in-app-review`.
 
 ### Backend & Infrastructure
-- **Identity & Storage:** Supabase (Auth, PostgreSQL, and Storage for user-uploaded plant photos).
+- **Identity & Storage:** Supabase (Auth with Google OAuth/Email, PostgreSQL, and Storage for user-uploaded plant photos).
 - **Billing:** RevenueCat integration for seamless subscription management (Weekly, Monthly, Yearly tiers).
 
 ---
@@ -42,7 +43,6 @@ MasterGrowbot utilizes a multi-model strategy to balance performance, cost, and 
 | Feature | Model | Purpose |
 | :--- | :--- | :--- |
 | **Plant Diagnosis** | `gemini-3-pro-preview` | High-order multimodal reasoning to analyze image bytes for pests, diseases, and stress. |
-| **Live Grow Coach** | `gemini-2.5-flash-native-audio-preview-09-2025` | Real-time WebSocket connection for low-latency voice-to-voice interaction. |
 | **Log Analysis** | `gemini-3-flash-preview` | Fast text summarization and trend detection in the cultivation journal. |
 | **Daily Insights** | `gemini-3-flash-preview` | Generation of context-aware cultivation tips on the Home dashboard. |
 
@@ -61,11 +61,19 @@ MasterGrowbot utilizes a multi-model strategy to balance performance, cost, and 
 ### 3. Scan & Fix (The Diagnostic Loop)
 - Multimodal input via native camera or gallery.
 - AI returns a **Recovery Protocol**: a structured checklist of actions to save the plant.
+- **Context-Aware Analysis**: Adjusts advice based on growing method (Indoor, Outdoor, Greenhouse).
+- **Share & Export**: Native sharing integration to copy reports to clipboard or share with contacts.
 - Result includes a **Confidence Score** and **Severity Indicator**.
 
-### 4. Live Uplink (Voice Coaching)
-- WebSocket-based audio stream allowing hands-free garden support.
-- Features real-time transcription and voice settings (Calm, Bold, Synthetic, Energetic).
+### 4. AI Cultivation Assistant (Chat)
+- **Multimodal Uploads**: Upload images and documents (PDF, CSV, etc.) for AI analysis.
+- **Grow Data Interpretation**: Analyze feeding schedules, environmental logs, and plant photos directly in chat.
+- **Smart History**: Pin impactful conversations and access chat history across devices.
+
+### 5. Profile & Settings
+- **User Profile**: Manage avatar (presets/camera), experience level, and grow space settings.
+- **Feedback System**: Integrated support ticket generation and star-rating feedback.
+- **Account Management**: Seamless Google Sign-In and account deletion options.
 
 ---
 
@@ -93,7 +101,7 @@ To run the app locally, you must configure Supabase to allow `localhost` redirec
 
 ## 📂 Section 6: Directory Structure & File Mapping
 
-- `screens/`: Primary view containers (Home, Diagnose, Chat, Journal).
+- `screens/`: Primary view containers (Home, Diagnose, Chat, Journal, Profile).
 - `services/`: API wrappers for Gemini, Supabase, and RevenueCat.
 - `components/`: Reusable UI modules (Growbot Mascot, Strain Cards, Navigation).
 - `data/`: Static assets and the `STRAIN_DATABASE`.

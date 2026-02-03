@@ -128,10 +128,23 @@ export async function diagnosePlant(
  * Chat with Coach (Text / Voice)
  * Uses 'gemini-3-flash-preview' via Gateway
  */
-export async function sendMessage(message: string, isVoice: boolean = false) {
-  const { data, error } = await supabase.functions.invoke('gemini-gateway', {
-    body: { mode: isVoice ? 'voice' : 'chat', prompt: message }
-  });
+export async function sendMessage(
+  message: string,
+  history: { role: string; content: string }[] = [],
+  attachment?: { data: string; type: string; mimeType: string }
+) {
+  const body: any = {
+    mode: 'chat',
+    prompt: message,
+    history: history
+  };
+
+  if (attachment) {
+    body.fileData = attachment.data; // Base64 or Text
+    body.mimeType = attachment.mimeType || (attachment.type === 'image' ? 'image/jpeg' : 'text/plain');
+  }
+
+  const { data, error } = await supabase.functions.invoke('gemini-gateway', { body });
 
   if (error) {
     console.error(error);

@@ -182,6 +182,7 @@ export interface UserProfile {
 
   // App State
   isOnboarded?: boolean;
+  hasSeenTutorial?: boolean; // Track if they've seen the "Get Started" flow
   streak?: number;       // Consecutive days visited
   lastVisit?: string;    // ISO Date of last open
 }

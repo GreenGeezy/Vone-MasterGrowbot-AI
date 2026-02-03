@@ -10,6 +10,7 @@ import Journal from './screens/Journal';
 import Profile from './screens/Profile'; // Import Profile
 import Paywall from './screens/Paywall';
 import PostPaymentAuth from './screens/PostPaymentAuth';
+import GetStartedTutorial from './screens/GetStartedTutorial';
 import BottomNav from './components/BottomNav';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
@@ -28,6 +29,7 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false); // New Tutorial State
 
   useEffect(() => {
     const initApp = async () => {
@@ -44,9 +46,45 @@ const App: React.FC = () => {
         }
       });
 
+      // --- SESSION MANAGEMENT LOGIC ---
       const savedProfile = localStorage.getItem('mastergrowbot_profile');
-      if (savedProfile) setUserProfile(JSON.parse(savedProfile));
-      loadUserData();
+      let profileData: UserProfile | null = savedProfile ? JSON.parse(savedProfile) : null;
+      let isSubscribed = false;
+
+      // 1. Check Subscription Status (Simulated check, replace with actual Entitlement logic in prod)
+      try {
+        if (Capacitor.getPlatform() !== 'web') {
+          const { customerInfo } = await Purchases.getCustomerInfo();
+          // Check for active entitlement "pro" or similar. Mocking true for local dev context if profile exists
+          if (typeof customerInfo.entitlements.active['pro'] !== "undefined") {
+            isSubscribed = true;
+          }
+        } else {
+          // Web/Dev Logic: If they reached 'COMPLETED' or have profile, assume sub for now unless explicit logout
+          // For strict testing: assumes true if profile exists locally
+          if (profileData) isSubscribed = true;
+        }
+      } catch (e) {
+        console.warn("Purchases check failed (dev mode?)", e);
+        if (profileData) isSubscribed = true; // Fallback for dev
+      }
+
+      if (profileData && isSubscribed) {
+        // RETURNING USER -> SKIP EVERYTHING
+        console.log("Returning Subscriber Verified. Skipping Onboarding.");
+        setUserProfile(profileData);
+        setOnboardingStatus(OnboardingStep.COMPLETED);
+        loadUserData();
+      } else if (profileData && !isSubscribed) {
+        // EXPIRED/CANCELLED -> FORCE PAYWALL
+        console.log("Subscription Expired. Redirecting to Paywall.");
+        setUserProfile(profileData);
+        setOnboardingStatus(OnboardingStep.SUMMARY); // Effectively re-onboard/pay
+      } else {
+        // NEW USER -> START FROM SPLASH
+        console.log("New User Detected.");
+        setOnboardingStatus(OnboardingStep.SPLASH);
+      }
     };
     initApp();
   }, []);
@@ -99,6 +137,12 @@ const App: React.FC = () => {
     setShowAuth(false);
     setShowPaywall(false);
     setOnboardingStatus(OnboardingStep.COMPLETED);
+
+    // NEW USER CHECK: If they haven't seen tutorial, show it
+    if (!userProfile?.hasSeenTutorial) {
+      setShowTutorial(true);
+    }
+
     loadUserData();
   };
 
@@ -183,6 +227,11 @@ const App: React.FC = () => {
     handleAddTask(`Start journal for ${strain.name}`, new Date().toISOString().split('T')[0], 'user');
   };
 
+  const completeTutorial = () => {
+    setShowTutorial(false);
+    handleUpdateProfile({ hasSeenTutorial: true });
+  };
+
   if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={() => setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE)} />;
   if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) return <Onboarding onComplete={(p) => { setUserProfile(p); setOnboardingStatus(OnboardingStep.SUMMARY); }} />;
   if (onboardingStatus === OnboardingStep.SUMMARY) return <OnboardingSummary profile={userProfile!} onContinue={() => { setOnboardingStatus(OnboardingStep.COMPLETED); setShowPaywall(true); }} />;
@@ -195,9 +244,11 @@ const App: React.FC = () => {
           {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} onAddTask={handleAddTask} plant={plants[0]} defaultProfile={userProfile} onAddPlant={handleAddPlant} />}
           {currentTab === AppScreen.CHAT && <Chat onSaveToJournal={handleAddJournalEntry} plant={plants[0]} userProfile={userProfile} />}
           {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
-          {currentTab === AppScreen.PROFILE && <Profile userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onSignOut={() => window.location.reload()} />}
+          {currentTab === AppScreen.PROFILE && <Profile userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onViewTutorial={() => setShowTutorial(true)} onSignOut={() => { localStorage.clear(); window.location.reload(); }} />}
         </div>
       </ErrorBoundary>
+
+      {showTutorial && <GetStartedTutorial onComplete={completeTutorial} />}
 
       {showPaywall && <Paywall onClose={() => setShowPaywall(false)} onPurchase={() => { setShowPaywall(false); setShowAuth(true); }} onSkip={() => setShowPaywall(false)} />}
 

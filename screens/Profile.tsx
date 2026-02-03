@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import {
     User, LogOut, Shield, Settings, ChevronRight, Camera,
-    MessageSquare, FileText, Trash2, Mail, X, Check, Star, Edit2, Flame, Image as ImageIcon, Smile
+    MessageSquare, FileText, Trash2, Mail, X, Check, Star, Edit2, Flame, Image as ImageIcon, Smile, ScanLine
 } from 'lucide-react';
 import { Browser } from '@capacitor/browser';
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
@@ -11,6 +11,7 @@ interface ProfileProps {
     userProfile: UserProfile | null;
     onUpdateProfile: (updates: Partial<UserProfile>) => void;
     onSignOut: () => void;
+    onViewTutorial?: () => void;
 }
 
 // "Cool" Animated/Styled Grower Avatars (Local Assets)
@@ -23,7 +24,7 @@ const COOL_AVATARS = [
     '/assets/avatars/hydro_bucket.png'    // Hydro Bucket
 ];
 
-const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignOut }) => {
+const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignOut, onViewTutorial }) => {
     // Local state for modals
     const [showSupportModal, setShowSupportModal] = useState(false);
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -32,6 +33,19 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
 
     const [isEditingName, setIsEditingName] = useState(false);
     const [tempName, setTempName] = useState('');
+
+    // --- AUTO-SYNC EMAIL ---
+    React.useEffect(() => {
+        const syncEmail = async () => {
+            const { supabase } = await import('../services/supabaseClient');
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user && user.email && user.email !== userProfile?.email) {
+                console.log("Syncing Profile Email:", user.email);
+                onUpdateProfile({ email: user.email });
+            }
+        };
+        syncEmail();
+    }, []); // Run once on mount
 
     // Support Form State
     const [supportForm, setSupportForm] = useState({ name: '', email: '', issue: '', message: '' });
@@ -256,6 +270,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
 
                 {/* 3. Community & Support */}
                 <Section title="Community & Support">
+                    <Row icon={ScanLine} label="View Tutorial" onClick={() => onViewTutorial && onViewTutorial()} />
                     <Row icon={Mail} label="Contact Support" onClick={() => setShowSupportModal(true)} />
                     <Row icon={MessageSquare} label="Share Feedback" onClick={() => setShowFeedbackModal(true)} />
                 </Section>
