@@ -7,7 +7,9 @@ import {
   Lock,
   ChevronRight,
   AlertCircle,
-  Mail
+  Mail,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { supabase, signInWithGoogle, updateOnboardingProfile } from '../services/supabaseClient';
 import { UserProfile } from '../types';
@@ -27,6 +29,7 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete, onSkip, u
   const [statusMessage, setStatusMessage] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signup'); // Toggle state
 
@@ -243,12 +246,19 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete, onSkip, u
           <div className="relative">
             <Lock className="absolute left-4 top-3.5 text-gray-400" size={18} />
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
-              className="w-full bg-white border border-gray-200 pl-11 p-3.5 rounded-xl font-bold text-gray-800 focus:ring-2 focus:ring-green-500 outline-none shadow-sm"
+              className="w-full bg-white border border-gray-200 pl-11 pr-12 p-3.5 rounded-xl font-bold text-gray-800 focus:ring-2 focus:ring-green-500 outline-none shadow-sm"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 top-3.5 text-gray-400 hover:text-gray-600 focus:outline-none"
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
         </div>
 
