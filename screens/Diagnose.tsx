@@ -6,6 +6,7 @@ import Growbot from '../components/Growbot';
 import { STRAIN_DATABASE } from '../data/strains';
 import { Share } from '@capacitor/share';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { InAppReview } from '@capacitor-community/in-app-review';
 import { formatMetricDisplay, formatDiagnosisReport } from '../utils/diagnosisFormatter';
 
 /**
@@ -138,6 +139,21 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
         userProfile: defaultProfile || { experience: 'Novice' } as UserProfile // Fallback
       });
       setResult(diagnosis);
+
+      // --- IN-APP REVIEW TRIGGER (3rd Success) ---
+      try {
+        const currentCount = parseInt(localStorage.getItem('diagnosis_success_count') || '0');
+        const newCount = currentCount + 1;
+        localStorage.setItem('diagnosis_success_count', newCount.toString());
+
+        if (newCount === 3) {
+          console.log("Triggering In-App Review...");
+          await InAppReview.requestReview();
+        }
+      } catch (e) {
+        console.warn("Review trigger failed", e);
+      }
+
     } catch (e) {
       alert("Analysis failed. Please check connection.");
     } finally {
