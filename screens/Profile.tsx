@@ -92,10 +92,33 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
         setShowFeedbackModal(false);
     };
 
-    const handleDeleteAccount = () => {
-        if (window.confirm("Are you sure you want to delete your account? This action cannot be undone.")) {
-            alert("Account deletion request sent. We will process this within 24 hours.");
-            onSignOut();
+    const handleDeleteAccount = async () => { // Async to handle submission
+        if (window.confirm("Are you sure you want to delete your account? This action cannot be undone and all data will be removed within 24 hours.")) {
+
+            // 1. Send actual deletion request to support system
+            try {
+                const subject = "ACCOUNT DELETION REQUEST";
+                const body = `User: ${userProfile.email} (${userProfile.id})\nRequest Date: ${new Date().toISOString()}\n\nPlease delete all data associated with this user logic.`;
+
+                // Use the existing email trigger logic (using mailto as fallback immediate action + db log)
+                const mailtoLink = `mailto:Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+                // Ideally log to DB if possible, but Email is the required "initiation" step
+                const { submitUserFeedback } = await import('../services/dbService');
+                // We log it as feedback with a special flag/rating to ensure it's captured in DB
+                await submitUserFeedback({ rating: 0, message: "ACCOUNT_DELETION_REQUEST" });
+
+                // Open Mail Client to ensure user sends the verification email
+                window.location.href = mailtoLink;
+
+                alert("Deletion request generated. Please send the pre-filled email to confirm your identity. We will process this immediately.");
+                onSignOut();
+            } catch (e) {
+                console.error("Deletion error:", e);
+                // Fallback
+                alert("Please email Support@futuristiccannabis.ai to complete your deletion request.");
+                onSignOut();
+            }
         }
     };
 

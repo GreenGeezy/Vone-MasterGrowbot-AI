@@ -38,11 +38,29 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete, onSkip, u
     // 1. App State Listener (Deep Link Return)
     const handleAppStateChange = async (state: any) => {
       if (state.isActive && isProcessing) {
-        // Fallback: Check session if onAuthStateChange didn't fire
-        const { data } = await supabase.auth.getSession();
-        if (data.session) {
-          await handlePostAuthLogic(data.session.user.id);
-        }
+        console.log("App returned to foreground. checking session...");
+        // Poll for session (5 times over 5 seconds) to allow App.tsx to exchange code
+        let attempts = 0;
+        const maxAttempts = 5;
+
+        const checkSession = async () => {
+          const { data } = await supabase.auth.getSession();
+          if (data.session) {
+            console.log("Session found via polling!");
+            await handlePostAuthLogic(data.session.user.id);
+            return true;
+          }
+          return false;
+        };
+
+        const poll = setInterval(async () => {
+          attempts++;
+          const success = await checkSession();
+          if (success || attempts >= maxAttempts) {
+            clearInterval(poll);
+            if (!success) console.log("Google Auth Polling timed out (may rely on listener)");
+          }
+        }, 1000);
       }
     };
 

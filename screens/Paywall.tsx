@@ -213,6 +213,8 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
           <span className="flex items-center gap-1 text-green-600"><Clock size={12} /> Days 1-3: Free</span>
           <ArrowRight size={12} className="text-gray-300" />
           <span className="flex items-center gap-1"><Lock size={12} /> Day 4+: Auto-Bill</span>
+          <ArrowRight size={12} className="text-gray-300" />
+          <span className="flex items-center gap-1 text-gray-900"><X size={12} /> Cancel Anytime</span>
         </div>
         <button onClick={handleStartTrial} disabled={isPurchasing || !selectedPkgIdentifier} className="w-full bg-green-600 text-white font-black text-lg py-4 rounded-2xl shadow-xl shadow-green-200 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:shadow-none">
           {isPurchasing ? <span className="animate-pulse">Processing...</span> : <>Start Your Free 3-Day Trial Now <ArrowRight strokeWidth={3} size={20} /></>}

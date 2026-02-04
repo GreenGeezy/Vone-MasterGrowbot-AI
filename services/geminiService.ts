@@ -144,13 +144,33 @@ export async function sendMessage(
     body.mimeType = attachment.mimeType || (attachment.type === 'image' ? 'image/jpeg' : 'text/plain');
   }
 
-  const { data, error } = await supabase.functions.invoke('gemini-gateway', { body });
+  // Retry Logic for Cold Starts (Edge Function Wake-up)
+  const MAX_RETRIES = 3;
+  let attempt = 0;
 
-  if (error) {
-    console.error(error);
-    return "I'm having trouble connecting to the network right now.";
+  while (attempt < MAX_RETRIES) {
+    attempt++;
+    console.log(`[Gemini] Sending message (Attempt ${attempt}/${MAX_RETRIES})...`);
+
+    const { data, error } = await supabase.functions.invoke('gemini-gateway', { body });
+
+    if (!error) {
+      return data?.result || "I didn't catch that.";
+    }
+
+    console.warn(`[Gemini] Attempt ${attempt} failed:`, error);
+
+    // If it's the last attempt, return the error message
+    if (attempt === MAX_RETRIES) {
+      console.error("All retries failed.");
+      return "I'm having trouble connecting to the network right now.";
+    }
+
+    // Wait 1 second before retrying (backoff)
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
-  return data?.result || "I didn't catch that.";
+
+  return "I'm having trouble connecting to the network right now.";
 }
 
 /**
