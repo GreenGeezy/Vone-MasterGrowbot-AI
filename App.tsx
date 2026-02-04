@@ -39,24 +39,49 @@ const App: React.FC = () => {
         await Purchases.configure({ apiKey: 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' });
       }
 
+      // 0. Check for Cold Start Deep Link (Crucial for Android/Brave)
+      const launchUrl = await CapacitorApp.getLaunchUrl();
+      if (launchUrl && launchUrl.url.includes('code=')) {
+        alert(`Debug: App Launched via URL: ${launchUrl.url.substring(0, 50)}...`);
+        try {
+          // Process the code immediately
+          const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(new URL(launchUrl.url).searchParams.get('code')!);
+          if (error) {
+            console.error("Launch Auth Error:", error);
+            alert(`Launch Login Error: ${error.message}`);
+          }
+          if (sessionData.session) {
+            console.log("Session established via Launch URL.");
+            // alert("Launch Login Success!");
+            // Continue to loadUserData below
+          }
+        } catch (err: any) {
+          console.error("Launch Processing Failed:", err);
+          alert(`Launch Link Error: ${err.message}`);
+        }
+      }
+
       CapacitorApp.addListener('appUrlOpen', async (data) => {
         if (data.url.includes('code=')) {
-          // Just exchange the code. The PostPaymentAuth component (if open) will catch the state change.
+          // DEBUG: Alert so user sees what's happening
+          alert(`Debug: Deep link received. URL: ${data.url.substring(0, 50)}...`);
+
           try {
             const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(new URL(data.url).searchParams.get('code')!);
 
             if (error) {
               console.error("Auth Exchange Error:", error);
+              alert(`Login Error: ${error.message}`); // VISIBLE ERROR
             }
 
             if (sessionData.session) {
               console.log("Session established via Deep Link.");
-              // We do NOT call handleAuthSuccess() here to avoid closing the UI before profile sync.
-              // If PostPaymentAuth is NOT open (e.g. cold start via link), we should reload data.
+              // alert("Login Success! Syncing profile..."); // Optional success msg
               loadUserData();
             }
-          } catch (err) {
+          } catch (err: any) {
             console.error("Deep Link Processing Failed:", err);
+            alert(`Deep Link Error: ${err.message || JSON.stringify(err)}`); // VISIBLE ERROR
           }
         }
       });
