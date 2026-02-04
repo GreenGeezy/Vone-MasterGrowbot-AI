@@ -221,11 +221,15 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete, onSkip, u
                 onClick={(e) => {
                   e.stopPropagation();
                   // Manual Force Check
+                  alert("Checking for session...");
                   supabase.auth.getSession().then(({ data }) => {
-                    if (data.session) handlePostAuthLogic(data.session.user.id);
-                    else {
+                    if (data.session) {
+                      alert("Session Found! Proceeding...");
+                      handlePostAuthLogic(data.session.user.id);
+                    } else {
                       setIsProcessing(false); // Reset if actually failed
                       setAuthError("Sign-in not detected. Please try again.");
+                      alert("No session found. Please tap 'Continue with Google' again.");
                     }
                   });
                 }}

@@ -52,8 +52,9 @@ const App: React.FC = () => {
           }
           if (sessionData.session) {
             console.log("Session established via Launch URL.");
-            // alert("Launch Login Success!");
-            // Continue to loadUserData below
+            alert("Launch Login Success!"); // VISIBLE SUCCESS
+            handleAuthSuccess(); // FORCE UI TRANSITION
+            // loadUserData(); // handleAuthSuccess calls this anyway
           }
         } catch (err: any) {
           console.error("Launch Processing Failed:", err);
@@ -76,8 +77,9 @@ const App: React.FC = () => {
 
             if (sessionData.session) {
               console.log("Session established via Deep Link.");
-              // alert("Login Success! Syncing profile..."); // Optional success msg
-              loadUserData();
+              alert("Login Success! Syncing profile..."); // VISIBLE SUCCESS
+              handleAuthSuccess(); // FORCE UI TRANSITION
+              // loadUserData(); // handleAuthSuccess calls this anyway
             }
           } catch (err: any) {
             console.error("Deep Link Processing Failed:", err);
