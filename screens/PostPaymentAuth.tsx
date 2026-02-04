@@ -215,7 +215,25 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete, onSkip, u
           className="w-full bg-white border border-gray-300 text-gray-700 font-bold py-3.5 rounded-xl shadow-sm flex items-center justify-center gap-3 active:scale-[0.98] transition-transform"
         >
           {isProcessing ? (
-            <span className="text-sm">Connecting...</span>
+            <div className="flex flex-col items-center">
+              <span className="text-sm">Connecting...</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Manual Force Check
+                  supabase.auth.getSession().then(({ data }) => {
+                    if (data.session) handlePostAuthLogic(data.session.user.id);
+                    else {
+                      setIsProcessing(false); // Reset if actually failed
+                      setAuthError("Sign-in not detected. Please try again.");
+                    }
+                  });
+                }}
+                className="mt-2 text-[10px] text-green-600 font-black uppercase underline decoration-2 underline-offset-2 hover:text-green-700"
+              >
+                Stuck? Tap to Confirm
+              </button>
+            </div>
           ) : (
             <>
               <svg className="w-5 h-5" viewBox="0 0 24 24">

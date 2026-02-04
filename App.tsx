@@ -42,13 +42,21 @@ const App: React.FC = () => {
       CapacitorApp.addListener('appUrlOpen', async (data) => {
         if (data.url.includes('code=')) {
           // Just exchange the code. The PostPaymentAuth component (if open) will catch the state change.
-          const { data: sessionData } = await supabase.auth.exchangeCodeForSession(new URL(data.url).searchParams.get('code')!);
+          try {
+            const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(new URL(data.url).searchParams.get('code')!);
 
-          if (sessionData.session) {
-            console.log("Session established via Deep Link.");
-            // We do NOT call handleAuthSuccess() here to avoid closing the UI before profile sync.
-            // If PostPaymentAuth is NOT open (e.g. cold start via link), we should reload data.
-            loadUserData();
+            if (error) {
+              console.error("Auth Exchange Error:", error);
+            }
+
+            if (sessionData.session) {
+              console.log("Session established via Deep Link.");
+              // We do NOT call handleAuthSuccess() here to avoid closing the UI before profile sync.
+              // If PostPaymentAuth is NOT open (e.g. cold start via link), we should reload data.
+              loadUserData();
+            }
+          } catch (err) {
+            console.error("Deep Link Processing Failed:", err);
           }
         }
       });
@@ -156,11 +164,28 @@ const App: React.FC = () => {
   const handleAddJournalEntry = (entry: any) => {
     const newEntry = { ...entry, id: Date.now().toString(), date: new Date().toLocaleDateString() };
     setPlants(prev => {
-      if (prev[0]) {
-        prev[0].journal.unshift(newEntry);
-        return [...prev];
+      if (prev.length > 0) {
+        // Add to existing first plant
+        const updatedFirst = { ...prev[0], journal: [newEntry, ...prev[0].journal] };
+        return [updatedFirst, ...prev.slice(1)];
+      } else {
+        // Create Default Plant to save entry
+        const defaultPlant: Plant = {
+          id: Date.now().toString(),
+          name: 'My First Grow',
+          strain: 'Generic',
+          stage: 'Seedling',
+          healthScore: 100,
+          daysInStage: 1,
+          imageUri: entry.image || entry.imageUri || 'https://images.unsplash.com/photo-1603796846097-b36976ea2851',
+          totalDays: 1,
+          journal: [newEntry], // Initialize with this entry
+          tasks: [],
+          streak: 0,
+          weeklySummaries: []
+        };
+        return [defaultPlant];
       }
-      return prev;
     });
     setCurrentTab(AppScreen.JOURNAL);
   };

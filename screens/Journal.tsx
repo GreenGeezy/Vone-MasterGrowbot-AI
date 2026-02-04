@@ -20,6 +20,7 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
   const [selectedEntry, setSelectedEntry] = useState<any | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedStrain, setSelectedStrain] = useState<any | null>(null); // New State for Preview Modal
   const plant = plants[0];
   const filteredStrains = STRAIN_DATABASE.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -151,11 +152,63 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {filteredStrains.map(s => (
-              <div key={s.id} onClick={() => { onUpdatePlant(plant.id, { strain: s.name, strainDetails: s }); setShowStrainSearch(false); }}>
-                <StrainCard strain={s} compact />
+            {/* If a strain is selected, show PREVIEW MODAL overlay */}
+            {selectedStrain ? (
+              <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in">
+                <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-in slide-in-from-bottom-10 space-y-4 max-h-[85vh] overflow-y-auto">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-black text-gray-900">Preview Strain</h3>
+                    <button onClick={() => setSelectedStrain(null)} className="p-2 bg-gray-100 rounded-full"><X size={18} /></button>
+                  </div>
+
+                  {/* Reuse StrainCard for detail view */}
+                  <StrainCard strain={selectedStrain} />
+
+                  <button
+                    onClick={() => {
+                      // Safe check for plant existence
+                      const plantId = plant?.id || Date.now().toString(); // Fallback ID if creating new
+                      const isNew = !plant; // If no plant exists
+
+                      // If no plant exists, we might need a way to 'create' one via onUpdatePlant or valid callback?
+                      // Assuming onUpdatePlant handles existing plant updates. 
+                      // If 'plant' is undefined, Journal was showing "No strain selected".
+                      // In that case, we might need to rely on the App to create one or handle it here?
+                      // However, onUpdatePlant expects an ID. 
+                      // If plant is undefined, we can't update it. 
+                      // Logic Gap: If no plant, we can't update. But App.tsx passes 'plants' and 'onUpdate'.
+                      // Fix: If no plant, we must ignore or assume App handles empty state. 
+                      // BUT, user screen showed "No strain selected" which implies 'plant' was likely defined but had no strain?
+                      // Wait, previous code: plant = plants[0]. If plants is empty, plant is undefined.
+                      // If plant is undefined, we can't call onUpdatePlant(plant.id).
+                      // Let's protect this call.
+
+                      if (plant) {
+                        onUpdatePlant(plant.id, { strain: selectedStrain.name, strainDetails: selectedStrain });
+                        alert(`Updated journal to ${selectedStrain.name}!`);
+                      } else {
+                        // If no plant, we're stuck unless we have onAddPlant
+                        alert("Please create a plant first via Home screen to assign a strain.");
+                      }
+
+                      setSelectedStrain(null);
+                      setShowStrainSearch(false);
+                    }}
+                    className="w-full py-4 bg-green-600 text-white rounded-xl font-black shadow-lg shadow-green-200 active:scale-95 transition-transform flex items-center justify-center gap-2"
+                  >
+                    <Plus size={18} strokeWidth={3} />
+                    Add to Journal
+                  </button>
+                </div>
               </div>
-            ))}
+            ) : (
+              // LIST VIEW
+              filteredStrains.map(s => (
+                <div key={s.id} onClick={() => setSelectedStrain(s)} className="active:scale-[0.98] transition-transform cursor-pointer">
+                  <StrainCard strain={s} compact />
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
