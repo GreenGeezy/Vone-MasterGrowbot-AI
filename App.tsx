@@ -42,7 +42,7 @@ const App: React.FC = () => {
       // 0. Check for Cold Start Deep Link (Crucial for Android/Brave)
       const launchUrl = await CapacitorApp.getLaunchUrl();
       if (launchUrl && launchUrl.url.includes('code=')) {
-        alert(`Debug: App Launched via URL: ${launchUrl.url.substring(0, 50)}...`);
+        // Removed blocking debug alert to prevent code expiration
         try {
           // Process the code immediately
           const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(new URL(launchUrl.url).searchParams.get('code')!);
@@ -64,8 +64,7 @@ const App: React.FC = () => {
 
       CapacitorApp.addListener('appUrlOpen', async (data) => {
         if (data.url.includes('code=')) {
-          // DEBUG: Alert so user sees what's happening
-          alert(`Debug: Deep link received. URL: ${data.url.substring(0, 50)}...`);
+          // Removed blocking debug alert to prevent code expiration
 
           try {
             const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(new URL(data.url).searchParams.get('code')!);
