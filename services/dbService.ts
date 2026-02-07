@@ -317,16 +317,7 @@ export const createChatSession = async (title: string = "New Conversation"): Pro
   const { data: { session } } = await supabase.auth.getSession();
 
   if (!session) {
-    const newSession = {
-      id: `local_session_${Date.now()}`, // Distinct ID format
-      title,
-      is_pinned: false,
-      created_at: new Date().toISOString()
-    };
-    const sessions = getLocal(STORAGE_KEYS.CHAT_SESSIONS);
-    sessions.unshift(newSession); // Add to top
-    setLocal(STORAGE_KEYS.CHAT_SESSIONS, sessions);
-    return newSession;
+    return createLocalSession(title);
   }
 
   const { data, error } = await supabase
@@ -335,8 +326,26 @@ export const createChatSession = async (title: string = "New Conversation"): Pro
     .select()
     .single();
 
-  if (error) { console.error("Create Session Error:", error); return null; }
+  if (error) {
+    console.error("Create Session Error (Cloud):", error);
+    // FALLBACK: If cloud fails, create local session instead of blocking the user
+    return createLocalSession(title);
+  }
   return data;
+};
+
+const createLocalSession = (title: string): ChatSession => {
+  const newSession = {
+    id: `local_session_${Date.now()}`,
+    title,
+    is_pinned: false,
+    created_at: new Date().toISOString()
+  };
+  const sessions = getLocal(STORAGE_KEYS.CHAT_SESSIONS);
+  sessions.unshift(newSession);
+  setLocal(STORAGE_KEYS.CHAT_SESSIONS, sessions);
+  return newSession;
+};
 };
 
 export const getChatSessions = async (): Promise<ChatSession[]> => {
