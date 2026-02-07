@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { OnboardingStep, UserProfile, Plant, Task, AppScreen } from './types';
 import Splash from './screens/Splash';
 import Onboarding from './screens/Onboarding';
@@ -30,6 +30,7 @@ const App: React.FC = () => {
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false); // New Tutorial State
+  const isAuthProcessing = useRef(false);
 
   useEffect(() => {
     const initApp = async () => {
@@ -42,14 +43,20 @@ const App: React.FC = () => {
       // --- AUTH DEEP LINK HANDLING ---
       // Helper function with Timeout & Error Handling
       const handleAuthDeepLink = async (urlStr: string) => {
+        if (isAuthProcessing.current) {
+          console.log("Auth already in progress, skipping duplicate link.");
+          return;
+        }
+
         const code = new URL(urlStr).searchParams.get('code');
         if (!code) return;
 
         try {
-          // 15s Timeout to prevent "Processing..." hang
+          isAuthProcessing.current = true;
+          // 60s Timeout to guarantee sufficient time for network operations (especially on mobile)
           const exchangePromise = supabase.auth.exchangeCodeForSession(code);
           const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Authentication timed out. Check connection.")), 15000)
+            setTimeout(() => reject(new Error("Authentication timed out. Check connection.")), 60000)
           );
 
           // Race the exchange against the timeout
@@ -67,6 +74,8 @@ const App: React.FC = () => {
           if (err.message !== 'Auth session missing!') {
             alert(`Login Failed: ${err.message || 'Unknown error'}`);
           }
+        } finally {
+          isAuthProcessing.current = false;
         }
       };
 

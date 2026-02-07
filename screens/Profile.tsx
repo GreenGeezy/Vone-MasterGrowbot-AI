@@ -294,7 +294,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 {/* 3. Community & Support */}
                 <Section title="Community & Support">
                     <Row icon={ScanLine} label="View Tutorial" onClick={() => onViewTutorial && onViewTutorial()} />
-                    <Row icon={Star} label="Rate on App Store" onClick={() => openLink('https://play.google.com/store/apps/details?id=com.futuristiccannabis.mastergrowbot')} />
+                    <Row icon={Star} label="Rate on App Store" onClick={() => openLink('https://play.google.com/store/apps/details?id=com.mastergrowbot.app')} />
                     <Row icon={Mail} label="Contact Support" onClick={() => setShowSupportModal(true)} />
                     <Row icon={MessageSquare} label="Share Feedback" onClick={() => setShowFeedbackModal(true)} />
                 </Section>
@@ -439,7 +439,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
 
                             // 2. Neutral Prompt (Policy Compliant)
                             if (window.confirm("Thanks for your feedback! Would you like to leave a public review on the App Store?")) {
-                                window.open("https://play.google.com/store/apps/details?id=com.futuristiccannabis.mastergrowbot", "_blank");
+                                window.open("https://play.google.com/store/apps/details?id=com.mastergrowbot.app", "_blank");
                             }
 
                             setShowFeedbackModal(false);

@@ -39,9 +39,9 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete, onSkip, u
     const handleAppStateChange = async (state: any) => {
       if (state.isActive && isProcessing) {
         console.log("App returned to foreground. checking session...");
-        // Poll for session (5 times over 5 seconds) to allow App.tsx to exchange code
+        // Poll for session (30 times over 30 seconds) to allow App.tsx to exchange code
         let attempts = 0;
-        const maxAttempts = 5;
+        const maxAttempts = 30;
 
         const checkSession = async () => {
           const { data } = await supabase.auth.getSession();
