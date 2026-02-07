@@ -2,13 +2,30 @@
 import { supabase } from './supabaseClient';
 import { GrowTask } from '../types';
 
+// --- Local Storage Helpers ---
+
+const STORAGE_KEYS = {
+  CHAT_SESSIONS: 'mg_local_chat_sessions',
+  CHAT_MESSAGES: 'mg_local_chat_messages',
+  TASKS: 'mg_local_tasks',
+  JOURNAL: 'mg_local_journal',
+  TICKETS: 'mg_local_tickets',
+  FEEDBACK: 'mg_local_feedback'
+};
+
+const getLocal = (key: string) => {
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; }
+};
+
+const setLocal = (key: string, data: any) => {
+  localStorage.setItem(key, JSON.stringify(data));
+};
+
 /**
  * Helper to convert Base64 string to Blob for upload.
  */
 const base64ToBlob = (base64: string, contentType: string = 'image/jpeg'): Blob => {
-  // Handle both data URI scheme and raw base64 strings
   const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
-
   const byteCharacters = atob(base64Data);
   const byteArrays = [];
 
@@ -27,33 +44,22 @@ const base64ToBlob = (base64: string, contentType: string = 'image/jpeg'): Blob 
 
 /**
  * Uploads an image to Supabase Storage 'user_uploads' bucket.
- * @param base64 The base64 string of the image.
- * @param path The target file path (e.g., 'folder/filename.jpg').
- * @returns The public URL of the uploaded file.
+ * For anonymous users, this returns null (local images handled via base64 in UI).
  */
 export const uploadImage = async (base64: string, path: string): Promise<string | null> => {
   if (!supabase) return null;
   try {
-    const blob = base64ToBlob(base64);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return null; // Skip upload for anonymous users
 
-    // Upload file
+    const blob = base64ToBlob(base64);
     const { error: uploadError } = await supabase.storage
       .from('user_uploads')
-      .upload(path, blob, {
-        contentType: 'image/jpeg',
-        upsert: true
-      });
+      .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
 
-    if (uploadError) {
-      console.error('Supabase Upload Error:', uploadError);
-      throw uploadError;
-    }
+    if (uploadError) throw uploadError;
 
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('user_uploads')
-      .getPublicUrl(path);
-
+    const { data: { publicUrl } } = supabase.storage.from('user_uploads').getPublicUrl(path);
     return publicUrl;
   } catch (error) {
     console.error('Error uploading image:', error);
@@ -62,7 +68,7 @@ export const uploadImage = async (base64: string, path: string): Promise<string 
 };
 
 /**
- * Saves a new entry to the journal_logs table.
+ * Saves a new entry to the journal_logs table (or Local Storage).
  */
 export const saveJournalEntry = async (entry: {
   plant_id: string;
@@ -71,21 +77,29 @@ export const saveJournalEntry = async (entry: {
   media_url?: string;
   tags: string[];
 }) => {
-  if (!supabase) throw new Error("Supabase connection unavailable");
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("User not authenticated");
+  const { data: { session } } = await supabase.auth.getSession();
+
+  const newEntry = {
+    id: `local_${Date.now()}`,
+    user_id: session?.user.id || 'anon',
+    plant_id: entry.plant_id,
+    entry_type: entry.entry_type,
+    content: entry.content,
+    media_url: entry.media_url,
+    tags: entry.tags,
+    created_at: new Date().toISOString()
+  };
+
+  if (!session) {
+    const entries = getLocal(STORAGE_KEYS.JOURNAL);
+    entries.push(newEntry);
+    setLocal(STORAGE_KEYS.JOURNAL, entries);
+    return newEntry;
+  }
 
   const { data, error } = await supabase
     .from('journal_logs')
-    .insert({
-      user_id: user.id,
-      plant_id: entry.plant_id,
-      entry_type: entry.entry_type,
-      content: entry.content,
-      media_url: entry.media_url,
-      tags: entry.tags,
-      created_at: new Date().toISOString()
-    })
+    .insert({ ...newEntry, id: undefined }) // Let DB gen ID
     .select()
     .single();
 
@@ -95,134 +109,142 @@ export const saveJournalEntry = async (entry: {
 
 // --- Task Management System ---
 
-/**
- * Fetches pending tasks for the current user for today specific date.
- */
 export const getPendingTasksForToday = async (): Promise<GrowTask[] | null> => {
-  if (!supabase) return [];
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+  const { data: { session } } = await supabase.auth.getSession();
+  const today = new Date().toISOString().split('T')[0];
 
-    const today = new Date().toISOString().split('T')[0];
-
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('user_id', user.id)
-      .lte('due_date', today)
-      .eq('is_completed', false)
-      .order('due_date', { ascending: true });
-
-    if (error) {
-      console.error('Error fetching tasks:', error);
-      return [];
-    }
-
-    return (data || []).map((t: any) => ({
-      id: t.id,
-      plantId: t.plant_id,
-      title: t.title,
-      isCompleted: t.is_completed,
-      completed: t.is_completed,
-      dueDate: t.due_date,
-      source: t.source,
-      createdAt: t.created_at,
-      type: t.type
-    }));
-
-  } catch (e) {
-    console.error("Task Fetch Exception:", e);
-    return [];
+  if (!session) {
+    const tasks = getLocal(STORAGE_KEYS.TASKS);
+    return tasks
+      .filter((t: any) => t.due_date <= today && !t.is_completed)
+      .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+      .map((t: any) => ({
+        id: t.id,
+        plantId: t.plant_id,
+        title: t.title,
+        isCompleted: t.is_completed,
+        completed: t.is_completed,
+        dueDate: t.due_date,
+        source: t.source,
+        createdAt: t.created_at,
+        type: t.type
+      }));
   }
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('user_id', session.user.id)
+    .lte('due_date', today)
+    .eq('is_completed', false)
+    .order('due_date', { ascending: true });
+
+  if (error) return [];
+
+  return (data || []).map((t: any) => ({
+    id: t.id,
+    plantId: t.plant_id,
+    title: t.title,
+    isCompleted: t.is_completed,
+    completed: t.is_completed,
+    dueDate: t.due_date,
+    source: t.source,
+    createdAt: t.created_at,
+    type: t.type
+  }));
 };
 
-/**
- * Adds a new task.
- */
 export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCompleted' | 'createdAt'>): Promise<GrowTask | null> => {
-  if (!supabase) return null;
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+  const { data: { session } } = await supabase.auth.getSession();
 
-    const newTask = {
-      user_id: user.id,
-      plant_id: task.plantId,
-      title: task.title,
-      is_completed: false,
-      due_date: task.dueDate,
-      source: task.source,
-      type: task.type || 'other',
-      recurrence: task.recurrence || null, // New Field
-      notes: task.notes || null,           // New Field
-      created_at: new Date().toISOString()
-    };
+  const newTaskObj = {
+    user_id: session?.user.id || 'anon',
+    plant_id: task.plantId,
+    title: task.title,
+    is_completed: false,
+    due_date: task.dueDate,
+    source: task.source,
+    type: task.type || 'other',
+    recurrence: task.recurrence || null,
+    notes: task.notes || null,
+    created_at: new Date().toISOString()
+  };
 
-    const { data, error } = await supabase
-      .from('tasks')
-      .insert(newTask)
-      .select()
-      .single();
+  if (!session) {
+    const tasks = getLocal(STORAGE_KEYS.TASKS);
+    const localTask = { ...newTaskObj, id: `local_${Date.now()}` };
+    tasks.push(localTask);
+    setLocal(STORAGE_KEYS.TASKS, tasks);
 
-    if (error) {
-      console.error("Add Task Error:", error);
-      return null; // Return null instead of crashing
-    }
-
+    // Return mapped format
     return {
-      id: data.id,
-      plantId: data.plant_id,
-      title: data.title,
-      isCompleted: data.is_completed,
-      completed: data.is_completed,
-      dueDate: data.due_date,
-      source: data.source,
-      createdAt: data.created_at,
-      type: data.type,
-      recurrence: data.recurrence, // Return new field
-      notes: data.notes            // Return new field
+      id: localTask.id,
+      plantId: localTask.plant_id,
+      title: localTask.title,
+      isCompleted: localTask.is_completed,
+      completed: localTask.is_completed,
+      dueDate: localTask.due_date,
+      source: localTask.source,
+      createdAt: localTask.created_at,
+      type: localTask.type,
+      recurrence: localTask.recurrence,
+      notes: localTask.notes
     };
-
-  } catch (e) {
-    console.error("Task Add Exception:", e);
-    return null;
   }
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .insert(newTaskObj)
+    .select()
+    .single();
+
+  if (error) return null;
+
+  return {
+    id: data.id,
+    plantId: data.plant_id,
+    title: data.title,
+    isCompleted: data.is_completed,
+    completed: data.is_completed,
+    dueDate: data.due_date,
+    source: data.source,
+    createdAt: data.created_at,
+    type: data.type,
+    recurrence: data.recurrence,
+    notes: data.notes
+  };
 };
 
-/**
- * Toggles task completion status.
- */
 export const toggleTaskCompletion = async (taskId: string, isCompleted: boolean): Promise<boolean> => {
-  if (!supabase) return false;
-  try {
-    const { error } = await supabase
-      .from('tasks')
-      .update({ is_completed: isCompleted })
-      .eq('id', taskId);
+  const { data: { session } } = await supabase.auth.getSession();
 
-    if (error) {
-      console.error("Toggle Task Error:", error);
-      return false;
-    }
+  if (!session || taskId.startsWith('local_')) {
+    const tasks = getLocal(STORAGE_KEYS.TASKS);
+    const updated = tasks.map((t: any) => t.id === taskId ? { ...t, is_completed: isCompleted } : t);
+    setLocal(STORAGE_KEYS.TASKS, updated);
     return true;
-  } catch (e) {
-    console.error("Toggle Task Exception:", e);
-    return false;
   }
+
+  const { error } = await supabase
+    .from('tasks')
+    .update({ is_completed: isCompleted })
+    .eq('id', taskId);
+
+  return !error;
 };
 
 // --- Support & Feedback ---
 
 export const createSupportTicket = async (ticket: { name: string, email: string, issue: string, message: string }) => {
-  if (!supabase) return null;
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
 
+  // Submit to DB if possible (RLS might allow anon insert, check policy)
+  // If strict RLS, we fallback to just returning success since Email is the primary channel.
+  try {
     const { data, error } = await supabase
       .from('support_tickets')
       .insert({
-        user_id: user?.id || null, // Allow generic support even if auth fails, ideally
+        user_id: session?.user.id || null,
         name: ticket.name,
         email: ticket.email,
         issue: ticket.issue,
@@ -232,69 +254,52 @@ export const createSupportTicket = async (ticket: { name: string, email: string,
       })
       .select()
       .single();
+    if (!error) return data;
+  } catch (e) { console.warn("Support DB insert failed (anon)", e); }
 
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error('Error creating support ticket:', error);
-    return null;
-  }
+  // Fallback: Store locally just for record
+  const tickets = getLocal(STORAGE_KEYS.TICKETS);
+  tickets.push({ ...ticket, id: `local_${Date.now()}`, created_at: new Date().toISOString() });
+  setLocal(STORAGE_KEYS.TICKETS, tickets);
+  return { id: 'local-ticket' };
 };
 
 export const submitUserFeedback = async (feedback: { rating: number, message: string }) => {
-  if (!supabase) return null;
+  const { data: { session } } = await supabase.auth.getSession();
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
     const { data, error } = await supabase
       .from('user_feedback')
       .insert({
-        user_id: user.id,
+        user_id: session?.user.id || null, // Allow null in DB scheme if possible
         rating: feedback.rating,
         message: feedback.message,
         created_at: new Date().toISOString()
       })
       .select()
       .single();
-
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error('Error submitting feedback:', error);
-    return null;
-  }
+    if (!error) return data;
+  } catch (e) { console.warn("Feedback DB insert failed (anon)", e); }
+  return { id: 'local-feedback' };
 };
 
 export const submitAppRating = async (rating: number) => {
-  if (!supabase) return null;
+  const { data: { session } } = await supabase.auth.getSession();
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    const { data, error } = await supabase
-      .from('app_ratings')
-      .insert({
-        user_id: user.id,
-        rating: rating,
-        created_at: new Date().toISOString()
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error('Error submitting rating:', error);
-    return null;
-  }
+    await supabase.from('app_ratings').insert({
+      user_id: session?.user.id || null,
+      rating: rating,
+      created_at: new Date().toISOString()
+    });
+  } catch (e) { /* ignore */ }
+  return { id: 'local-rating' };
 };
-// --- Chat History System ---
+
+// --- Chat History System (Mixed Mode) ---
 
 export interface ChatSession {
   id: string;
   title: string;
-  is_pinned: boolean; // Note snake_case from DB
+  is_pinned: boolean;
   created_at: string;
 }
 
@@ -308,65 +313,73 @@ export interface StoredMessage {
   created_at: string;
 }
 
-/**
- * Creates a new chat session.
- */
 export const createChatSession = async (title: string = "New Conversation"): Promise<ChatSession | null> => {
-  if (!supabase) return null;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
+    const newSession = {
+      id: `local_session_${Date.now()}`, // Distinct ID format
+      title,
+      is_pinned: false,
+      created_at: new Date().toISOString()
+    };
+    const sessions = getLocal(STORAGE_KEYS.CHAT_SESSIONS);
+    sessions.unshift(newSession); // Add to top
+    setLocal(STORAGE_KEYS.CHAT_SESSIONS, sessions);
+    return newSession;
+  }
 
   const { data, error } = await supabase
     .from('chat_sessions')
-    .insert({
-      user_id: user.id,
-      title: title
-    })
+    .insert({ user_id: session.user.id, title })
     .select()
     .single();
 
-  if (error) {
-    console.error("Create Session Error:", error);
-    return null;
-  }
+  if (error) { console.error("Create Session Error:", error); return null; }
   return data;
 };
 
-/**
- * Gets all chat sessions for the user.
- */
 export const getChatSessions = async (): Promise<ChatSession[]> => {
-  if (!supabase) return [];
+  const { data: { session } } = await supabase.auth.getSession();
+  let sessions: ChatSession[] = [];
 
-  const { data, error } = await supabase
-    .from('chat_sessions')
-    .select('*')
-    .order('is_pinned', { ascending: false })
-    .order('created_at', { ascending: false });
+  // 1. Load Local
+  const localSessions = getLocal(STORAGE_KEYS.CHAT_SESSIONS);
+  sessions = [...localSessions];
 
-  if (error) return [];
-  return data;
+  // 2. Load Cloud (if logged in)
+  if (session) {
+    const { data } = await supabase
+      .from('chat_sessions')
+      .select('*')
+      .order('is_pinned', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (data) sessions = [...sessions, ...data];
+  }
+
+  // Sort combined
+  return sessions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 };
 
-/**
- * Deletes a chat session.
- */
 export const deleteChatSession = async (sessionId: string) => {
-  if (!supabase) return;
+  if (sessionId.startsWith('local_')) {
+    const sessions = getLocal(STORAGE_KEYS.CHAT_SESSIONS);
+    setLocal(STORAGE_KEYS.CHAT_SESSIONS, sessions.filter((s: any) => s.id !== sessionId));
+    return;
+  }
   await supabase.from('chat_sessions').delete().eq('id', sessionId);
 };
 
-/**
- * Toggle Pin status.
- */
 export const pinChatSession = async (sessionId: string, isPinned: boolean) => {
-  if (!supabase) return;
+  if (sessionId.startsWith('local_')) {
+    const sessions = getLocal(STORAGE_KEYS.CHAT_SESSIONS);
+    const updated = sessions.map((s: any) => s.id === sessionId ? { ...s, is_pinned: isPinned } : s);
+    setLocal(STORAGE_KEYS.CHAT_SESSIONS, updated);
+    return;
+  }
   await supabase.from('chat_sessions').update({ is_pinned: isPinned }).eq('id', sessionId);
 };
 
-/**
- * Saves a message to a session.
- */
 export const saveChatMessage = async (
   sessionId: string,
   role: 'user' | 'assistant',
@@ -374,7 +387,23 @@ export const saveChatMessage = async (
   attachmentUrl?: string,
   attachmentType?: string
 ): Promise<StoredMessage | null> => {
-  if (!supabase) return null;
+
+  const newMessage = {
+    id: `msg_${Date.now()}`,
+    session_id: sessionId,
+    role,
+    content,
+    attachment_url: attachmentUrl,
+    attachment_type: attachmentType,
+    created_at: new Date().toISOString()
+  };
+
+  if (sessionId.startsWith('local_')) {
+    const messages = getLocal(STORAGE_KEYS.CHAT_MESSAGES);
+    messages.push(newMessage);
+    setLocal(STORAGE_KEYS.CHAT_MESSAGES, messages);
+    return newMessage;
+  }
 
   const { data, error } = await supabase
     .from('chat_messages')
@@ -388,18 +417,17 @@ export const saveChatMessage = async (
     .select()
     .single();
 
-  if (error) {
-    console.error("Save Message Error:", error);
-    return null;
-  }
+  if (error) { console.error("Save Message Error:", error); return null; }
   return data;
 };
 
-/**
- * Gets messages for a specific session.
- */
 export const getChatMessages = async (sessionId: string): Promise<StoredMessage[]> => {
-  if (!supabase) return [];
+  if (sessionId.startsWith('local_')) {
+    const messages = getLocal(STORAGE_KEYS.CHAT_MESSAGES);
+    return messages
+      .filter((m: any) => m.session_id === sessionId)
+      .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }
 
   const { data, error } = await supabase
     .from('chat_messages')
