@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { CONFIG } from './config';
 import { Capacitor } from '@capacitor/core';
-import { Browser } from '@capacitor/browser'; 
+import { Browser } from '@capacitor/browser';
 import { UserProfile } from '../types';
 
 // Initialize Supabase using the CONFIG we fixed in the previous step
@@ -10,15 +10,15 @@ export const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_K
     storage: localStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true,
+    detectSessionInUrl: false, // DISABLED: We handle this manually in App.tsx to avoid race conditions
     flowType: 'pkce',
   },
 });
 
 export const signInWithGoogle = async () => {
   // Use Capacitor's native check for reliability
-  const isMobile = Capacitor.isNativePlatform(); 
-  
+  const isMobile = Capacitor.isNativePlatform();
+
   // 1. Determine the Redirect URL
   // Matches your Supabase > Authentication > URL Configuration
   const redirectUrl = isMobile
@@ -26,7 +26,7 @@ export const signInWithGoogle = async () => {
     : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
       ? `${window.location.origin}` // URL Configuration in Supabase must allow this exact Origin
       : 'https://auth.mastergrowbotai.com/auth/v1/callback';
-    
+
   console.log(`[Auth] Starting Google Sign-In. Redirecting to: ${redirectUrl}`);
 
   // 2. Start the OAuth flow
@@ -43,18 +43,18 @@ export const signInWithGoogle = async () => {
   // 3. Open the URL using the Secure In-App Browser (Capacitor Browser)
   // This keeps the session context within the app container.
   if (data?.url) {
-      if (isMobile) {
-          await Browser.open({ 
-              url: data.url, 
-              windowName: '_self', // Replaces current context
-              presentationStyle: 'popover' // iOS visual polish (ignored on Android)
-          });
-      } else {
-          // Fallback for web testing (localhost)
-          window.location.href = data.url;
-      }
+    if (isMobile) {
+      await Browser.open({
+        url: data.url,
+        windowName: '_self', // Replaces current context
+        presentationStyle: 'popover' // iOS visual polish (ignored on Android)
+      });
+    } else {
+      // Fallback for web testing (localhost)
+      window.location.href = data.url;
+    }
   }
-  
+
   return data;
 };
 

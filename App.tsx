@@ -39,51 +39,47 @@ const App: React.FC = () => {
         await Purchases.configure({ apiKey: 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' });
       }
 
-      // 0. Check for Cold Start Deep Link (Crucial for Android/Brave)
-      const launchUrl = await CapacitorApp.getLaunchUrl();
-      if (launchUrl && launchUrl.url.includes('code=')) {
-        // Removed blocking debug alert to prevent code expiration
+      // --- AUTH DEEP LINK HANDLING ---
+      // Helper function with Timeout & Error Handling
+      const handleAuthDeepLink = async (urlStr: string) => {
+        const code = new URL(urlStr).searchParams.get('code');
+        if (!code) return;
+
         try {
-          // Process the code immediately
-          const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(new URL(launchUrl.url).searchParams.get('code')!);
-          if (error) {
-            console.error("Launch Auth Error:", error);
-            alert(`Launch Login Error: ${error.message}`);
-          }
-          if (sessionData.session) {
-            console.log("Session established via Launch URL.");
-            alert("Launch Login Success!"); // VISIBLE SUCCESS
-            handleAuthSuccess(); // FORCE UI TRANSITION
-            // loadUserData(); // handleAuthSuccess calls this anyway
+          // 15s Timeout to prevent "Processing..." hang
+          const exchangePromise = supabase.auth.exchangeCodeForSession(code);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Authentication timed out. Check connection.")), 15000)
+          );
+
+          // Race the exchange against the timeout
+          const { data: sessionData, error } = await Promise.race([exchangePromise, timeoutPromise]) as any;
+
+          if (error) throw error;
+
+          if (sessionData?.session) {
+            alert("Login Success!"); // User requested visible confirmation
+            handleAuthSuccess();
           }
         } catch (err: any) {
-          console.error("Launch Processing Failed:", err);
-          alert(`Launch Link Error: ${err.message}`);
+          console.error("Auth Exchange Failed:", err);
+          // Only alert meaningful errors
+          if (err.message !== 'Auth session missing!') {
+            alert(`Login Failed: ${err.message || 'Unknown error'}`);
+          }
         }
+      };
+
+      // 1. Check for Cold Start Deep Link (Crucial for Android)
+      const launchUrl = await CapacitorApp.getLaunchUrl();
+      if (launchUrl?.url && launchUrl.url.includes('code=')) {
+        handleAuthDeepLink(launchUrl.url);
       }
 
+      // 2. Runtime Deep Link Listener
       CapacitorApp.addListener('appUrlOpen', async (data) => {
         if (data.url.includes('code=')) {
-          // Removed blocking debug alert to prevent code expiration
-
-          try {
-            const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(new URL(data.url).searchParams.get('code')!);
-
-            if (error) {
-              console.error("Auth Exchange Error:", error);
-              alert(`Login Error: ${error.message}`); // VISIBLE ERROR
-            }
-
-            if (sessionData.session) {
-              console.log("Session established via Deep Link.");
-              alert("Login Success! Syncing profile..."); // VISIBLE SUCCESS
-              handleAuthSuccess(); // FORCE UI TRANSITION
-              // loadUserData(); // handleAuthSuccess calls this anyway
-            }
-          } catch (err: any) {
-            console.error("Deep Link Processing Failed:", err);
-            alert(`Deep Link Error: ${err.message || JSON.stringify(err)}`); // VISIBLE ERROR
-          }
+          handleAuthDeepLink(data.url);
         }
       });
 
