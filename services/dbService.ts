@@ -265,6 +265,30 @@ export const submitUserFeedback = async (feedback: { rating: number, message: st
     return null;
   }
 };
+
+export const submitAppRating = async (rating: number) => {
+  if (!supabase) return null;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from('app_ratings')
+      .insert({
+        user_id: user.id,
+        rating: rating,
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error submitting rating:', error);
+    return null;
+  }
+};
 // --- Chat History System ---
 
 export interface ChatSession {

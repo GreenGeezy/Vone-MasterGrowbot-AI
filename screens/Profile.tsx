@@ -294,6 +294,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 {/* 3. Community & Support */}
                 <Section title="Community & Support">
                     <Row icon={ScanLine} label="View Tutorial" onClick={() => onViewTutorial && onViewTutorial()} />
+                    <Row icon={Star} label="Rate on App Store" onClick={() => openLink('https://play.google.com/store/apps/details?id=com.futuristiccannabis.mastergrowbot')} />
                     <Row icon={Mail} label="Contact Support" onClick={() => setShowSupportModal(true)} />
                     <Row icon={MessageSquare} label="Share Feedback" onClick={() => setShowFeedbackModal(true)} />
                 </Section>
@@ -429,21 +430,18 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                         <button onClick={async () => {
                             const rating = (supportForm as any).rating || 5;
                             const message = (supportForm as any).feedbackMessage || '';
-                            const subject = "App Feedback - MasterGrowbot AI";
-                            const body = `Rating: ${rating} Stars\n\nFeedback:\n${message}`;
-                            const mailtoLink = `mailto:Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
+                            // 1. Submit to Supabase
                             const { submitUserFeedback } = await import('../services/dbService');
-                            submitUserFeedback({ rating, message }).catch(console.error);
+                            await submitUserFeedback({ rating, message }).catch(console.error);
 
                             alert("Feedback Sent! Thank you for helping us grow. 🌱");
-                            window.location.href = mailtoLink;
 
-                            if (rating === 5 && message.length > 0) {
-                                if (window.confirm("Hi! 👋 We’re a small team building MasterGrowbot AI. If you enjoy using it, a quick rating makes a massive difference to us.")) {
-                                    window.open("https://play.google.com/store/apps/details?id=com.futuristiccannabis.mastergrowbot", "_blank");
-                                }
+                            // 2. Neutral Prompt (Policy Compliant)
+                            if (window.confirm("Thanks for your feedback! Would you like to leave a public review on the App Store?")) {
+                                window.open("https://play.google.com/store/apps/details?id=com.futuristiccannabis.mastergrowbot", "_blank");
                             }
+
                             setShowFeedbackModal(false);
                             setSupportForm({ name: '', email: '', issue: '', message: '' });
                         }} className="w-full py-4 bg-gray-900 text-white rounded-xl font-black shadow-xl active:scale-95 transition-transform mb-3">Submit Feedback</button>
