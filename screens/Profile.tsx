@@ -251,7 +251,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                     )}
                 </div>
 
-                <p className="text-xs font-bold text-gray-400 mt-1">{userProfile.email || 'user@example.com'}</p>
+                <p className="text-xs font-bold text-gray-400 mt-1">{userProfile.email || 'MasterGrowbot AI'}</p>
                 <div className="mt-3 inline-flex items-center gap-1.5 bg-black/5 px-3 py-1 rounded-full">
                     <Shield size={12} className="text-green-700" />
                     <span className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Pro Member</span>
