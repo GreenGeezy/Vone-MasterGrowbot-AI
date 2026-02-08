@@ -5,8 +5,8 @@ export const CONFIG = {
     // We are now using the "Preview" models enabled in your AI Studio account.
     MODELS: {
         DIAGNOSIS: 'gemini-3-pro-preview',   // High Reasoning
-        CHAT_LIVE: 'gemini-3-flash-preview', // Low Latency
-        INSIGHTS: 'gemini-3-flash-preview',  // Daily Tips
+        CHAT_LIVE: 'gemini-1.5-flash',       // Low Latency, Stable
+        INSIGHTS: 'gemini-1.5-flash',        // Daily Tips
     },
 
     // 2. SUPABASE CONFIGURATION

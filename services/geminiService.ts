@@ -139,7 +139,8 @@ export async function sendMessage(
     model: CONFIG.MODELS.CHAT_LIVE,
     mode: 'chat',
     prompt: message,
-    history: history
+    // Filter out the artificial 'welcome' message or any message that might cause 'model first' issues if strict
+    history: history.filter(h => h.content !== "Welcome, Grower! 🌿 I am MasterGrowbot AI. Select a chart or start a new one to begin.")
   };
 
   if (attachment) {
@@ -148,8 +149,10 @@ export async function sendMessage(
   }
 
   // Retry Logic for Cold Starts (Edge Function Wake-up)
-  const MAX_RETRIES = 3;
+  // Cold start can take ~5-10s. Current logic (3s) is too short.
+  const MAX_RETRIES = 5;
   let attempt = 0;
+  let delay = 2000; // Start with 2s delay
 
   while (attempt < MAX_RETRIES) {
     attempt++;
@@ -166,11 +169,12 @@ export async function sendMessage(
     // If it's the last attempt, return the error message
     if (attempt === MAX_RETRIES) {
       console.error("All retries failed.");
-      return "I'm having trouble connecting to the network right now.";
+      return "I'm having trouble connecting to the network right now. Please try again in a moment.";
     }
 
-    // Wait 1 second before retrying (backoff)
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Exponential Backoff: Wait 2s, 4s, 8s...
+    await new Promise(resolve => setTimeout(resolve, delay));
+    delay *= 2;
   }
 
   return "I'm having trouble connecting to the network right now.";
