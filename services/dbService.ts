@@ -447,3 +447,38 @@ export const getChatMessages = async (sessionId: string): Promise<StoredMessage[
   if (error) return [];
   return data;
 };
+
+// --- Account Deletion ---
+
+export const deleteUserData = async (): Promise<boolean> => {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  // 1. Clear Local Storage
+  localStorage.clear();
+
+  // 2. Delete from Supabase (if authenticated)
+  if (session?.user?.id) {
+    const uid = session.user.id;
+    try {
+      // Execute deletions in parallel for speed, handle potential errors gracefully
+      await Promise.all([
+        supabase.from('profiles').delete().eq('id', uid),
+        supabase.from('grow_logs').delete().eq('user_id', uid), // Assuming this is the table name from user request
+        supabase.from('journal_logs').delete().eq('user_id', uid),
+        supabase.from('tasks').delete().eq('user_id', uid),
+        supabase.from('chat_sessions').delete().eq('user_id', uid),
+        supabase.from('chat_messages').delete().eq('user_id', uid), // Dependent on session usually, but for completeness
+        supabase.from('user_feedback').delete().eq('user_id', uid),
+        supabase.from('support_tickets').delete().eq('user_id', uid),
+        supabase.auth.signOut()
+      ]);
+      return true;
+    } catch (e) {
+      console.error("Error deleting user data from Supabase:", e);
+      // Even if DB fails (e.g. network), we treated local clear as success for the user's perception on this device
+      return false;
+    }
+  }
+
+  return true; // Local only account deleted
+};

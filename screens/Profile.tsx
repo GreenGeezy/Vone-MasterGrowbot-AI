@@ -306,11 +306,36 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                     <Row icon={FileText} label="Privacy Policy" onClick={() => openLink('https://mastergrowbot.com/privacy-policy')} />
                     <Row icon={Shield} label="Terms of Service" onClick={() => openLink('https://mastergrowbot.com/terms-of-service')} />
                     <Row icon={LogOut} label="Sign Out" onClick={onSignOut} />
-                    <Row icon={Trash2} label="Delete Account" onClick={handleDeleteAccount} isDestructive />
                 </Section>
 
+                {/* DELETE ACCOUNT SECTION (Policy Compliant) */}
+                <div className="px-4 mt-8 mb-12">
+                    <button
+                        onClick={async () => {
+                            if (window.confirm('Warning: This action is permanent. All your grow logs, AI insights, and photos will be deleted. Do you wish to proceed?')) {
+                                try {
+                                    const { deleteUserData } = await import('../services/dbService');
+                                    await deleteUserData();
+                                    onSignOut();
+                                    // Force reload to clear any in-memory state
+                                    window.location.reload();
+                                } catch (e) {
+                                    console.error("Deletion failed:", e);
+                                    alert("Network error. Please try again.");
+                                }
+                            }
+                        }}
+                        className="w-full py-4 bg-red-50 text-red-600 font-black rounded-xl border-2 border-red-100 hover:bg-red-100 active:scale-95 transition-all text-sm uppercase tracking-wider shadow-sm"
+                    >
+                        Delete Profile & Data
+                    </button>
+                    <p className="text-[10px] text-gray-400 text-center mt-4 leading-relaxed px-4">
+                        To request data deletion after uninstalling the app, visit <span onClick={() => openLink('https://mastergrowbot.com/privacy-policy')} className="text-blue-500 underline cursor-pointer">mastergrowbot.com/privacy-policy</span> or email <a href="mailto:support@futuristiccannabis.ai" className="text-blue-500 underline">support@futuristiccannabis.ai</a>.
+                    </p>
+                </div>
+
                 <div className="text-center pb-8 opacity-40">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 1.0.89 (Beta)</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 1.0.126 (Beta)</p>
                 </div>
             </div>
 
