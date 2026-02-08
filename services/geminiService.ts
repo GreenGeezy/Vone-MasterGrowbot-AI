@@ -186,12 +186,29 @@ export async function sendMessage(
       return data?.result || "I didn't catch that.";
     }
 
+    // Capture precise error info
+    // Supabase invoke error is often: { message: "...", context: Response }
+    // If we have a backend generated error response, it might be in `error.message` depending on how Supabase client parses the 500 response.
+    // But often for 500s, `invoke` gives a generic error.
+    // Let's rely on the fact that my backend sends JSON { error: "..." }.
+    // If Supabase client parses that, we might see it.
+
+    // Check if it's a "Permanent" error (Client side issue / Invalid Model)
+    // If the valid session cannot be established, waiting won't help.
+    const errorString = JSON.stringify(error || {});
+    const isPermanent = errorString.includes("400") || errorString.includes("404") || errorString.includes("invalid") || errorString.includes("not found");
+
     console.warn(`[Gemini] Attempt ${attempt} failed:`, error);
+
+    if (isPermanent) {
+      console.error("Permanent error detected. Stopping retries.");
+      return `Configuration Error: ${error.message || "Invalid Model or Key"}. Please check settings.`;
+    }
 
     // If it's the last attempt, return the error message
     if (attempt === MAX_RETRIES) {
       console.error("All retries failed.");
-      return "I'm having trouble connecting to the network right now. Please try again in a moment.";
+      return `Connection failed after ${MAX_RETRIES} attempts. Server said: ${error.message || "Network Error"}`;
     }
 
     // Exponential Backoff: Wait 2s, 4s, 8s...
