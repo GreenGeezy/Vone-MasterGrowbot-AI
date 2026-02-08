@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { DiagnosisResult, UserProfile } from '../types';
+import { CONFIG } from './config';
 
 // --- Types ---
 
@@ -83,6 +84,7 @@ export async function diagnosePlant(
 
   const { data, error } = await supabase.functions.invoke('gemini-gateway', {
     body: {
+      model: CONFIG.MODELS.DIAGNOSIS,
       mode: 'diagnosis',
       image: cleanImage,
       prompt: systemContext + prompt
@@ -134,6 +136,7 @@ export async function sendMessage(
   attachment?: { data: string; type: string; mimeType: string }
 ) {
   const body: any = {
+    model: CONFIG.MODELS.CHAT_LIVE,
     mode: 'chat',
     prompt: message,
     history: history

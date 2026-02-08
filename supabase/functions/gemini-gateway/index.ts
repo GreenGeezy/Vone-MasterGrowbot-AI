@@ -16,8 +16,9 @@ serve(async (req) => {
     const genAI = new GoogleGenerativeAI(apiKey);
     const { mode, prompt, image, history, mimeType, fileData } = await req.json();
 
-    // --- 1. DEFAULT MODEL (Chat/Voice) ---
-    let modelName = "gemini-3-flash-preview";
+    // --- 1. DYNAMIC MODEL SELECTION ---
+    // Use model from client config, fallback to stable flash model if missing
+    let modelName = reqBody.model || "gemini-1.5-flash";
 
     // UPDATED SYSTEM PROMPT: AI Cultivation Assistant
     // - Removed "No Markdown" restriction to allow ordered lists/bolding.

@@ -34,7 +34,8 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
     const [isEditingName, setIsEditingName] = useState(false);
     const [tempName, setTempName] = useState('');
 
-    // --- AUTO-SYNC EMAIL ---
+    // --- AUTO-SYNC EMAIL (DISABLED: Auth Removed) ---
+    /*
     React.useEffect(() => {
         const syncEmail = async () => {
             const { supabase } = await import('../services/supabaseClient');
@@ -45,7 +46,8 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
             }
         };
         syncEmail();
-    }, []); // Run once on mount
+    }, []); 
+    */
 
     // Support Form State
     const [supportForm, setSupportForm] = useState({ name: '', email: '', issue: '', message: '' });
