@@ -1,5 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { GoogleGenerativeAI } from "npm:@google/generative-ai"
+import { serve } from "std/http/server.ts"
+import { GoogleGenerativeAI } from "@google/generative-ai"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,7 +14,8 @@ serve(async (req) => {
     if (!apiKey) throw new Error("Missing API Key");
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const { mode, prompt, image, history, mimeType, fileData } = await req.json();
+    const reqBody = await req.json();
+    const { mode, prompt, image, history, mimeType, fileData } = reqBody;
 
     // --- 1. DYNAMIC MODEL SELECTION ---
     // Use model from client config, fallback to stable flash model if missing
