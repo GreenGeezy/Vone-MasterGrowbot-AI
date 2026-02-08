@@ -162,8 +162,8 @@ export async function sendMessage(
     model: CONFIG.MODELS.CHAT_LIVE,
     mode: 'chat',
     prompt: message,
-    // Filter out the artificial 'welcome' message or any message that might cause 'model first' issues if strict
-    history: history.filter(h => h.content !== "Welcome, Grower! 🌿 I am MasterGrowbot AI. Select a chart or start a new one to begin.")
+    // Filter out artificial messages and sanitize for alternation logic
+    history: sanitizeHistory(history)
   };
 
   if (attachment) {
@@ -172,7 +172,6 @@ export async function sendMessage(
   }
 
   // Retry Logic for Cold Starts (Edge Function Wake-up)
-  // Cold start can take ~5-10s. Current logic (3s) is too short.
   const MAX_RETRIES = 5;
   let attempt = 0;
   let delay = 2000; // Start with 2s delay
@@ -201,6 +200,47 @@ export async function sendMessage(
   }
 
   return "I'm having trouble connecting to the network right now.";
+}
+
+/**
+ * Ensures history alternates User -> Model -> User -> Model
+ * Gemini 1.5/Advanced is strict about this.
+ */
+function sanitizeHistory(history: { role: string; content: string }[]): { role: string; content: string }[] {
+  if (!history || history.length === 0) return [];
+
+  const sanitized: { role: string; content: string }[] = [];
+
+  // 1. Filter out artificial/system messages first
+  const cleanRaw = history.filter(h =>
+    !h.content.includes("Welcome, Grower!") &&
+    !h.content.includes("Could not start chat") &&
+    !h.content.includes("Connection error")
+  );
+
+  // 2. Enforce Alternation
+  for (let i = 0; i < cleanRaw.length; i++) {
+    const msg = cleanRaw[i];
+    const role = msg.role === 'assistant' ? 'model' : 'user';
+
+    // Logic: Look ahead.
+    const nextMsg = cleanRaw[i + 1];
+    const nextRole = nextMsg ? (nextMsg.role === 'assistant' ? 'model' : 'user') : null;
+
+    if (role === 'user' && nextRole === 'user') {
+      // Skip this message (it's a dangling user message from a failed previous turn)
+      continue;
+    }
+
+    // Also, if this is the LAST message, it MUST be 'model' (because new prompt is 'user')
+    if (i === cleanRaw.length - 1 && role === 'user') {
+      continue;
+    }
+
+    sanitized.push(msg);
+  }
+
+  return sanitized;
 }
 
 /**
