@@ -313,7 +313,8 @@ const App: React.FC = () => {
 
       {showTutorial && <GetStartedTutorial onComplete={completeTutorial} />}
 
-      {showPaywall && <Paywall onClose={() => setShowPaywall(false)} onPurchase={() => { setShowPaywall(false); setShowAuth(true); }} onSkip={() => setShowPaywall(false)} />}
+      {/* HARD PAYWALL: No onClose or onSkip provided to prevent bypass */}
+      {showPaywall && <Paywall onClose={() => { }} onPurchase={() => { setShowPaywall(false); setShowAuth(true); }} onSkip={() => { }} />}
 
       {showAuth && <PostPaymentAuth onComplete={handleAuthSuccess} onSkip={handleAuthSuccess} userProfile={userProfile} />}
 
