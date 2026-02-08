@@ -76,8 +76,6 @@ serve(async (req) => {
 
     if (mode === 'chat') {
       // MAP HISTORY (If present)
-      // Client sends: [{ role: 'user'|'assistant', content: '...' }]
-      // Gemini expects: [{ role: 'user'|'model', parts: [{ text: '...' }] }]
       let chatHistory = [];
       if (history && Array.isArray(history)) {
         chatHistory = history.map(msg => ({
@@ -95,7 +93,6 @@ serve(async (req) => {
       if (fileData && mimeType) {
         msgParts.push({ inlineData: { mimeType: mimeType, data: fileData } });
       } else if (image) {
-        // Legacy support if client sends 'image' key
         msgParts.push({ inlineData: { mimeType: "image/jpeg", data: image } });
       }
 
@@ -108,7 +105,7 @@ serve(async (req) => {
       resultText = result.response.text();
     }
     else {
-      // Fallback (Voice / Simple)
+      // Fallback
       const result = await model.generateContent(prompt);
       resultText = result.response.text();
     }
@@ -118,7 +115,11 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error("Gemini Backend Error:", error); // Logs to Supabase Dashboard
+    return new Response(JSON.stringify({
+      error: error.message || "Unknown Backend Error",
+      details: JSON.stringify(error)
+    }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }

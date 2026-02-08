@@ -82,14 +82,37 @@ export async function diagnosePlant(
     }
   `;
 
-  const { data, error } = await supabase.functions.invoke('gemini-gateway', {
-    body: {
-      model: CONFIG.MODELS.DIAGNOSIS,
-      mode: 'diagnosis',
-      image: cleanImage,
-      prompt: systemContext + prompt
-    }
-  });
+  // Retry Logic for Cold Starts (Edge Function Wake-up)
+  const MAX_RETRIES = 5;
+  let attempt = 0;
+  let delay = 2000;
+  let data, error;
+
+  while (attempt < MAX_RETRIES) {
+    attempt++;
+    console.log(`[Gemini Diagnosis] Attempt ${attempt}/${MAX_RETRIES}...`);
+
+    const response = await supabase.functions.invoke('gemini-gateway', {
+      body: {
+        model: CONFIG.MODELS.DIAGNOSIS,
+        mode: 'diagnosis',
+        image: cleanImage,
+        prompt: systemContext + prompt
+      }
+    });
+
+    data = response.data;
+    error = response.error;
+
+    if (!error) break; // Success!
+
+    console.warn(`[Gemini Diagnosis] Attempt ${attempt} failed:`, error);
+
+    if (attempt === MAX_RETRIES) break; // Give up after max retries
+
+    await new Promise(resolve => setTimeout(resolve, delay));
+    delay *= 2;
+  }
 
   if (error) {
     console.error("Gemini Connection Error:", error);
