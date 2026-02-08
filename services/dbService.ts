@@ -346,7 +346,7 @@ const createLocalSession = (title: string): ChatSession => {
   setLocal(STORAGE_KEYS.CHAT_SESSIONS, sessions);
   return newSession;
 };
-};
+
 
 export const getChatSessions = async (): Promise<ChatSession[]> => {
   const { data: { session } } = await supabase.auth.getSession();
