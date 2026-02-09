@@ -154,13 +154,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
               <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Stop guessing—identify pests, diseases, and deficiencies instantly to prevent crop loss.</p>
             </div>
           </div>
-          <div className="flex gap-4 items-start">
-            <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl flex-shrink-0"><Headphones size={24} /></div>
-            <div>
-              <h3 className="font-bold text-gray-900 text-sm">Strain Intelligence</h3>
-              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Upload your own genetics and get AI-powered insights to grow premium quality plants.</p>
-            </div>
-          </div>
+
           <div className="flex gap-4 items-start">
             <div className="p-3 bg-yellow-50 text-yellow-600 rounded-2xl flex-shrink-0"><Zap size={24} /></div>
             <div>
@@ -178,8 +172,8 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
           <div className="flex gap-4 items-start">
             <div className="p-3 bg-green-50 text-green-500 rounded-2xl flex-shrink-0"><Dna size={24} /></div>
             <div>
-              <h3 className="font-bold text-gray-900 text-sm">Verified Strain Intelligence</h3>
-              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Strain-specific advice to handle variations ensuring peak potency.</p>
+              <h3 className="font-bold text-gray-900 text-sm">Unlock AI Strain Intelligence™</h3>
+              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Get instant, genetic-specific grow guides and yield-maximizing secrets for over 100+ cannabis strains.</p>
             </div>
           </div>
         </div>

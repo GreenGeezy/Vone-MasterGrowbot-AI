@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, BookOpen, ScanLine, Database, User } from 'lucide-react';
+import { Home, BookOpen, ScanLine, Dna, User } from 'lucide-react';
 import { AppScreen } from '../types';
 
 interface BottomNavProps {
@@ -36,9 +36,9 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate }) => {
         </button>
       </div>
 
-      <button onClick={() => onNavigate(AppScreen.STRAINS)} className={getContainerClass(AppScreen.STRAINS)}>
-        <Database size={24} className={getIconColor(AppScreen.STRAINS)} />
-        <span className="text-[10px] font-bold text-text-sub">Strains</span>
+      <button onClick={() => onNavigate(AppScreen.STRAINS)} className={`flex flex-col items-center gap-1 ${currentScreen === AppScreen.STRAINS ? 'text-green-500' : 'text-gray-400'}`}>
+        <Dna size={24} />
+        <span className="text-[10px] font-bold">Strains</span>
       </button>
 
       <button onClick={() => onNavigate(AppScreen.PROFILE)} className={getContainerClass(AppScreen.PROFILE)}>

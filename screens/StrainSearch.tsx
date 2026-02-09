@@ -79,16 +79,16 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
 
     // --- RENDER HELPERS ---
 
+    const DEFAULT_STRAIN_IMAGE = 'https://images.unsplash.com/photo-1603909223429-69bb7aa8179b?auto=format&fit=crop&q=80&w=800'; // High quality bud placeholder
+
     const StrainCard = ({ strain, onClick }: { strain: Strain, onClick: () => void }) => (
         <div onClick={onClick} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-4 active:scale-[0.98] transition-all cursor-pointer">
             <div className="w-16 h-16 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 relative">
-                {strain.imageUri ? (
-                    <img src={strain.imageUri} className="w-full h-full object-cover" alt={strain.name} />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-300">
-                        <Sprout size={24} />
-                    </div>
-                )}
+                <img
+                    src={strain.imageUri || DEFAULT_STRAIN_IMAGE}
+                    className="w-full h-full object-cover"
+                    alt={strain.name}
+                />
                 {strain.userCreated && (
                     <div className="absolute top-0 right-0 bg-blue-500 w-3 h-3 rounded-bl-lg"></div>
                 )}
@@ -214,13 +214,12 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
             {selectedStrain && (
                 <div className="fixed inset-0 z-[70] bg-white flex flex-col animate-in slide-in-from-right">
                     <div className="relative h-72">
-                        {selectedStrain.imageUri ? (
-                            <img src={selectedStrain.imageUri} className="w-full h-full object-cover" alt="Hero" />
-                        ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-green-500 to-emerald-800 flex items-center justify-center">
-                                <Sprout size={64} className="text-white/20" />
-                            </div>
-                        )}
+                        <img
+                            src={selectedStrain.imageUri || DEFAULT_STRAIN_IMAGE}
+                            className="w-full h-full object-cover"
+                            alt="Hero"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                         <button onClick={() => setSelectedStrain(null)} className="absolute top-12 right-6 p-2 bg-black/20 backdrop-blur-md rounded-full text-white"><X size={20} /></button>
                         <div className="absolute bottom-0 inset-x-0 h-32 bg-gradient-to-t from-black/80 to-transparent" />
                         <div className="absolute bottom-6 left-6 text-white">

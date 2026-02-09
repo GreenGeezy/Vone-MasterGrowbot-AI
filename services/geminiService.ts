@@ -328,7 +328,7 @@ export async function getStrainInsights(strainName: string, description?: string
     const response = await supabase.functions.invoke('gemini-gateway', {
       body: {
         model: CONFIG.MODELS.INSIGHTS,
-        mode: 'chat', // Use chat mode for free-form text
+        mode: 'insight', // Use simple generation mode to avoid Chat history errors
         prompt: prompt
       }
     });
