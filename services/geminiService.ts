@@ -90,9 +90,7 @@ export async function diagnosePlant(
 
   while (attempt < MAX_RETRIES) {
     attempt++;
-    console.log(`[Gemini Diagnosis] Attempt ${attempt}/${MAX_RETRIES}...`);
-
-    // --- USE NEW GEMINI V3 FUNCTION ---
+    // --- STRICT USER REQUIREMENT: GEMINI 3 V3 FUNCTION ---
     const response = await supabase.functions.invoke('gemini-v3', {
       body: {
         model: CONFIG.MODELS.DIAGNOSIS,
@@ -108,6 +106,8 @@ export async function diagnosePlant(
     if (!error) break; // Success!
 
     console.warn(`[Gemini Diagnosis] Attempt ${attempt} failed:`, error);
+    // If 404/500 from V3, it implies model issue or crash.
+    // But we retry just in case of network blip.
 
     if (attempt === MAX_RETRIES) break; // Give up after max retries
 
@@ -325,7 +325,7 @@ export async function getStrainInsights(strainName: string, description?: string
 
   // Use the Insights model (Flash)
   try {
-    // --- USE NEW GEMINI V3 FUNCTION ---
+    // --- STRICT USER REQUIREMENT: GEMINI 3 V3 FUNCTION ---
     const response = await supabase.functions.invoke('gemini-v3', {
       body: {
         model: CONFIG.MODELS.INSIGHTS,

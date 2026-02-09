@@ -1,12 +1,10 @@
 import { Capacitor } from '@capacitor/core';
 
 export const CONFIG = {
-    // 1. MODEL CONFIGURATION (Gemini 3.0)
-    // We are now using the "Preview" models enabled in your AI Studio account.
     MODELS: {
-        DIAGNOSIS: 'gemini-3-pro-preview',    // High Reasoning (GenAI SDK)
+        DIAGNOSIS: 'gemini-3-pro-preview',    // User Requested (Preview)
         CHAT_LIVE: 'gemini-1.5-flash-001',    // Stable (Flash)
-        INSIGHTS: 'gemini-3-pro-preview',     // High Reasoning (GenAI SDK)
+        INSIGHTS: 'gemini-3-pro-preview',     // User Requested (Preview)
     },
 
     // 2. SUPABASE CONFIGURATION

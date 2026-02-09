@@ -155,7 +155,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
       }
 
     } catch (e) {
-      alert("Analysis failed. Please check connection.");
+      alert(`Analysis failed: ${e.message || JSON.stringify(e)}`);
     } finally {
       setLoading(false);
     }
