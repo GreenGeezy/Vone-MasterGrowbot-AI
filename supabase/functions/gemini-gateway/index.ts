@@ -1,13 +1,12 @@
-import { serve } from "std/http/server.ts"
-import { GoogleGenerativeAI } from "@google/generative-ai"
-import { createClient } from "@supabase/supabase-js"
+import { GoogleGenerativeAI } from "npm:@google/generative-ai@^0.21.0";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
@@ -15,7 +14,6 @@ serve(async (req) => {
     if (!apiKey) throw new Error("Missing API Key");
 
     // --- RATE LIMITING (FAIL OPEN) ---
-    // We try to limit usage, but if DB fails, we allow the request to proceed (Fail Open).
     try {
       const authHeader = req.headers.get('Authorization');
       if (authHeader) {
@@ -43,7 +41,6 @@ serve(async (req) => {
           }
 
           // Increment count (Upsert)
-          // If row exists, increment. If not, insert 1.
           const { error: upsertError } = await supabase
             .from('user_daily_usage')
             .upsert(
@@ -74,8 +71,7 @@ serve(async (req) => {
     // --- 0. WAKE UP PING (Cold Start Optimization) ---
     if (mode === 'wakeup') {
       console.log("Waking up Gemini Flash...");
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      // Perform a real, tiny request to ensuring connection is warm
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
       await model.generateContent("Ping");
       return new Response(JSON.stringify({ result: 'Ready' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -83,12 +79,9 @@ serve(async (req) => {
     }
 
     // --- 1. DYNAMIC MODEL SELECTION ---
-    // Use model from client config, fallback to gemini-1.5-flash if missing
-    let modelName = reqBody.model || "gemini-1.5-flash";
+    let modelName = reqBody.model || "gemini-1.5-flash-001";
 
-    // UPDATED SYSTEM PROMPT: AI Cultivation Assistant
-    // - Removed "No Markdown" restriction to allow ordered lists/bolding.
-    // - Added strict "Step-by-Step" command.
+    // UPDATED SYSTEM PROMPT
     let systemInstruction = `
       You are MasterGrowbot AI, an expert AI Cultivation Assistant.
       
@@ -111,7 +104,7 @@ serve(async (req) => {
 
     // --- 2. DIAGNOSIS MODE (Legacy Support) ---
     if (mode === 'diagnosis') {
-      modelName = "gemini-1.5-pro";
+      modelName = "gemini-1.5-pro-001";
       systemInstruction = `
         You are an expert plant pathologist. Analyze this cannabis plant image.
         Return ONLY valid JSON (no markdown) with this structure:
@@ -164,8 +157,6 @@ serve(async (req) => {
           parts: [{ text: msg.content }]
         }));
 
-        // CRITICAL FIX: Ensure History STARTS with 'user'
-        // Drop any leading 'model' messages
         while (chatHistory.length > 0 && chatHistory[0].role !== 'user') {
           chatHistory.shift();
         }
@@ -179,30 +170,10 @@ serve(async (req) => {
           topK: 40,
           maxOutputTokens: 1024,
         },
-        safetySettings: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_HATE_SPEECH",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-        ],
       });
 
-      // CONSTRUCT MESSAGE PARTS
       let msgParts = [{ text: prompt }];
 
-      // Handle New Image/File Attachment
       if (fileData && mimeType) {
         msgParts.push({ inlineData: { mimeType: mimeType, data: fileData } });
       } else if (image) {
@@ -228,7 +199,6 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    // UPDATED ERROR LOGGING: Serialize the full Error object
     const errorDetails = JSON.stringify(error, Object.getOwnPropertyNames(error));
     console.error("Gemini Backend Error:", errorDetails);
 

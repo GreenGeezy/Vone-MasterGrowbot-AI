@@ -22,7 +22,7 @@ const cleanBase64 = (data: string) =>
 
 /**
  * AI Plant Diagnosis (Vision + Logic)
- * Uses 'gemini-3-pro-preview' via Gateway
+ * Uses 'gemini-1.5-pro-001' (Pinned Stable) via Gateway
  */
 export async function diagnosePlant(
   base64Image: string,
@@ -92,7 +92,8 @@ export async function diagnosePlant(
     attempt++;
     console.log(`[Gemini Diagnosis] Attempt ${attempt}/${MAX_RETRIES}...`);
 
-    const response = await supabase.functions.invoke('gemini-gateway', {
+    // --- USE NEW GEMINI V3 FUNCTION ---
+    const response = await supabase.functions.invoke('gemini-v3', {
       body: {
         model: CONFIG.MODELS.DIAGNOSIS,
         mode: 'diagnosis',
@@ -151,7 +152,7 @@ export async function diagnosePlant(
 
 /**
  * Chat with Coach (Text / Voice)
- * Uses 'gemini-3-flash-preview' via Gateway
+ * Uses 'gemini-1.5-flash-001' (Pinned Stable) via Gateway
  */
 export async function sendMessage(
   message: string,
@@ -180,6 +181,7 @@ export async function sendMessage(
     attempt++;
     console.log(`[Gemini] Sending message (Attempt ${attempt}/${MAX_RETRIES})...`);
 
+    // STAY ON CLASSIC GATEWAY FOR CHAT (V1.5)
     const { data, error } = await supabase.functions.invoke('gemini-gateway', { body });
 
     if (!error) {
@@ -211,13 +213,11 @@ export async function sendMessage(
       return `Error: ${error.message || "Request Failed"}.`;
     }
 
-    // If it's the last attempt, return the error message
     if (attempt === MAX_RETRIES) {
       console.error("All retries failed.");
       return `Connection failed after ${MAX_RETRIES} attempts. Server said: ${error.message || "Network Error"}`;
     }
 
-    // Exponential Backoff: Wait 2s, 4s, 8s...
     await new Promise(resolve => setTimeout(resolve, delay));
     delay *= 2;
   }
@@ -325,7 +325,8 @@ export async function getStrainInsights(strainName: string, description?: string
 
   // Use the Insights model (Flash)
   try {
-    const response = await supabase.functions.invoke('gemini-gateway', {
+    // --- USE NEW GEMINI V3 FUNCTION ---
+    const response = await supabase.functions.invoke('gemini-v3', {
       body: {
         model: CONFIG.MODELS.INSIGHTS,
         mode: 'insight', // Use simple generation mode to avoid Chat history errors
