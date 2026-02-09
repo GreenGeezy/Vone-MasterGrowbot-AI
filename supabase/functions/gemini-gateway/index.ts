@@ -148,6 +148,12 @@ serve(async (req) => {
           role: msg.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: msg.content }]
         }));
+
+        // CRITICAL FIX: Ensure History STARTS with 'user'
+        // Drop any leading 'model' messages
+        while (chatHistory.length > 0 && chatHistory[0].role !== 'user') {
+          chatHistory.shift();
+        }
       }
 
       const chat = model.startChat({

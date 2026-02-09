@@ -238,16 +238,31 @@ function sanitizeHistory(history: { role: string; content: string }[]): { role: 
   const cleanRaw = history.filter(h =>
     !h.content.includes("Welcome, Grower!") &&
     !h.content.includes("Could not start chat") &&
-    !h.content.includes("Connection error")
+    !h.content.includes("Connection error") &&
+    !h.content.includes("Daily limit") // Filter limit messages too
   );
 
-  // 2. Enforce Alternation
-  for (let i = 0; i < cleanRaw.length; i++) {
-    const msg = cleanRaw[i];
+  // 2. Enforce: First Message MUST be User
+  // Skip ANY messages at the start until we find a 'user' message
+  let startIndex = 0;
+  while (startIndex < cleanRaw.length && cleanRaw[startIndex].role !== 'user') {
+    startIndex++;
+  }
+
+  // If no user messages found, return empty history (start fresh)
+  if (startIndex >= cleanRaw.length) {
+    return [];
+  }
+
+  const validStarts = cleanRaw.slice(startIndex);
+
+  // 3. Enforce Alternation (User -> Model -> User)
+  for (let i = 0; i < validStarts.length; i++) {
+    const msg = validStarts[i];
     const role = msg.role === 'assistant' ? 'model' : 'user';
 
     // Logic: Look ahead.
-    const nextMsg = cleanRaw[i + 1];
+    const nextMsg = validStarts[i + 1];
     const nextRole = nextMsg ? (nextMsg.role === 'assistant' ? 'model' : 'user') : null;
 
     if (role === 'user' && nextRole === 'user') {
@@ -256,7 +271,7 @@ function sanitizeHistory(history: { role: string; content: string }[]): { role: 
     }
 
     // Also, if this is the LAST message, it MUST be 'model' (because new prompt is 'user')
-    if (i === cleanRaw.length - 1 && role === 'user') {
+    if (i === validStarts.length - 1 && role === 'user') {
       continue;
     }
 
