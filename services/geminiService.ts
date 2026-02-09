@@ -193,16 +193,22 @@ export async function sendMessage(
     // Let's rely on the fact that my backend sends JSON { error: "..." }.
     // If Supabase client parses that, we might see it.
 
-    // Check if it's a "Permanent" error (Client side issue / Invalid Model)
+    // Check if it's a "Permanent" error (Client side issue / Invalid Model / Rate Limit)
     // If the valid session cannot be established, waiting won't help.
     const errorString = JSON.stringify(error || {});
-    const isPermanent = errorString.includes("400") || errorString.includes("404") || errorString.includes("invalid") || errorString.includes("not found");
+    const isPermanent =
+      errorString.includes("400") ||
+      errorString.includes("404") ||
+      errorString.includes("invalid") ||
+      errorString.includes("not found") ||
+      errorString.includes("Daily limit") || // NEW: Stop immediately if limit reached
+      errorString.includes("429");
 
     console.warn(`[Gemini] Attempt ${attempt} failed:`, error);
 
     if (isPermanent) {
       console.error("Permanent error detected. Stopping retries.");
-      return `Configuration Error: ${error.message || "Invalid Model or Key"}. Please check settings.`;
+      return `Error: ${error.message || "Request Failed"}.`;
     }
 
     // If it's the last attempt, return the error message

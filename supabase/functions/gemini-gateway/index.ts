@@ -1,5 +1,6 @@
 import { serve } from "std/http/server.ts"
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import { createClient } from "@supabase/supabase-js"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,6 +13,59 @@ serve(async (req) => {
   try {
     const apiKey = Deno.env.get('GEMINI_API_KEY');
     if (!apiKey) throw new Error("Missing API Key");
+
+    // --- RATE LIMITING (FAIL OPEN) ---
+    // We try to limit usage, but if DB fails, we allow the request to proceed (Fail Open).
+    try {
+      const authHeader = req.headers.get('Authorization');
+      if (authHeader) {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+          { global: { headers: { Authorization: authHeader } } }
+        );
+
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user) {
+          const limit = 200;
+          const today = new Date().toISOString().split('T')[0];
+
+          const { data: usage, error: usageError } = await supabase
+            .from('user_daily_usage')
+            .select('request_count')
+            .eq('user_id', user.id)
+            .eq('date', today)
+            .single();
+
+          if (!usageError && usage && usage.request_count >= limit) {
+            throw new Error(`Daily limit reached (${limit} requests). Please try again tomorrow.`);
+          }
+
+          // Increment count (Upsert)
+          // If row exists, increment. If not, insert 1.
+          const { error: upsertError } = await supabase
+            .from('user_daily_usage')
+            .upsert(
+              {
+                user_id: user.id,
+                date: today,
+                request_count: (usage?.request_count ?? 0) + 1
+              },
+              { onConflict: 'user_id, date' }
+            );
+
+          if (upsertError) console.error("Rate Limit Upsert Error:", upsertError);
+        }
+      }
+    } catch (limiterError) {
+      if (limiterError.message.includes("Daily limit")) {
+        throw limiterError; // Re-throw actual limit errors
+      }
+      // Otherwise, swallow the error (Fail Open)
+      console.error("Rate Limiter Failed (Proceeding anyway):", limiterError);
+    }
+    // ---------------------------------
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const reqBody = await req.json();
