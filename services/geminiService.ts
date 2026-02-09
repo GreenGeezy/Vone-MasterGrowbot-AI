@@ -284,3 +284,17 @@ export async function analyzeGrowLog(notes: string, tags: string[] = []): Promis
   const prompt = `Analyze this grow journal note: "${notes}". Tags: ${tags.join(', ')}. Provide a 1-sentence observation on plant health.`;
   return await sendMessage(prompt);
 }
+
+/**
+ * Wake Up Backend (Cold Start Fix)
+ * Pings the Edge Function on app launch to pre-warm the instance.
+ */
+export async function wakeUpBackend() {
+  console.log("[Gemini] Waking up backend...");
+  try {
+    // Send a dummy request with 'wakeup' mode to avoid expensive API calls
+    await supabase.functions.invoke('gemini-gateway', { body: { mode: 'wakeup' } });
+  } catch (e) {
+    console.log("[Gemini] Wake-up ping sent.");
+  }
+}

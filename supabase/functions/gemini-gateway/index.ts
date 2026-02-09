@@ -17,9 +17,16 @@ serve(async (req) => {
     const reqBody = await req.json();
     const { mode, prompt, image, history, mimeType, fileData } = reqBody;
 
+    // --- 0. WAKE UP PING (Cold Start Optimization) ---
+    if (mode === 'wakeup') {
+      return new Response(JSON.stringify({ result: 'Ready' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // --- 1. DYNAMIC MODEL SELECTION ---
-    // Use model from client config, fallback to stable flash model if missing
-    let modelName = reqBody.model || "gemini-1.5-flash";
+    // Use model from client config, fallback to gemini-3-flash-preview if missing
+    let modelName = reqBody.model || "gemini-3-flash-preview";
 
     // UPDATED SYSTEM PROMPT: AI Cultivation Assistant
     // - Removed "No Markdown" restriction to allow ordered lists/bolding.

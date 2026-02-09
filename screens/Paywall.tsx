@@ -134,7 +134,8 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1596791836043-982c75908b89?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80')] bg-cover bg-center opacity-40"></div>
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white"></div>
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white"></div>
-        {/* HARD PAYWALL: X Button Removed to prevent skipping */}
+
+        {/* HARD PAYWALL ENFORCED: Close button hidden to require subscription */}
         <div className="absolute bottom-4 left-6 right-6">
           <div className="flex items-center gap-2 mb-2">
             <span className="bg-black/80 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 backdrop-blur-md"><Shield size={10} className="text-green-400" /> Trusted by Elite Growers Worldwide</span>

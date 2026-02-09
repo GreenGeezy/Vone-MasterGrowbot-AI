@@ -21,6 +21,8 @@ import { getPendingTasksForToday, toggleTaskCompletion, addNewTask } from './ser
 import { STRAIN_DATABASE } from './data/strains';
 import ErrorBoundary from './components/ErrorBoundary';
 
+import { getDailyInsight, wakeUpBackend } from './services/geminiService';
+
 const App: React.FC = () => {
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -34,6 +36,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initApp = async () => {
+      // 0. Wake up Backend (Fixes Chat Cold Start)
+      wakeUpBackend();
+
       await SplashScreen.hide();
 
       if (Capacitor.getPlatform() === 'android') {
