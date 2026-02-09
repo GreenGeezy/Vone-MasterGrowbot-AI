@@ -103,7 +103,6 @@ serve(async (req) => {
           topP: 0.95,
           topK: 40,
           maxOutputTokens: 1024,
-          responseMimeType: "text/plain",
         },
         safetySettings: [
           {
@@ -154,10 +153,13 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("Gemini Backend Error:", error); // Logs to Supabase Dashboard
+    // UPDATED ERROR LOGGING: Serialize the full Error object
+    const errorDetails = JSON.stringify(error, Object.getOwnPropertyNames(error));
+    console.error("Gemini Backend Error:", errorDetails);
+
     return new Response(JSON.stringify({
       error: error.message || "Unknown Backend Error",
-      details: JSON.stringify(error)
+      details: errorDetails
     }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
