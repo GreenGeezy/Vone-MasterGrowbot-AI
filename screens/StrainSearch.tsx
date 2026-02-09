@@ -108,6 +108,105 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
         );
     };
 
+    const StrainDetailModal = ({ strain, onClose, onAdd }: { strain: Strain, onClose: () => void, onAdd: (s: Strain) => void }) => {
+        const [imgSrc, setImgSrc] = useState(strain.imageUri || DEFAULT_STRAIN_IMAGE);
+        const [localAiInsight, setLocalAiInsight] = useState<string | null>(null);
+        const [localIsLoading, setLocalIsLoading] = useState(false);
+
+        // Reset image when strain changes (though component usually remounts if key changes)
+        useEffect(() => {
+            setImgSrc(strain.imageUri || DEFAULT_STRAIN_IMAGE);
+            setLocalAiInsight(null);
+        }, [strain]);
+
+        const handleAi = async () => {
+            setLocalIsLoading(true);
+            const result = await getStrainInsights(strain.name, strain.description);
+            setLocalAiInsight(result);
+            setLocalIsLoading(false);
+        };
+
+        return (
+            <div className="fixed inset-0 z-[70] bg-white flex flex-col animate-in slide-in-from-right">
+                <div className="relative h-72">
+                    <img
+                        src={imgSrc}
+                        onError={() => setImgSrc(DEFAULT_STRAIN_IMAGE)}
+                        className="w-full h-full object-cover"
+                        alt="Hero"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                    <button onClick={onClose} className="absolute top-12 right-6 p-2 bg-black/20 backdrop-blur-md rounded-full text-white"><X size={20} /></button>
+                    <div className="absolute bottom-0 inset-x-0 h-32 bg-gradient-to-t from-black/80 to-transparent" />
+                    <div className="absolute bottom-6 left-6 text-white">
+                        <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">{strain.type}</span>
+                        <h1 className="text-4xl font-black mt-2 leading-none">{strain.name}</h1>
+                    </div>
+                </div>
+
+                <div className="flex-1 p-6 overflow-y-auto">
+                    <div className="flex gap-4 mb-8">
+                        <div className="flex-1 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-center">
+                            <div className="text-[10px] font-bold text-gray-400 uppercase">THC Content</div>
+                            <div className="text-xl font-black text-gray-900 mt-1">{strain.thc_level || 'N/A'}</div>
+                        </div>
+                        <div className="flex-1 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-center">
+                            <div className="text-[10px] font-bold text-gray-400 uppercase">Terpene</div>
+                            <div className="text-xl font-black text-gray-900 mt-1 truncate">{strain.most_common_terpene || 'Mystery'}</div>
+                        </div>
+                    </div>
+
+                    <div className="mb-8">
+                        <h3 className="font-bold text-gray-900 mb-2">Description</h3>
+                        <p className="text-gray-500 leading-relaxed text-sm">
+                            {strain.description || "No description provided for this strain."}
+                        </p>
+                    </div>
+
+                    {/* AI INSIGHTS SECTION */}
+                    <div className="mb-24">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                                <Sparkles size={18} className="text-purple-500" /> AI Strain Intelligence
+                            </h3>
+                        </div>
+
+                        {!localAiInsight ? (
+                            <button
+                                onClick={handleAi}
+                                disabled={localIsLoading}
+                                className="w-full py-4 bg-purple-50 text-purple-700 rounded-xl font-bold border border-purple-100 hover:bg-purple-100 transition-colors flex items-center justify-center gap-2"
+                            >
+                                {localIsLoading ? (
+                                    <span className="animate-pulse">Analyzing Genetics...</span>
+                                ) : (
+                                    <>Generate Grow Tips</>
+                                )}
+                            </button>
+                        ) : (
+                            <div className="bg-gray-50 p-5 rounded-2xl text-sm text-gray-700 leading-relaxed whitespace-pre-wrap border border-gray-100 shadow-sm animate-in fade-in">
+                                {localAiInsight}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* ADD TO GARDEN FAB */}
+                <div className="absolute bottom-8 right-6 left-6">
+                    <button
+                        onClick={() => {
+                            onAdd(strain);
+                            onClose();
+                        }}
+                        className="w-full py-4 bg-green-600 text-white rounded-2xl font-black text-lg shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-2"
+                    >
+                        <Plus size={24} /> Add to Garden
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="bg-surface min-h-screen pb-24 pt-12 px-6 flex flex-col font-sans">
 
@@ -218,86 +317,16 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
             )}
 
             {/* --- DETAIL MODAL --- */}
+            {/* --- DETAIL MODAL --- */}
             {selectedStrain && (
-                <div className="fixed inset-0 z-[70] bg-white flex flex-col animate-in slide-in-from-right">
-                    <div className="relative h-72">
-                        <img
-                            src={selectedStrain.imageUri || DEFAULT_STRAIN_IMAGE}
-                            className="w-full h-full object-cover"
-                            alt="Hero"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                        <button onClick={() => setSelectedStrain(null)} className="absolute top-12 right-6 p-2 bg-black/20 backdrop-blur-md rounded-full text-white"><X size={20} /></button>
-                        <div className="absolute bottom-0 inset-x-0 h-32 bg-gradient-to-t from-black/80 to-transparent" />
-                        <div className="absolute bottom-6 left-6 text-white">
-                            <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">{selectedStrain.type}</span>
-                            <h1 className="text-4xl font-black mt-2 leading-none">{selectedStrain.name}</h1>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 p-6 overflow-y-auto">
-                        <div className="flex gap-4 mb-8">
-                            <div className="flex-1 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-center">
-                                <div className="text-[10px] font-bold text-gray-400 uppercase">THC Content</div>
-                                <div className="text-xl font-black text-gray-900 mt-1">{selectedStrain.thc_level || 'N/A'}</div>
-                            </div>
-                            <div className="flex-1 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-center">
-                                <div className="text-[10px] font-bold text-gray-400 uppercase">Terpene</div>
-                                <div className="text-xl font-black text-gray-900 mt-1 truncate">{selectedStrain.most_common_terpene || 'Mystery'}</div>
-                            </div>
-                        </div>
-
-                        <div className="mb-8">
-                            <h3 className="font-bold text-gray-900 mb-2">Description</h3>
-                            <p className="text-gray-500 leading-relaxed text-sm">
-                                {selectedStrain.description || "No description provided for this strain."}
-                            </p>
-                        </div>
-
-                        {/* AI INSIGHTS SECTION */}
-                        <div className="mb-24">
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                                    <Sparkles size={18} className="text-purple-500" /> AI Strain Intelligence
-                                </h3>
-                            </div>
-
-                            {!aiInsight ? (
-                                <button
-                                    onClick={handleGetInsights}
-                                    disabled={isAiLoading}
-                                    className="w-full py-4 bg-purple-50 text-purple-700 rounded-xl font-bold border border-purple-100 hover:bg-purple-100 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    {isAiLoading ? (
-                                        <span className="animate-pulse">Analyzing Genetics...</span>
-                                    ) : (
-                                        <>Generate Grow Tips</>
-                                    )}
-                                </button>
-                            ) : (
-                                <div className="bg-gray-50 p-5 rounded-2xl text-sm text-gray-700 leading-relaxed whitespace-pre-wrap border border-gray-100 shadow-sm animate-in fade-in">
-                                    {aiInsight}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* ADD TO GARDEN FAB */}
-                    <div className="absolute bottom-8 right-6 left-6">
-                        <button
-                            onClick={() => {
-                                onAddPlant(selectedStrain);
-                                setSelectedStrain(null);
-                            }}
-                            className="w-full py-4 bg-green-600 text-white rounded-2xl font-black text-lg shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-2"
-                        >
-                            <Plus size={24} /> Add to Garden
-                        </button>
-                    </div>
-                </div>
+                <StrainDetailModal
+                    strain={selectedStrain}
+                    onClose={() => setSelectedStrain(null)}
+                    onAdd={onAddPlant}
+                />
             )}
 
-        </div>
+        </div >
     );
 };
 

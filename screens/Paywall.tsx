@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   X, Check, Shield, Star, Zap, ArrowRight, Lock,
-  LifeBuoy, Headphones, Dna, Clock
+  LifeBuoy, Headphones, Dna, Clock, BookOpen
 } from 'lucide-react';
 import { Purchases, PurchasesPackage, PACKAGE_TYPE } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
@@ -174,6 +174,13 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
             <div>
               <h3 className="font-bold text-gray-900 text-sm">Unlock AI Strain Intelligence™</h3>
               <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Get instant, genetic-specific grow guides and yield-maximizing secrets for over 100+ cannabis strains.</p>
+            </div>
+          </div>
+          <div className="flex gap-4 items-start">
+            <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl flex-shrink-0"><BookOpen size={24} /></div>
+            <div>
+              <h3 className="font-bold text-gray-900 text-sm">Professional Grow Journal</h3>
+              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Track nutrients, environment, and visual history to replicate your best harvests.</p>
             </div>
           </div>
         </div>
