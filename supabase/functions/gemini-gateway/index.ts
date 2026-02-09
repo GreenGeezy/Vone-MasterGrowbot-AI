@@ -20,7 +20,7 @@ serve(async (req) => {
     // --- 0. WAKE UP PING (Cold Start Optimization) ---
     if (mode === 'wakeup') {
       console.log("Waking up Gemini Flash...");
-      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+      const model = genAI.getGenerativeModel({ model: "gemini-3-flash" });
       // Perform a real, tiny request to ensuring connection is warm
       await model.generateContent("Ping");
       return new Response(JSON.stringify({ result: 'Ready' }), {
@@ -29,8 +29,8 @@ serve(async (req) => {
     }
 
     // --- 1. DYNAMIC MODEL SELECTION ---
-    // Use model from client config, fallback to gemini-3-flash-preview if missing
-    let modelName = reqBody.model || "gemini-3-flash-preview";
+    // Use model from client config, fallback to gemini-3-flash if missing
+    let modelName = reqBody.model || "gemini-3-flash";
 
     // UPDATED SYSTEM PROMPT: AI Cultivation Assistant
     // - Removed "No Markdown" restriction to allow ordered lists/bolding.
@@ -96,7 +96,34 @@ serve(async (req) => {
         }));
       }
 
-      const chat = model.startChat({ history: chatHistory });
+      const chat = model.startChat({
+        history: chatHistory,
+        generationConfig: {
+          temperature: 0.7,
+          topP: 0.95,
+          topK: 40,
+          maxOutputTokens: 1024,
+          responseMimeType: "text/plain",
+        },
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_HATE_SPEECH",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+        ],
+      });
 
       // CONSTRUCT MESSAGE PARTS
       let msgParts = [{ text: prompt }];
