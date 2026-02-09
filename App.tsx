@@ -132,9 +132,11 @@ const App: React.FC = () => {
         setUserProfile(profileData);
         setOnboardingStatus(OnboardingStep.SUMMARY); // Effectively re-onboard/pay
       } else {
-        // NEW USER -> START FROM SPLASH
-        console.log("New User Detected.");
-        setOnboardingStatus(OnboardingStep.SPLASH);
+        // NEW USER -> STAY ON EXISTING STATE (Default is SPLASH)
+        // CRITICAL FIX: Do NOT force setOnboardingStatus(SPLASH) here.
+        // If the user has already clicked "Start" and moved to QUIZ before this finishes,
+        // resetting it to SPLASH causes the "Flash and Reset" bug.
+        console.log("New User Detected. Waiting for interaction.");
       }
     };
     initApp();

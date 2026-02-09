@@ -19,6 +19,10 @@ serve(async (req) => {
 
     // --- 0. WAKE UP PING (Cold Start Optimization) ---
     if (mode === 'wakeup') {
+      console.log("Waking up Gemini Flash...");
+      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+      // Perform a real, tiny request to ensuring connection is warm
+      await model.generateContent("Ping");
       return new Response(JSON.stringify({ result: 'Ready' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
