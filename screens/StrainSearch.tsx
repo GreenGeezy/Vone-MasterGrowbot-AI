@@ -81,17 +81,38 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
 
     // --- RENDER HELPERS ---
 
-    const DEFAULT_STRAIN_IMAGE = 'https://images.unsplash.com/photo-1603909223429-69bb7aa8179b?auto=format&fit=crop&q=80&w=800'; // High quality bud placeholder
+    // Curated high-quality cannabis/plant placeholders from Unsplash
+    const PLACEHOLDER_IMAGES = [
+        'https://images.unsplash.com/photo-1603909223429-69bb7aa8179b?auto=format&fit=crop&q=80&w=800',
+        'https://images.unsplash.com/photo-1556928045-16f7f50be0f3?auto=format&fit=crop&q=80&w=800',
+        'https://images.unsplash.com/photo-1615485925763-867c493ec73b?auto=format&fit=crop&q=80&w=800',
+        'https://images.unsplash.com/photo-1536768316335-976495f59051?auto=format&fit=crop&q=80&w=800',
+        'https://images.unsplash.com/photo-1588636906239-01c80f688029?auto=format&fit=crop&q=80&w=800',
+        'https://images.unsplash.com/photo-1595123550441-d377e017de6a?auto=format&fit=crop&q=80&w=800',
+        'https://images.unsplash.com/photo-1587328006240-629a738872e6?auto=format&fit=crop&q=80&w=800',
+        'https://images.unsplash.com/photo-1623951558913-68d1f2b694b8?auto=format&fit=crop&q=80&w=800',
+        'https://images.unsplash.com/photo-1613098731057-3f8d9560f73b?auto=format&fit=crop&q=80&w=800'
+    ];
+
+    const getStrainPlaceholder = (name: string) => {
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) {
+            hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const index = Math.abs(hash) % PLACEHOLDER_IMAGES.length;
+        return PLACEHOLDER_IMAGES[index];
+    };
 
     const StrainCard = ({ strain, onClick }: { strain: Strain, onClick: () => void }) => {
-        const [imgSrc, setImgSrc] = useState(strain.imageUri || DEFAULT_STRAIN_IMAGE);
+        // Use deterministic placeholder based on name if no URI is present
+        const [imgSrc, setImgSrc] = useState(strain.imageUri || getStrainPlaceholder(strain.name));
 
         return (
             <div onClick={onClick} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-4 active:scale-[0.98] transition-all cursor-pointer">
                 <div className="w-16 h-16 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 relative">
                     <img
                         src={imgSrc}
-                        onError={() => setImgSrc(DEFAULT_STRAIN_IMAGE)}
+                        onError={() => setImgSrc(PLACEHOLDER_IMAGES[0])} // Fallback to first if deterministic fails
                         className="w-full h-full object-cover"
                         alt={strain.name}
                     />
@@ -109,13 +130,13 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
     };
 
     const StrainDetailModal = ({ strain, onClose, onAdd }: { strain: Strain, onClose: () => void, onAdd: (s: Strain) => void }) => {
-        const [imgSrc, setImgSrc] = useState(strain.imageUri || DEFAULT_STRAIN_IMAGE);
+        const [imgSrc, setImgSrc] = useState(strain.imageUri || getStrainPlaceholder(strain.name));
         const [localAiInsight, setLocalAiInsight] = useState<string | null>(null);
         const [localIsLoading, setLocalIsLoading] = useState(false);
 
         // Reset image when strain changes (though component usually remounts if key changes)
         useEffect(() => {
-            setImgSrc(strain.imageUri || DEFAULT_STRAIN_IMAGE);
+            setImgSrc(strain.imageUri || getStrainPlaceholder(strain.name));
             setLocalAiInsight(null);
         }, [strain]);
 
@@ -131,7 +152,7 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
                 <div className="relative h-72">
                     <img
                         src={imgSrc}
-                        onError={() => setImgSrc(DEFAULT_STRAIN_IMAGE)}
+                        onError={() => setImgSrc(PLACEHOLDER_IMAGES[0])}
                         className="w-full h-full object-cover"
                         alt="Hero"
                     />
