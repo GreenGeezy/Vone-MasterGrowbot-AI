@@ -79,27 +79,34 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
 
     // --- RENDER HELPERS ---
 
+    // --- RENDER HELPERS ---
+
     const DEFAULT_STRAIN_IMAGE = 'https://images.unsplash.com/photo-1603909223429-69bb7aa8179b?auto=format&fit=crop&q=80&w=800'; // High quality bud placeholder
 
-    const StrainCard = ({ strain, onClick }: { strain: Strain, onClick: () => void }) => (
-        <div onClick={onClick} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-4 active:scale-[0.98] transition-all cursor-pointer">
-            <div className="w-16 h-16 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 relative">
-                <img
-                    src={strain.imageUri || DEFAULT_STRAIN_IMAGE}
-                    className="w-full h-full object-cover"
-                    alt={strain.name}
-                />
-                {strain.userCreated && (
-                    <div className="absolute top-0 right-0 bg-blue-500 w-3 h-3 rounded-bl-lg"></div>
-                )}
+    const StrainCard = ({ strain, onClick }: { strain: Strain, onClick: () => void }) => {
+        const [imgSrc, setImgSrc] = useState(strain.imageUri || DEFAULT_STRAIN_IMAGE);
+
+        return (
+            <div onClick={onClick} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-4 active:scale-[0.98] transition-all cursor-pointer">
+                <div className="w-16 h-16 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 relative">
+                    <img
+                        src={imgSrc}
+                        onError={() => setImgSrc(DEFAULT_STRAIN_IMAGE)}
+                        className="w-full h-full object-cover"
+                        alt={strain.name}
+                    />
+                    {strain.userCreated && (
+                        <div className="absolute top-0 right-0 bg-blue-500 w-3 h-3 rounded-bl-lg"></div>
+                    )}
+                </div>
+                <div className="flex-1">
+                    <h3 className="font-black text-gray-900 leading-tight">{strain.name}</h3>
+                    <p className="text-xs font-bold text-gray-400 uppercase mt-0.5">{strain.type} • {strain.thc_level !== 'Unknown' ? strain.thc_level : 'Custom'}</p>
+                </div>
+                <ChevronRight size={20} className="text-gray-300" />
             </div>
-            <div className="flex-1">
-                <h3 className="font-black text-gray-900 leading-tight">{strain.name}</h3>
-                <p className="text-xs font-bold text-gray-400 uppercase mt-0.5">{strain.type} • {strain.thc_level !== 'Unknown' ? strain.thc_level : 'Custom'}</p>
-            </div>
-            <ChevronRight size={20} className="text-gray-300" />
-        </div>
-    );
+        );
+    };
 
     return (
         <div className="bg-surface min-h-screen pb-24 pt-12 px-6 flex flex-col font-sans">

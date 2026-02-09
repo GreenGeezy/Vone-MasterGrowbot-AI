@@ -74,7 +74,7 @@ serve(async (req) => {
     // --- 0. WAKE UP PING (Cold Start Optimization) ---
     if (mode === 'wakeup') {
       console.log("Waking up Gemini Flash...");
-      const model = genAI.getGenerativeModel({ model: "gemini-3-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       // Perform a real, tiny request to ensuring connection is warm
       await model.generateContent("Ping");
       return new Response(JSON.stringify({ result: 'Ready' }), {
@@ -83,8 +83,8 @@ serve(async (req) => {
     }
 
     // --- 1. DYNAMIC MODEL SELECTION ---
-    // Use model from client config, fallback to gemini-3-flash if missing
-    let modelName = reqBody.model || "gemini-3-flash";
+    // Use model from client config, fallback to gemini-1.5-flash if missing
+    let modelName = reqBody.model || "gemini-1.5-flash";
 
     // UPDATED SYSTEM PROMPT: AI Cultivation Assistant
     // - Removed "No Markdown" restriction to allow ordered lists/bolding.
@@ -111,7 +111,7 @@ serve(async (req) => {
 
     // --- 2. DIAGNOSIS MODE (Legacy Support) ---
     if (mode === 'diagnosis') {
-      modelName = "gemini-3-pro-preview";
+      modelName = "gemini-1.5-pro";
       systemInstruction = `
         You are an expert plant pathologist. Analyze this cannabis plant image.
         Return ONLY valid JSON (no markdown) with this structure:
