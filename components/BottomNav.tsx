@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, BookOpen, ScanLine, MessageSquare, User } from 'lucide-react';
+import { Home, BookOpen, ScanLine, Database, User } from 'lucide-react';
 import { AppScreen } from '../types';
 
 interface BottomNavProps {
@@ -8,12 +8,11 @@ interface BottomNavProps {
 }
 
 const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate }) => {
-  const getIconColor = (screen: AppScreen) => 
+  const getIconColor = (screen: AppScreen) =>
     currentScreen === screen ? 'text-primary' : 'text-gray-400';
 
   const getContainerClass = (screen: AppScreen) =>
-    `flex flex-col items-center gap-1 p-2 transition-all active:scale-95 ${
-      currentScreen === screen ? 'opacity-100' : 'opacity-60 hover:opacity-80'
+    `flex flex-col items-center gap-1 p-2 transition-all active:scale-95 ${currentScreen === screen ? 'opacity-100' : 'opacity-60 hover:opacity-80'
     }`;
 
   return (
@@ -29,7 +28,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate }) => {
       </button>
 
       <div className="relative -top-6">
-        <button 
+        <button
           onClick={() => onNavigate(AppScreen.DIAGNOSE)}
           className="bg-primary text-white w-14 h-14 rounded-full flex items-center justify-center shadow-xl shadow-primary/30 border-4 border-surface hover:scale-105 transition-transform"
         >
@@ -37,9 +36,9 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate }) => {
         </button>
       </div>
 
-      <button onClick={() => onNavigate(AppScreen.CHAT)} className={getContainerClass(AppScreen.CHAT)}>
-        <MessageSquare size={24} className={getIconColor(AppScreen.CHAT)} />
-        <span className="text-[10px] font-bold text-text-sub">Coach</span>
+      <button onClick={() => onNavigate(AppScreen.STRAINS)} className={getContainerClass(AppScreen.STRAINS)}>
+        <Database size={24} className={getIconColor(AppScreen.STRAINS)} />
+        <span className="text-[10px] font-bold text-text-sub">Strains</span>
       </button>
 
       <button onClick={() => onNavigate(AppScreen.PROFILE)} className={getContainerClass(AppScreen.PROFILE)}>

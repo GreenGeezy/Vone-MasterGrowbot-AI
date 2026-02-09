@@ -157,8 +157,8 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
           <div className="flex gap-4 items-start">
             <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl flex-shrink-0"><Headphones size={24} /></div>
             <div>
-              <h3 className="font-bold text-gray-900 text-sm">24/7 Expert Chatbot</h3>
-              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Expert cultivation coach and assistant for real-time answers with grow data and image analysis, helping you boost plant quality and yields with ease.</p>
+              <h3 className="font-bold text-gray-900 text-sm">Strain Intelligence</h3>
+              <p className="text-xs text-gray-500 leading-relaxed mt-0.5">Upload your own genetics and get AI-powered insights to grow premium quality plants.</p>
             </div>
           </div>
           <div className="flex gap-4 items-start">

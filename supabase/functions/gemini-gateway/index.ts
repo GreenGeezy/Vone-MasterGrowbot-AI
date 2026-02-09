@@ -28,7 +28,7 @@ serve(async (req) => {
         const { data: { user } } = await supabase.auth.getUser();
 
         if (user) {
-          const limit = 200;
+          const limit = 100;
           const today = new Date().toISOString().split('T')[0];
 
           const { data: usage, error: usageError } = await supabase

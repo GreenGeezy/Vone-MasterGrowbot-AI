@@ -94,7 +94,7 @@ const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
           {/* Headline */}
           <h1 className="text-4xl sm:text-5xl font-extrabold leading-[1.1] tracking-tight text-text-main mb-4 sm:mb-6">
             Your Personal AI <br />
-            Grow <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-600">Coach</span>
+            Grow <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-600">Assistant</span>
           </h1>
 
           {/* Sub-headline */}

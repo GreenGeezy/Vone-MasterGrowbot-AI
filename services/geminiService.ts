@@ -307,6 +307,41 @@ export async function analyzeGrowLog(notes: string, tags: string[] = []): Promis
 }
 
 /**
+ * Strain Intelligence (New Feature)
+ * Analyzes a strain name (and optional desc) to give growing tips.
+ */
+export async function getStrainInsights(strainName: string, description?: string): Promise<string> {
+  const prompt = `
+    Analyze the cannabis strain "${strainName}" ${description ? `(User Notes: ${description})` : ''}.
+    Provide a concise Grow Guide in this exact format:
+    
+    🧬 LINEAGE: [Indica/Sativa/Hybrid] - [Famous Parents if known]
+    🏠 BEST ENVIRONMENT: [Indoor/Outdoor] because [Reason]
+    ⚡ DIFFICULTY: [Easy/Moderate/Hard]
+    🚀 PRO TIP: [One specific yield-maximizing technique]
+    
+    Keep it under 100 words total. Use emojis.
+  `;
+
+  // Use the Insights model (Flash)
+  try {
+    const response = await supabase.functions.invoke('gemini-gateway', {
+      body: {
+        model: CONFIG.MODELS.INSIGHTS,
+        mode: 'chat', // Use chat mode for free-form text
+        prompt: prompt
+      }
+    });
+
+    if (response.error) throw response.error;
+    return response.data?.result || "Could not retrieve strain data.";
+  } catch (e) {
+    console.error("Strain Insight Error:", e);
+    return "Strain intelligence is currently offline. Please try again later.";
+  }
+}
+
+/**
  * Wake Up Backend (Cold Start Fix)
  * Pings the Edge Function on app launch to pre-warm the instance.
  */

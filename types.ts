@@ -12,7 +12,7 @@ export enum AppScreen {
   HOME = 'home',
   JOURNAL = 'journal',
   DIAGNOSE = 'diagnose',
-  CHAT = 'chat',
+  STRAINS = 'strains',
   PAYWALL = 'paywall',
   ACCOUNT = 'account',
   PROFILE = 'profile'
@@ -37,6 +37,8 @@ export interface Strain {
   thc_level: string;
   most_common_terpene: string;
   description: string;
+  imageUri?: string;     // URL or Base64 for custom strains
+  userCreated?: boolean; // Flag to identify user-added strains
 }
 
 export interface GrowTask {

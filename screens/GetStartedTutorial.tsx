@@ -28,11 +28,11 @@ const GetStartedTutorial: React.FC<GetStartedTutorialProps> = ({ onComplete }) =
             color: "bg-blue-50"
         },
         {
-            id: 'chat',
-            title: "Ask Anything",
-            subtitle: "Your pocket cultivation expert.",
-            icon: <MessageSquare size={64} className="text-purple-500" />,
-            desc: "Upload logs, photos, or ask complex questions. The AI remembers your garden's context.",
+            id: 'strains_intro',
+            title: "Explore Strains",
+            subtitle: "Detailed insights for 100+ strains.",
+            icon: <Database size={64} className="text-purple-500" />,
+            desc: "Find the perfect environment and growing tips for your specific genetics.",
             action: "Next",
             color: "bg-purple-50"
         },

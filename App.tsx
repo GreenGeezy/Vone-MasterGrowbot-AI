@@ -5,7 +5,7 @@ import Onboarding from './screens/Onboarding';
 import OnboardingSummary from './screens/OnboardingSummary';
 import Home from './screens/Home';
 import Diagnose from './screens/Diagnose';
-import Chat from './screens/Chat';
+import StrainSearch from './screens/StrainSearch';
 import Journal from './screens/Journal';
 import Profile from './screens/Profile'; // Import Profile
 import Paywall from './screens/Paywall';
@@ -312,7 +312,7 @@ const App: React.FC = () => {
         <div className="h-full w-full overflow-y-auto pb-24">
           {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onAddPlant={handleAddPlant} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
           {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} onAddTask={handleAddTask} plant={plants[0]} defaultProfile={userProfile} onAddPlant={handleAddPlant} />}
-          {currentTab === AppScreen.CHAT && <Chat onSaveToJournal={handleAddJournalEntry} plant={plants[0]} userProfile={userProfile} />}
+          {currentTab === AppScreen.STRAINS && <StrainSearch onAddPlant={handleAddPlant} />}
           {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
           {currentTab === AppScreen.PROFILE && <Profile userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onViewTutorial={() => setShowTutorial(true)} onSignOut={() => { localStorage.clear(); window.location.reload(); }} />}
         </div>

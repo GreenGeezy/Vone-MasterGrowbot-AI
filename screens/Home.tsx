@@ -61,8 +61,8 @@ const Home: React.FC<any> = ({ plants, tasks, onToggleTask, onNavigateToPlant, o
       <div className="mt-8">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold text-text-main">Your Plants</h2>
-          <button onClick={() => { setShowStrainSearch(true); setSelectedStrain(null); }} className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-full text-xs font-bold shadow-lg shadow-green-200 active:scale-95 transition-transform">
-            <Search size={14} /> Search Strain Database
+          <button onClick={() => onAddPlant({ name: 'New Plant', image: '' })} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-full text-xs font-bold hover:bg-gray-200 transition-colors">
+            <Plus size={14} /> Add Plant
           </button>
         </div>
         <div className="space-y-4">
@@ -70,61 +70,7 @@ const Home: React.FC<any> = ({ plants, tasks, onToggleTask, onNavigateToPlant, o
         </div>
       </div>
 
-      {/* Strain Search Modal (Reused from Journal) */}
-      {showStrainSearch && (
-        <div className="fixed inset-0 z-[60] bg-white flex flex-col animate-in fade-in slide-in-from-bottom-4">
-          {selectedStrain ? (
-            /* DETAILS VIEW */
-            <div className="flex flex-col h-full">
-              <div className="p-6 flex items-center gap-4 border-b border-gray-50">
-                <button onClick={() => setSelectedStrain(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20} /></button>
-                <span className="font-bold text-lg text-gray-800">Strain Details</span>
-              </div>
-              <div className="p-6 flex-1 overflow-y-auto">
-                <StrainCard strain={selectedStrain} /> {/* Full View */}
-                <div className="mt-8">
-                  <button
-                    onClick={() => { onAddPlant(selectedStrain); setShowStrainSearch(false); setSearchQuery(''); }}
-                    className="w-full py-4 bg-green-500 text-white rounded-2xl font-black text-lg shadow-xl shadow-green-200 active:scale-95 transition-transform flex items-center justify-center gap-2"
-                  >
-                    <Plus size={24} /> Add to Your Plants
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* SEARCH LIST VIEW */
-            <>
-              <div className="p-6 border-b border-gray-100 flex items-center gap-4">
-                <button onClick={() => setShowStrainSearch(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20} /></button>
-                <div className="flex-1 relative">
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    placeholder="Search 100+ Strains..."
-                    className="w-full bg-gray-50 py-3 pl-10 pr-4 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-green-500/20"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-              </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {filteredStrains.map(s => (
-                  <div key={s.id} onClick={() => setSelectedStrain(s)} className="cursor-pointer active:scale-95 transition-transform">
-                    <StrainCard strain={s} compact />
-                  </div>
-                ))}
-                {filteredStrains.length === 0 && (
-                  <div className="text-center py-10 opacity-50">
-                    <p>No strains found matching "{searchQuery}"</p>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 };

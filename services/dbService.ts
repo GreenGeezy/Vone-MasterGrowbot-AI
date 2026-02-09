@@ -10,7 +10,8 @@ const STORAGE_KEYS = {
   TASKS: 'mg_local_tasks',
   JOURNAL: 'mg_local_journal',
   TICKETS: 'mg_local_tickets',
-  FEEDBACK: 'mg_local_feedback'
+  FEEDBACK: 'mg_local_feedback',
+  CUSTOM_STRAINS: 'mg_custom_strains'
 };
 
 const getLocal = (key: string) => {
@@ -345,6 +346,26 @@ const createLocalSession = (title: string): ChatSession => {
   sessions.unshift(newSession);
   setLocal(STORAGE_KEYS.CHAT_SESSIONS, sessions);
   return newSession;
+};
+
+// --- Custom Strains System ---
+
+export const getCustomStrains = (): any[] => {
+  return getLocal(STORAGE_KEYS.CUSTOM_STRAINS);
+};
+
+export const saveCustomStrain = (strain: any): any => {
+  const strains = getLocal(STORAGE_KEYS.CUSTOM_STRAINS);
+  const newStrain = { ...strain, id: `custom_${Date.now()}`, userCreated: true };
+  strains.unshift(newStrain); // Add to top
+  setLocal(STORAGE_KEYS.CUSTOM_STRAINS, strains);
+  return newStrain;
+};
+
+export const deleteCustomStrain = (id: string) => {
+  const strains = getLocal(STORAGE_KEYS.CUSTOM_STRAINS);
+  const updated = strains.filter((s: any) => s.id !== id);
+  setLocal(STORAGE_KEYS.CUSTOM_STRAINS, updated);
 };
 
 
