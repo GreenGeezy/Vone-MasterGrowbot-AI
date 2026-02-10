@@ -5,8 +5,8 @@ import { getCustomStrains, saveCustomStrain, uploadImage } from '../services/dbS
 import { getStrainInsights } from '../services/geminiService';
 import { Strain } from '../types';
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
-import sproutIcon from '../assets/images/sprout-icon.png';
-import purpleGrowRoom from '../assets/images/purple-grow-room.jpg';
+import sproutIcon from '../src/assets/images/sprout-icon.png';
+import purpleGrowRoom from '../src/assets/images/purple-grow-room.jpg';
 
 interface StrainSearchProps {
     onAddPlant: (strain: Strain) => void; // Callback to add to Garden
