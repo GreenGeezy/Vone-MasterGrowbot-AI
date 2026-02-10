@@ -5,6 +5,8 @@ import { getCustomStrains, saveCustomStrain, uploadImage } from '../services/dbS
 import { getStrainInsights } from '../services/geminiService';
 import { Strain } from '../types';
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
+import sproutIcon from '../assets/images/sprout-icon.png';
+import purpleGrowRoom from '../assets/images/purple-grow-room.jpg';
 
 interface StrainSearchProps {
     onAddPlant: (strain: Strain) => void; // Callback to add to Garden
@@ -79,40 +81,16 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
 
     // --- RENDER HELPERS ---
 
-    // --- RENDER HELPERS ---
-
-    // Curated high-quality cannabis/plant placeholders from Unsplash
-    const PLACEHOLDER_IMAGES = [
-        'https://images.unsplash.com/photo-1603909223429-69bb7aa8179b?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1556928045-16f7f50be0f3?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1615485925763-867c493ec73b?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1536768316335-976495f59051?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1588636906239-01c80f688029?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1595123550441-d377e017de6a?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1587328006240-629a738872e6?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1623951558913-68d1f2b694b8?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1613098731057-3f8d9560f73b?auto=format&fit=crop&q=80&w=800'
-    ];
-
-    const getStrainPlaceholder = (name: string) => {
-        let hash = 0;
-        for (let i = 0; i < name.length; i++) {
-            hash = name.charCodeAt(i) + ((hash << 5) - hash);
-        }
-        const index = Math.abs(hash) % PLACEHOLDER_IMAGES.length;
-        return PLACEHOLDER_IMAGES[index];
-    };
-
     const StrainCard = ({ strain, onClick }: { strain: Strain, onClick: () => void }) => {
-        // Use deterministic placeholder based on name if no URI is present
-        const [imgSrc, setImgSrc] = useState(strain.imageUri || getStrainPlaceholder(strain.name));
+        // Use Sprout Icon as default if no URI is present
+        const [imgSrc, setImgSrc] = useState(strain.imageUri || sproutIcon);
 
         return (
             <div onClick={onClick} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-4 active:scale-[0.98] transition-all cursor-pointer">
                 <div className="w-16 h-16 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 relative">
                     <img
                         src={imgSrc}
-                        onError={() => setImgSrc(PLACEHOLDER_IMAGES[0])} // Fallback to first if deterministic fails
+                        onError={() => setImgSrc(sproutIcon)} // Fallback to icon
                         className="w-full h-full object-cover"
                         alt={strain.name}
                     />
@@ -133,13 +111,13 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
     };
 
     const StrainDetailModal = ({ strain, onClose, onAdd }: { strain: Strain, onClose: () => void, onAdd: (s: Strain) => void }) => {
-        const [imgSrc, setImgSrc] = useState(strain.imageUri || getStrainPlaceholder(strain.name));
+        const [imgSrc, setImgSrc] = useState(strain.imageUri || sproutIcon);
         const [localAiInsight, setLocalAiInsight] = useState<string | null>(null);
         const [localIsLoading, setLocalIsLoading] = useState(false);
 
         // Reset image when strain changes (though component usually remounts if key changes)
         useEffect(() => {
-            setImgSrc(strain.imageUri || getStrainPlaceholder(strain.name));
+            setImgSrc(strain.imageUri || sproutIcon);
             setLocalAiInsight(null);
         }, [strain]);
 
@@ -154,7 +132,7 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
             <div className="fixed inset-0 z-[70] bg-white flex flex-col animate-in slide-in-from-right">
                 <div className="relative h-72">
                     <img
-                        src="/assets/strain_header.svg"
+                        src={purpleGrowRoom}
                         className="w-full h-full object-cover"
                         alt="Hero"
                     />
@@ -207,8 +185,15 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
                                 )}
                             </button>
                         ) : (
-                            <div className="bg-gray-50 p-5 rounded-2xl text-sm text-gray-700 leading-relaxed whitespace-pre-wrap border border-gray-100 shadow-sm animate-in fade-in">
-                                {localAiInsight}
+                            <div className={`p-5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap border shadow-sm animate-in fade-in ${localAiInsight?.startsWith('Error:') ? 'bg-red-50 text-red-600 border-red-100' : 'bg-gray-50 text-gray-700 border-gray-100'}`}>
+                                {localAiInsight?.startsWith('Error:') ? (
+                                    <>
+                                        <div className="font-bold mb-1 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500" /> Connection Failed</div>
+                                        {localAiInsight.replace('Error:', '')}
+                                    </>
+                                ) : (
+                                    localAiInsight
+                                )}
                             </div>
                         )}
                     </div>
@@ -339,7 +324,6 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
                 </div>
             )}
 
-            {/* --- DETAIL MODAL --- */}
             {/* --- DETAIL MODAL --- */}
             {selectedStrain && (
                 <StrainDetailModal

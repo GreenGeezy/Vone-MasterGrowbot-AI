@@ -91,7 +91,9 @@ export async function diagnosePlant(
   while (attempt < MAX_RETRIES) {
     attempt++;
     // --- STRICT USER REQUIREMENT: GEMINI 3 V3 FUNCTION ---
-    const response = await supabase.functions.invoke('gemini-v3', {
+    // --- STRICT USER REQUIREMENT: GEMINI 3 V3 FUNCTION ---
+    // Custom 60s Timeout for "Thinking" Models
+    const invokePromise = supabase.functions.invoke('gemini-v3', {
       body: {
         model: CONFIG.MODELS.DIAGNOSIS,
         mode: 'diagnosis',
@@ -100,10 +102,21 @@ export async function diagnosePlant(
       }
     });
 
-    data = response.data;
-    error = response.error;
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Request Timed Out (60s)")), 60000)
+    );
+
+    try {
+      const response = await Promise.race([invokePromise, timeoutPromise]) as any;
+      data = response.data;
+      error = response.error;
+    } catch (e: any) {
+      error = e;
+    }
 
     if (!error) break; // Success!
+
+
 
     console.warn(`[Gemini Diagnosis] Attempt ${attempt} failed:`, error);
     // If 404/500 from V3, it implies model issue or crash.
@@ -116,8 +129,9 @@ export async function diagnosePlant(
   }
 
   if (error) {
-    console.error("Gemini Connection Error:", error);
-    throw new Error("Failed to connect to AI Doctor.");
+    const errorDetails = error.message || error.details || JSON.stringify(error);
+    console.error("Gemini Connection Error:", errorDetails);
+    throw new Error(`AI Doctor Connection Failed: ${errorDetails}`);
   }
 
   try {
@@ -326,7 +340,8 @@ export async function getStrainInsights(strainName: string, description?: string
   // Use the Insights model (Flash)
   try {
     // --- STRICT USER REQUIREMENT: GEMINI 3 V3 FUNCTION ---
-    const response = await supabase.functions.invoke('gemini-v3', {
+    // Custom 60s Timeout
+    const invokePromise = supabase.functions.invoke('gemini-v3', {
       body: {
         model: CONFIG.MODELS.INSIGHTS,
         mode: 'insight', // Use simple generation mode to avoid Chat history errors
@@ -334,11 +349,18 @@ export async function getStrainInsights(strainName: string, description?: string
       }
     });
 
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Strain Insight Request Timed Out (60s)")), 60000)
+    );
+
+    const response = await Promise.race([invokePromise, timeoutPromise]) as any;
+
     if (response.error) throw response.error;
     return response.data?.result || "Could not retrieve strain data.";
-  } catch (e) {
+  } catch (e: any) {
     console.error("Strain Insight Error:", e);
-    return "Strain intelligence is currently offline. Please try again later.";
+    const errorMsg = e.message || JSON.stringify(e);
+    return `Error: ${errorMsg}`;
   }
 }
 

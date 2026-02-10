@@ -154,7 +154,8 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
         console.warn("Review trigger failed", e);
       }
 
-    } catch (e) {
+    } catch (e: any) {
+      console.error("Full Diagnosis Error:", e);
       alert(`Analysis failed: ${e.message || JSON.stringify(e)}`);
     } finally {
       setLoading(false);
