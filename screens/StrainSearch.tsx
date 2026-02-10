@@ -121,7 +121,10 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
                     )}
                 </div>
                 <div className="flex-1">
-                    <h3 className="font-black text-gray-900 leading-tight">{strain.name}</h3>
+                    <div className="flex items-center gap-2">
+                        <img src="/assets/sprout_icon.svg" className="w-6 h-6 object-contain" alt="Sprout Icon" />
+                        <h3 className="font-black text-gray-900 leading-tight">{strain.name}</h3>
+                    </div>
                     <p className="text-xs font-bold text-gray-400 uppercase mt-0.5">{strain.type} • {strain.thc_level !== 'Unknown' ? strain.thc_level : 'Custom'}</p>
                 </div>
                 <ChevronRight size={20} className="text-gray-300" />
@@ -151,8 +154,7 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
             <div className="fixed inset-0 z-[70] bg-white flex flex-col animate-in slide-in-from-right">
                 <div className="relative h-72">
                     <img
-                        src={imgSrc}
-                        onError={() => setImgSrc(PLACEHOLDER_IMAGES[0])}
+                        src="/assets/strain_header.svg"
                         className="w-full h-full object-cover"
                         alt="Hero"
                     />

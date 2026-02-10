@@ -13,20 +13,37 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get('GEMINI_API_KEY');
     if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
 
-    const genAI = new GoogleGenerativeAI(apiKey);
     const { prompt, image, mode } = await req.json();
+
+    if (!prompt && !image && mode !== 'wakeup') {
+      return new Response(JSON.stringify({ error: "Missing required fields: prompt or image" }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (mode === 'wakeup') {
+      return new Response(JSON.stringify({ message: "Backend awake" }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
 
     // Use Gemini 3 Pro Preview
     const modelId = "gemini-3-pro-preview";
 
     const model = genAI.getGenerativeModel({
       model: modelId,
-      // CRITICAL: Gemini 3 Preview models require v1beta API version
-      // The stable SDK defaults to v1, which causes 404/Not Found for preview models.
-      apiVersion: 'v1beta',
-      // Attempt to pass thinking config if supported, otherwise standard
+      // CRITICAL: Gemini 3 Preview features (media_resolution) require v1alpha API version used in docs
+      apiVersion: 'v1alpha',
+      // Thinking Config and Temperature
       generationConfig: {
-        temperature: 0.7, // Standard
+        temperature: 1.0, // Recommended for Gemini 3
+        // @ts-ignore: handling dynamic properties not yet in types
+        thinkingConfig: {
+          thinkingLevel: "high"
+        }
       }
     });
 
@@ -34,7 +51,7 @@ Deno.serve(async (req) => {
 
     if (mode === 'diagnosis' && image) {
       // Plant Scan Mode
-      const parts = [
+      const parts: any[] = [
         { text: prompt },
         {
           inlineData: {
@@ -43,6 +60,13 @@ Deno.serve(async (req) => {
           }
         }
       ];
+
+      // Add media_resolution only if supported by structured part
+      // Note: The SDK might structure this differently, but passing it as a property of the part object is key for v1alpha
+      parts[1].mediaResolution = {
+        level: "media_resolution_high"
+      };
+
       const result = await model.generateContent({ contents: [{ role: 'user', parts }] });
       resultText = result.response.text();
     } else if (mode === 'insight') {
