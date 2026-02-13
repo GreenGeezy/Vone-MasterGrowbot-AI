@@ -1,7 +1,7 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.mastergrowbot.app',
+  appId: 'com.mastergrowbot.ai',
   appName: 'MasterGrowbot AI',
   webDir: 'dist',
   server: {

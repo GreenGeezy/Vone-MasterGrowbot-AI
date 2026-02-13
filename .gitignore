@@ -37,4 +37,4 @@ key.properties
 
 # Capacitor / Mobile
 # Removed /android to allow stable build configs in CI/CD
-/ios
+# /ios
