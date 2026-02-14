@@ -8,6 +8,6 @@ export const CONFIG = {
     },
 
     // 2. SUPABASE CONFIGURATION
-    SUPABASE_URL: 'https://auth.mastergrowbotai.com',
-    SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvZndkaGx3c2Fod3hlY2V3eWVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUyMTA5NDgsImV4cCI6MjA4MDc4Njk0OH0.Gq2EjdT48L42TeKp2bU0dQi0wBFS9Jfby7RXR1t95Ko',
+    SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
+    SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY,
 };

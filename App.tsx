@@ -42,7 +42,11 @@ const App: React.FC = () => {
       await SplashScreen.hide();
 
       if (Capacitor.getPlatform() === 'android') {
-        await Purchases.configure({ apiKey: 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' });
+        const apiKey = import.meta.env.VITE_REVENUECAT_ANDROID_KEY;
+        if (apiKey) await Purchases.configure({ apiKey });
+      } else if (Capacitor.getPlatform() === 'ios') {
+        const apiKey = import.meta.env.VITE_REVENUECAT_IOS_KEY;
+        if (apiKey) await Purchases.configure({ apiKey });
       }
 
       // --- AUTH DEEP LINK HANDLING ---

@@ -38,3 +38,7 @@ key.properties
 # Capacitor / Mobile
 # Removed /android to allow stable build configs in CI/CD
 # /ios
+
+# Support Docs - Sensitive/Restricted Keywords (Scoped to Docs only)
+_AG_SUPPORT_DOCS/**/*cannabis*
+_AG_SUPPORT_DOCS/**/*marijuana*
