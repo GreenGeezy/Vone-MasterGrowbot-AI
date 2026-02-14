@@ -42,3 +42,6 @@ key.properties
 # Support Docs - Sensitive/Restricted Keywords (Scoped to Docs only)
 _AG_SUPPORT_DOCS/**/*cannabis*
 _AG_SUPPORT_DOCS/**/*marijuana*
+
+# Excluded Guides (User Request)
+_AG_SUPPORT_DOCS/Phase6_Integration_Guide.md
