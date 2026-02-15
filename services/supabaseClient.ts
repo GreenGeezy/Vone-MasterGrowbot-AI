@@ -15,48 +15,14 @@ export const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_K
   },
 });
 
+// DEPRECATED: OAuth is disabled for this app. Users use RevenueCat/Anonymous auth only.
+/*
 export const signInWithGoogle = async () => {
-  // Use Capacitor's native check for reliability
-  const isMobile = Capacitor.isNativePlatform();
-
-  // 1. Determine the Redirect URL
-  // Matches your Supabase > Authentication > URL Configuration
-  const redirectUrl = isMobile
-    ? 'com.mastergrowbot.app://login-callback'
-    : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? `${window.location.origin}` // URL Configuration in Supabase must allow this exact Origin
-      : 'https://auth.mastergrowbotai.com/auth/v1/callback';
-
-  console.log(`[Auth] Starting Google Sign-In. Redirecting to: ${redirectUrl}`);
-
-  // 2. Start the OAuth flow
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: redirectUrl,
-      skipBrowserRedirect: true, // CRITICAL: We handle the redirect manually below to prevent external browser launch
-    },
-  });
-
-  if (error) throw error;
-
-  // 3. Open the URL using the Secure In-App Browser (Capacitor Browser)
-  // This keeps the session context within the app container.
-  if (data?.url) {
-    if (isMobile) {
-      await Browser.open({
-        url: data.url,
-        windowName: '_self', // Replaces current context
-        presentationStyle: 'popover' // iOS visual polish (ignored on Android)
-      });
-    } else {
-      // Fallback for web testing (localhost)
-      window.location.href = data.url;
-    }
-  }
-
-  return data;
+  // ... (Code removed to prevent usage) ...
+  console.warn("Google Sign-In is disabled.");
+  return null;
 };
+*/
 
 // --- Helper Functions (Preserved exactly from your code) ---
 
