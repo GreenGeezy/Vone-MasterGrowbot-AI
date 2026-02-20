@@ -111,7 +111,7 @@ workflows:
             --workspace "ios/App/App.xcworkspace" \
             --scheme "App" \
             --config Release \
-            --archive-flags "-destination 'generic/platform=iOS'"
+            --archive-flags "-destination 'generic/platform=iOS'" || (echo "=== XCODEBUILD FAILURE LOG ===" && cat /tmp/xcodebuild_logs/*.log && exit 1)
 
     artifacts:
       - build/ios/ipa/*.ipa
