@@ -118,3 +118,7 @@ workflows:
       email:
         recipients:
           - Agcomsol@gmail.com
+      app_store_connect:
+        auth:
+          integration: Codemagic LLC Final Key
+        submit_to_testflight: true
