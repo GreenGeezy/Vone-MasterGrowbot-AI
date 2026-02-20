@@ -114,11 +114,13 @@ workflows:
       - /tmp/xcodebuild_logs/*.log
       - "*.DS_Store"
 
+    integrations:
+      app_store_connect: Codemagic LLC Final Key
+      
     publishing:
       email:
         recipients:
           - Agcomsol@gmail.com
       app_store_connect:
-        auth:
-          integration: Codemagic LLC Final Key
+        auth: integration
         submit_to_testflight: true
