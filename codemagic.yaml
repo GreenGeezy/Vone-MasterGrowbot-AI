@@ -69,7 +69,7 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.mastergrowbot.ai
       node: 20.11.1
-      xcode: latest
+      xcode: 15.4
       cocoapods: default
     triggering:
       events:
