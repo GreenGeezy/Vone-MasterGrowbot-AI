@@ -106,6 +106,9 @@ workflows:
 
       - name: Build IPA for App Store
         script: |
+          echo "=== AVAILABLE CODE SIGNING IDENTITIES ==="
+          security find-identity -v -p codesigning
+          
           # Build the archive and IPA using the profile we just set
           xcode-project build-ipa \
             --workspace "ios/App/App.xcworkspace" \
