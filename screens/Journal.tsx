@@ -5,9 +5,10 @@ import StrainCard from '../components/StrainCard';
 import { analyzeGrowLog } from '../services/geminiService';
 import { STRAIN_DATABASE } from '../data/strains';
 
-const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onUpdatePlant, onDeleteTask, onDeleteEntry }) => {
+const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onEditTask, onUpdatePlant, onDeleteTask, onDeleteEntry }) => {
   const [showCreator, setShowCreator] = useState(false);
-  const [showTaskCreator, setShowTaskCreator] = useState(false); // New Task Modal
+  const [showTaskCreator, setShowTaskCreator] = useState(false); // New/Edit Task Modal
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null); // Track editing state
 
   const [showFabMenu, setShowFabMenu] = useState(false); // Speed dial toggle
 
@@ -15,6 +16,7 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDate, setNewTaskDate] = useState(new Date().toISOString().split('T')[0]);
   const [taskRecurrence, setTaskRecurrence] = useState<'Once' | 'Daily' | 'Weekly'>('Once');
+  const [taskNotes, setTaskNotes] = useState(''); // Added dedicated notes state
 
   // Note View State
   const [selectedEntry, setSelectedEntry] = useState<any | null>(null);
@@ -36,11 +38,25 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
   const handleCreateTask = async () => {
     if (newTaskTitle.trim()) {
       await onAddTask(newTaskTitle, newTaskDate, 'user', { recurrence: taskRecurrence.toLowerCase() }); // Pass recurrence
-      setShowTaskCreator(false);
-      setNewTaskTitle('');
-      setTaskRecurrence('Once'); // Reset
-      setShowFabMenu(false);
+      closeTaskModal();
     }
+  };
+
+  const closeTaskModal = () => {
+    setShowTaskCreator(false);
+    setEditingTaskId(null);
+    setNewTaskTitle('');
+    setTaskNotes('');
+    setTaskRecurrence('Once');
+    setShowFabMenu(false);
+  };
+
+  const openEditTask = (task: any) => {
+    setEditingTaskId(task.id);
+    setNewTaskTitle(task.title || '');
+    setTaskNotes(task.notes || '');
+    setTaskRecurrence((task.recurrence && task.recurrence !== 'once') ? (task.recurrence.charAt(0).toUpperCase() + task.recurrence.slice(1) as any) : 'Once');
+    setShowTaskCreator(true);
   };
 
   // Combine and Sort Feed
@@ -69,10 +85,15 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
         {feedItems.map((item: any) => {
           if (item.feedType === 'task') {
             return (
-              <div key={`task-${item.id}`} className="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-blue-400 flex items-center justify-between opacity-80 group">
+              <div
+                key={`task-${item.id}`}
+                onClick={() => openEditTask(item)}
+                className="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-blue-400 flex items-center justify-between opacity-80 group cursor-pointer hover:bg-gray-50 transition-colors"
+              >
                 <div>
                   <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{item.date} • Task</div>
                   <div className={`font-bold ${item.isCompleted ? 'line-through text-gray-400' : 'text-gray-800'}`}>{item.title}</div>
+                  {item.notes && <div className="text-[10px] text-gray-500 mt-1 line-clamp-1">{item.notes}</div>}
                 </div>
                 <div className="flex items-center gap-3">
                   <button onClick={(e) => { e.stopPropagation(); onDeleteTask && onDeleteTask(item.id); }} className="text-gray-300 hover:text-red-500 transition-colors p-1">
@@ -135,11 +156,11 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
 
 
 
-      {/* Task Creator Modal */}
+      {/* Task Creator / Editor Modal */}
       {showTaskCreator && (
         <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
           <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-in zoom-in-95">
-            <h3 className="text-lg font-black text-gray-800 mb-4">New Grow Task</h3>
+            <h3 className="text-lg font-black text-gray-800 mb-4">{editingTaskId ? 'Edit Grow Task' : 'New Grow Task'}</h3>
 
             {/* Title */}
             <input
@@ -169,25 +190,26 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
               className="w-full bg-gray-50 p-3 rounded-xl font-medium text-gray-600 mb-6 outline-none text-xs resize-none"
               rows={3}
               placeholder="Add notes..."
-              id="task-notes-input" // Using ID to grab value in handleCreate because of state complexity in replace block
+              value={taskNotes}
+              onChange={(e) => setTaskNotes(e.target.value)}
             />
 
             <div className="flex gap-3">
-              <button onClick={() => setShowTaskCreator(false)} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold">Cancel</button>
+              <button onClick={closeTaskModal} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold">Cancel</button>
               <button
                 onClick={async () => {
                   if (newTaskTitle.trim()) {
-                    const notes = (document.getElementById('task-notes-input') as HTMLTextAreaElement)?.value || '';
-                    await onAddTask(newTaskTitle, new Date().toISOString().split('T')[0], 'user', { notes, recurrence: taskRecurrence.toLowerCase() });
-                    setShowTaskCreator(false);
-                    setNewTaskTitle('');
-                    setTaskRecurrence('Once');
-                    setShowFabMenu(false);
+                    if (editingTaskId && onEditTask) {
+                      await onEditTask(editingTaskId, newTaskTitle, taskNotes, taskRecurrence.toLowerCase());
+                    } else {
+                      await onAddTask(newTaskTitle, new Date().toISOString().split('T')[0], 'user', { notes: taskNotes, recurrence: taskRecurrence.toLowerCase() });
+                    }
+                    closeTaskModal();
                   }
                 }}
                 className="flex-1 py-3 bg-blue-500 text-white rounded-xl font-bold shadow-lg shadow-blue-200"
               >
-                Add Task
+                {editingTaskId ? 'Save Task' : 'Add Task'}
               </button>
             </div>
           </div>

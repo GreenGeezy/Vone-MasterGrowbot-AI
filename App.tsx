@@ -17,7 +17,7 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { supabase } from './services/supabaseClient';
-import { getPendingTasksForToday, toggleTaskCompletion, addNewTask, deleteTask, deleteJournalEntry, deletePlant } from './services/dbService';
+import { getPendingTasksForToday, toggleTaskCompletion, addNewTask, updateTaskProperties, deleteTask, deleteJournalEntry, deletePlant } from './services/dbService';
 import { STRAIN_DATABASE } from './data/strains';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -280,6 +280,21 @@ const App: React.FC = () => {
     }
   };
 
+  const handleUpdateTask = async (taskId: string, title: string, notes?: string, recurrence?: 'daily' | 'weekly' | 'once' | string) => {
+    // 1. Optimistic UI update
+    const updates: any = { title, notes, recurrence };
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
+
+    // 2. Also update in plant's internal task array if it exists
+    setPlants(prev => prev.map(plant => ({
+      ...plant,
+      tasks: plant.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t)
+    })));
+
+    // 3. Database operation
+    await updateTaskProperties(taskId, updates);
+  };
+
   const handleDeleteTask = async (taskId: string) => {
     // 1. Optimistic UI update
     setTasks(prev => prev.filter(t => t.id !== taskId));
@@ -353,10 +368,10 @@ const App: React.FC = () => {
     <div className="h-screen w-screen bg-surface overflow-hidden relative">
       <ErrorBoundary>
         <div className="h-full w-full overflow-y-auto pb-24">
-          {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onDeleteTask={handleDeleteTask} onDeletePlant={handleDeletePlant} onAddPlant={() => setCurrentTab(AppScreen.STRAINS)} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
+          {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onEditTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onDeletePlant={handleDeletePlant} onAddPlant={() => setCurrentTab(AppScreen.STRAINS)} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
           {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} onAddTask={handleAddTask} plant={plants[0]} defaultProfile={userProfile} onAddPlant={handleAddPlant} />}
           {currentTab === AppScreen.STRAINS && <StrainSearch onAddPlant={handleAddPlant} />}
-          {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} onDeleteEntry={handleDeleteEntry} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
+          {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onEditTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onDeleteEntry={handleDeleteEntry} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
           {currentTab === AppScreen.PROFILE && <Profile userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onViewTutorial={() => setShowTutorial(true)} onSignOut={() => { localStorage.clear(); window.location.reload(); }} />}
         </div>
       </ErrorBoundary>

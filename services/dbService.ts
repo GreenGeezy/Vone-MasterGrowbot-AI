@@ -234,6 +234,22 @@ export const toggleTaskCompletion = async (taskId: string, isCompleted: boolean)
   return !error;
 };
 
+export const updateTaskProperties = async (taskId: string, updates: any): Promise<boolean> => {
+  if (taskId.startsWith('local_')) {
+    const tasks = getLocal(STORAGE_KEYS.TASKS);
+    const newTasks = tasks.map((t: any) => t.id === taskId ? { ...t, ...updates } : t);
+    setLocal(STORAGE_KEYS.TASKS, newTasks);
+    return true;
+  }
+
+  const { error } = await supabase.from('tasks').update(updates).eq('id', taskId);
+  if (error) {
+    console.error("Error updating task:", error);
+    return false;
+  }
+  return true;
+};
+
 export const deleteTask = async (taskId: string): Promise<boolean> => {
   if (taskId.startsWith('local_')) {
     const tasks = getLocal(STORAGE_KEYS.TASKS);
