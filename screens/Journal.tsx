@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Calendar, Plus, X, CheckCircle2 } from 'lucide-react';
+import { Calendar, Plus, X, CheckCircle2, Trash2 } from 'lucide-react';
 import NoteCreator from '../components/NoteCreator';
 import StrainCard from '../components/StrainCard';
 import { analyzeGrowLog } from '../services/geminiService';
 import { STRAIN_DATABASE } from '../data/strains';
 
-const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onUpdatePlant }) => {
+const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onUpdatePlant, onDeleteTask, onDeleteEntry }) => {
   const [showCreator, setShowCreator] = useState(false);
   const [showTaskCreator, setShowTaskCreator] = useState(false); // New Task Modal
 
@@ -69,12 +69,17 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
         {feedItems.map((item: any) => {
           if (item.feedType === 'task') {
             return (
-              <div key={`task-${item.id}`} className="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-blue-400 flex items-center justify-between opacity-80">
+              <div key={`task-${item.id}`} className="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-blue-400 flex items-center justify-between opacity-80 group">
                 <div>
                   <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{item.date} • Task</div>
                   <div className={`font-bold ${item.isCompleted ? 'line-through text-gray-400' : 'text-gray-800'}`}>{item.title}</div>
                 </div>
-                {item.isCompleted && <CheckCircle2 size={18} className="text-green-500" />}
+                <div className="flex items-center gap-3">
+                  <button onClick={(e) => { e.stopPropagation(); onDeleteTask && onDeleteTask(item.id); }} className="text-gray-300 hover:text-red-500 transition-colors p-1">
+                    <Trash2 size={16} />
+                  </button>
+                  {item.isCompleted && <CheckCircle2 size={18} className="text-green-500" />}
+                </div>
               </div>
             );
           }
@@ -237,7 +242,18 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
               )}
             </div>
 
-            <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end">
+            <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+              <button
+                onClick={() => {
+                  if (window.confirm("Are you sure you want to delete this journal entry?")) {
+                    onDeleteEntry && onDeleteEntry(selectedEntry.id, plant?.id);
+                    setSelectedEntry(null);
+                  }
+                }}
+                className="px-4 py-3 text-red-500 font-bold flex items-center gap-2 hover:bg-red-50 rounded-xl transition-colors"
+              >
+                <Trash2 size={18} /> Delete Note
+              </button>
               <button onClick={() => setSelectedEntry(null)} className="px-6 py-3 bg-gray-900 text-white rounded-xl font-bold">Close</button>
             </div>
           </div>

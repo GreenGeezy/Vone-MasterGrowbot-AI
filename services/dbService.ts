@@ -234,6 +234,53 @@ export const toggleTaskCompletion = async (taskId: string, isCompleted: boolean)
   return !error;
 };
 
+export const deleteTask = async (taskId: string): Promise<boolean> => {
+  if (taskId.startsWith('local_')) {
+    const tasks = getLocal(STORAGE_KEYS.TASKS);
+    setLocal(STORAGE_KEYS.TASKS, tasks.filter((t: any) => t.id !== taskId));
+    return true;
+  }
+
+  const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+  if (error) {
+    console.error("Error deleting task:", error);
+    return false;
+  }
+  return true;
+};
+
+export const deleteJournalEntry = async (entryId: string): Promise<boolean> => {
+  if (entryId.startsWith('local_')) {
+    const entries = getLocal(STORAGE_KEYS.JOURNAL);
+    setLocal(STORAGE_KEYS.JOURNAL, entries.filter((e: any) => e.id !== entryId));
+    return true;
+  }
+
+  const { error } = await supabase.from('journal_logs').delete().eq('id', entryId);
+  if (error) {
+    console.error("Error deleting journal entry:", error);
+    return false;
+  }
+  return true;
+};
+
+export const deletePlant = async (plantId: string): Promise<boolean> => {
+  // A Plant deletion conceptually would delete its tasks and logs too in a real relational setup.
+  // Given the current mixed local/cloud structure, we provide the hook for the DB, but App.tsx handles the cascading local state.
+  if (plantId.startsWith('local_') || plantId.length < 5) {
+    // Local IDs or numeric indices like '1' used temporarily
+    return true;
+  }
+
+  try {
+    const { error } = await supabase.from('plants').delete().eq('id', plantId);
+    if (error) console.warn("Supabase plant delete error:", error);
+  } catch (e) {
+    console.warn("Plant deletion network error:", e);
+  }
+  return true; // We always return true here to ensure UI clears it regardless of cloud sync status for this specific MVP architecture.
+};
+
 // --- Support & Feedback ---
 
 export const createSupportTicket = async (ticket: { name: string, email: string, issue: string, message: string }) => {

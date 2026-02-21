@@ -17,7 +17,7 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { supabase } from './services/supabaseClient';
-import { getPendingTasksForToday, toggleTaskCompletion, addNewTask } from './services/dbService';
+import { getPendingTasksForToday, toggleTaskCompletion, addNewTask, deleteTask, deleteJournalEntry, deletePlant } from './services/dbService';
 import { STRAIN_DATABASE } from './data/strains';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -280,6 +280,45 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteTask = async (taskId: string) => {
+    // 1. Optimistic UI update
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+
+    // 2. Also remove from plant's internal task array if it exists there (syncing state)
+    setPlants(prev => prev.map(plant => ({
+      ...plant,
+      tasks: plant.tasks.filter(t => t.id !== taskId)
+    })));
+
+    // 3. Database operation
+    await deleteTask(taskId);
+  };
+
+  const handleDeleteEntry = async (entryId: string, plantId: string) => {
+    // 1. Optimistic UI update for Journal
+    setPlants(prev => prev.map(plant =>
+      plant.id === plantId
+        ? { ...plant, journal: plant.journal.filter((j: any) => j.id !== entryId) }
+        : plant
+    ));
+
+    // 2. Database operation
+    await deleteJournalEntry(entryId);
+  };
+
+  const handleDeletePlant = async (plantId: string) => {
+    // 1. UI update
+    setPlants(prev => prev.filter(p => p.id !== plantId));
+
+    // 2. Also clear global tasks associated with this plant
+    setTasks(prev => prev.filter(t => t.plantId !== plantId && (t as any).plant_id !== plantId));
+
+    // 3. If no plants remain, optionally navigate home, but user is likely already there.
+
+    // 4. DB operation
+    await deletePlant(plantId);
+  };
+
   const handleAddPlant = (strain: any) => {
     const newPlant: Plant = {
       id: Date.now().toString(),
@@ -314,10 +353,10 @@ const App: React.FC = () => {
     <div className="h-screen w-screen bg-surface overflow-hidden relative">
       <ErrorBoundary>
         <div className="h-full w-full overflow-y-auto pb-24">
-          {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onAddPlant={handleAddPlant} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
+          {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onDeleteTask={handleDeleteTask} onDeletePlant={handleDeletePlant} onAddPlant={() => setCurrentTab(AppScreen.STRAINS)} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
           {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} onAddTask={handleAddTask} plant={plants[0]} defaultProfile={userProfile} onAddPlant={handleAddPlant} />}
           {currentTab === AppScreen.STRAINS && <StrainSearch onAddPlant={handleAddPlant} />}
-          {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
+          {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} onDeleteEntry={handleDeleteEntry} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
           {currentTab === AppScreen.PROFILE && <Profile userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onViewTutorial={() => setShowTutorial(true)} onSignOut={() => { localStorage.clear(); window.location.reload(); }} />}
         </div>
       </ErrorBoundary>
