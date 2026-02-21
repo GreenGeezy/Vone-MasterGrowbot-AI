@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Browser } from '@capacitor/browser';
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
 
 interface ProfileProps {
     userProfile: UserProfile | null;
@@ -296,7 +297,12 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 {/* 3. Community & Support */}
                 <Section title="Community & Support">
                     <Row icon={ScanLine} label="View Tutorial" onClick={() => onViewTutorial && onViewTutorial()} />
-                    <Row icon={Star} label="Rate on App Store" onClick={() => openLink('https://play.google.com/store/apps/details?id=com.mastergrowbot.app')} />
+                    <Row icon={Star} label="Rate on App Store" onClick={() => {
+                        const storeUrl = Capacitor.getPlatform() === 'ios'
+                            ? 'https://apps.apple.com/app/id6752221060?action=write-review'
+                            : 'https://play.google.com/store/apps/details?id=com.mastergrowbot.app';
+                        openLink(storeUrl);
+                    }} />
                     <Row icon={Mail} label="Contact Support" onClick={() => setShowSupportModal(true)} />
                     <Row icon={MessageSquare} label="Share Feedback" onClick={() => setShowFeedbackModal(true)} />
                 </Section>
@@ -403,10 +409,13 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
             {showSupportModal && (
                 <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
                     <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl">
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="flex justify-between items-start mb-2">
                             <h2 className="text-lg font-black text-gray-900">Contact Support</h2>
                             <button onClick={() => setShowSupportModal(false)} className="p-2 bg-gray-100 rounded-full"><X size={18} /></button>
                         </div>
+                        <p className="text-xs text-gray-500 font-medium mb-4 leading-relaxed">
+                            Thank you for being a MasterGrowbot AI subscriber! Fill out the form below or email <a href="mailto:support@futuristiccannabis.ai" className="text-blue-500 underline">support@futuristiccannabis.ai</a> for personalized custom help from a dedicated team member.
+                        </p>
                         <form onSubmit={async (e) => {
                             e.preventDefault();
                             const ticketId = `MG-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -463,11 +472,6 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                             await submitUserFeedback({ rating, message }).catch(console.error);
 
                             alert("Feedback Sent! Thank you for helping us grow. 🌱");
-
-                            // 2. Neutral Prompt (Policy Compliant)
-                            if (window.confirm("Thanks for your feedback! Would you like to leave a public review on the App Store?")) {
-                                window.open("https://play.google.com/store/apps/details?id=com.mastergrowbot.app", "_blank");
-                            }
 
                             setShowFeedbackModal(false);
                             setSupportForm({ name: '', email: '', issue: '', message: '' });
