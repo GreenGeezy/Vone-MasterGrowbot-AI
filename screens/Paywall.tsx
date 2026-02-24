@@ -140,7 +140,30 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
           <div className="flex items-center gap-2 mb-2">
             <span className="bg-black/80 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 backdrop-blur-md"><Shield size={10} className="text-green-400" /> Trusted by Elite Growers Worldwide</span>
           </div>
-          <h1 className="text-3xl font-black text-gray-900 leading-tight">Rescue Your Grow Instantly with AI Power</h1>
+          <h1
+            className="text-3xl font-black text-gray-900 leading-tight select-none"
+            onClick={(e) => {
+              // Secret Developer Unlock Bypass
+              const now = Date.now();
+              const state = (e.currentTarget as any)._secretTapState || { count: 0, lastTap: 0 };
+
+              if (now - state.lastTap > 500) {
+                state.count = 1; // Reset if taps are too slow (> 500ms apart)
+              } else {
+                state.count += 1;
+              }
+              state.lastTap = now;
+              (e.currentTarget as any)._secretTapState = state;
+
+              if (state.count >= 7) {
+                console.log("Developer Unlock Activated.");
+                state.count = 0; // Reset
+                onPurchase();    // Bypass the paywall
+              }
+            }}
+          >
+            Rescue Your Grow Instantly with AI Power
+          </h1>
           <p className="text-sm font-medium text-gray-600 mt-1">Snap a pic for pest detection, customized grow tips,  guides to grow premium quality plants, and boost your yields without the guesswork.</p>
         </div>
       </div>
