@@ -224,11 +224,11 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
         </button>
         <div className="text-center mt-4 space-y-3">
           {selectedPkg && <div className="bg-gray-50 rounded-lg p-2 inline-block"><p className="text-[10px] text-gray-600 font-bold leading-tight">{getTrialText()} unless canceled.</p></div>}
-          <p className="text-[9px] text-gray-400 font-medium leading-relaxed max-w-xs mx-auto">Recurring billing. Cancel anytime in your settings. Family Sharing enabled. By continuing, you agree to our Terms.</p>
+          <p className="text-[9px] text-gray-400 font-medium leading-relaxed max-w-xs mx-auto">Recurring billing. Cancel anytime in your settings. Family Sharing enabled. By continuing, you agree to our Terms of Use and Privacy Policy.</p>
           <div className="flex justify-center gap-4 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-            <button onClick={() => openLink('https://mastergrowbot.com/terms-of-service')} className="hover:text-green-600">Terms</button>
+            <button onClick={() => openLink('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')} className="hover:text-green-600">Terms of Use</button>
             <span className="text-gray-300">•</span>
-            <button onClick={() => openLink('https://mastergrowbot.com/privacy-policy')} className="hover:text-green-600">Privacy</button>
+            <button onClick={() => openLink('https://www.mastergrowbot.com/privacy-policy')} className="hover:text-green-600">Privacy Policy</button>
             <span className="text-gray-300">•</span>
             <button onClick={handleRestore} className="hover:text-green-600">Restore</button>
           </div>
