@@ -81,8 +81,8 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete }) => {
         </button>
 
         <div className="flex justify-center gap-6 text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-6">
-          <button onClick={() => openLegalLink('https://www.mastergrowbot.com/terms-of-service')} className="hover:text-green-600 transition-colors">Terms</button>
-          <button onClick={() => openLegalLink('https://www.mastergrowbot.com/privacy-policy')} className="hover:text-green-600 transition-colors">Privacy</button>
+          <button onClick={() => openLegalLink('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')} className="hover:text-green-600 transition-colors">Terms of Use</button>
+          <button onClick={() => openLegalLink('https://www.mastergrowbot.com/privacy-policy')} className="hover:text-green-600 transition-colors">Privacy Policy</button>
         </div>
       </div>
     </div>

@@ -309,8 +309,8 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
 
                 {/* 4. Legal & Account */}
                 <Section title="Legal & Account">
-                    <Row icon={FileText} label="Privacy Policy" onClick={() => openLink('https://mastergrowbot.com/privacy-policy')} />
-                    <Row icon={Shield} label="Terms of Service" onClick={() => openLink('https://mastergrowbot.com/terms-of-service')} />
+                    <Row icon={FileText} label="Privacy Policy" onClick={() => openLink('https://www.mastergrowbot.com/privacy-policy')} />
+                    <Row icon={Shield} label="Terms of Use" onClick={() => openLink('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')} />
                     <Row icon={LogOut} label="Sign Out" onClick={onSignOut} />
                 </Section>
 
