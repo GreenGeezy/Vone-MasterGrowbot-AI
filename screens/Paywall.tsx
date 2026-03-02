@@ -21,39 +21,49 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadProducts = async () => {
-      try {
-        if (!Capacitor.isNativePlatform()) {
-          const mockPackages = [
-            { identifier: 'mg_weekly', packageType: PACKAGE_TYPE.WEEKLY, product: { priceString: '$7.99', title: 'Weekly Access', description: 'Short term help' } } as any,
-            { identifier: 'mg_monthly', packageType: PACKAGE_TYPE.MONTHLY, product: { priceString: '$29.99', title: 'Monthly Pro', description: 'Ongoing optimization' } } as any,
-            { identifier: 'mg_annual', packageType: PACKAGE_TYPE.ANNUAL, product: { priceString: '$199.99', title: 'Annual Saver', description: 'Best value year round' } } as any,
-          ];
-          setPackages(mockPackages);
-          setSelectedPkgIdentifier('mg_monthly');
-          setLoading(false);
-          return;
-        }
-
-        try {
-          const offerings = await Purchases.getOfferings();
-          if (offerings.current && offerings.current.availablePackages.length > 0) {
-            setPackages(offerings.current.availablePackages);
-            const monthly = offerings.current.availablePackages.find(p => p.packageType === PACKAGE_TYPE.MONTHLY);
-            setSelectedPkgIdentifier(monthly ? monthly.identifier : offerings.current.availablePackages[0].identifier);
-          }
-        } catch (e: any) {
-          console.error("RevenueCat Error:", e);
-          setError("Could not load offers. Please check your connection.");
-        }
-      } catch (err) {
-        setError("Failed to initialize store connection.");
-      } finally {
+  const loadProducts = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (!Capacitor.isNativePlatform()) {
+        const mockPackages = [
+          { identifier: 'mg_weekly', packageType: PACKAGE_TYPE.WEEKLY, product: { priceString: '$7.99', title: 'Weekly Access', description: 'Short term help' } } as any,
+          { identifier: 'mg_monthly', packageType: PACKAGE_TYPE.MONTHLY, product: { priceString: '$29.99', title: 'Monthly Pro', description: 'Ongoing optimization' } } as any,
+          { identifier: 'mg_annual', packageType: PACKAGE_TYPE.ANNUAL, product: { priceString: '$199.99', title: 'Annual Saver', description: 'Best value year round' } } as any,
+        ];
+        setPackages(mockPackages);
+        setSelectedPkgIdentifier('mg_monthly');
         setLoading(false);
+        return;
       }
-    };
 
+      try {
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Connection to App Store timed out. Please check your network.")), 8000)
+        );
+        const offeringsPromise = Purchases.getOfferings();
+
+        const offerings = await Promise.race([offeringsPromise, timeoutPromise]) as any;
+
+        if (offerings.current && offerings.current.availablePackages.length > 0) {
+          setPackages(offerings.current.availablePackages);
+          const monthly = offerings.current.availablePackages.find((p: any) => p.packageType === PACKAGE_TYPE.MONTHLY);
+          setSelectedPkgIdentifier(monthly ? monthly.identifier : offerings.current.availablePackages[0].identifier);
+        } else {
+          setError("No subscription plans found at this time. Please try again.");
+        }
+      } catch (e: any) {
+        console.error("RevenueCat Error:", e);
+        setError(e.message || "Could not connect to the App Store. Please check your connection.");
+      }
+    } catch (err) {
+      setError("Failed to initialize store connection.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadProducts();
   }, []);
 
@@ -128,9 +138,22 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
 
   if (loading) return (<div className="fixed inset-0 bg-white z-[60] flex items-center justify-center"><Growbot size="lg" mood="thinking" className="animate-bounce" /></div>);
 
+  if (error && !packages.length) {
+    return (
+      <div className="fixed inset-0 bg-white z-[60] flex flex-col items-center justify-center p-8 text-center">
+        <Growbot size="xl" mood="alert" className="mb-6 opacity-80" />
+        <h2 className="text-xl font-black text-gray-900 mb-2">Connection Issues</h2>
+        <p className="text-sm text-gray-500 mb-8 max-w-xs">{error}</p>
+        <button onClick={loadProducts} className="bg-green-600 text-white font-bold px-8 py-3 rounded-xl shadow-lg hover:bg-green-700 active:scale-95 transition-all">
+          Retry Connection
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-white z-[60] flex flex-col overflow-hidden">
-      <div className="relative h-64 bg-green-900 flex-shrink-0">
+      <div className="relative min-h-[30vh] basis-[35%] bg-green-900 flex-shrink-0">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1596791836043-982c75908b89?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80')] bg-cover bg-center opacity-40"></div>
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white"></div>
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white"></div>

@@ -48,8 +48,8 @@ const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
    return (
       <div className="h-screen bg-surface text-text-main flex flex-col relative overflow-hidden font-sans">
          {/* Soft Light Background */}
-         <div className="absolute top-[-20%] right-[-20%] w-[500px] h-[500px] bg-primary/10 rounded-full blur-[100px] pointer-events-none"></div>
-         <div className="absolute bottom-[-10%] left-[-20%] w-[400px] h-[400px] bg-neon-blue/10 rounded-full blur-[100px] pointer-events-none"></div>
+         <div className="absolute top-[-20%] right-[-20%] w-full max-w-[500px] aspect-square bg-primary/10 rounded-full blur-[100px] pointer-events-none"></div>
+         <div className="absolute bottom-[-10%] left-[-20%] w-full max-w-[400px] aspect-square bg-neon-blue/10 rounded-full blur-[100px] pointer-events-none"></div>
 
          {/* Step Indicator (Micro-progress) */}
          <div className="w-full text-center pt-6 pb-2 z-20">

@@ -374,16 +374,16 @@ const App: React.FC = () => {
           {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onEditTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onDeleteEntry={handleDeleteEntry} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
           {currentTab === AppScreen.PROFILE && <Profile userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onViewTutorial={() => setShowTutorial(true)} onSignOut={() => { localStorage.clear(); window.location.reload(); }} />}
         </div>
+
+        {showTutorial && <GetStartedTutorial onComplete={completeTutorial} />}
+
+        {/* HARD PAYWALL: No onClose or onSkip provided to prevent bypass */}
+        {showPaywall && <Paywall onClose={() => { }} onPurchase={() => { setShowPaywall(false); setShowAuth(true); }} onSkip={() => { }} />}
+
+        {showAuth && <PostPaymentAuth onComplete={handleAuthSuccess} onSkip={handleAuthSuccess} userProfile={userProfile} />}
+
+        <BottomNav currentScreen={currentTab} onNavigate={(tab) => setCurrentTab(tab)} />
       </ErrorBoundary>
-
-      {showTutorial && <GetStartedTutorial onComplete={completeTutorial} />}
-
-      {/* HARD PAYWALL: No onClose or onSkip provided to prevent bypass */}
-      {showPaywall && <Paywall onClose={() => { }} onPurchase={() => { setShowPaywall(false); setShowAuth(true); }} onSkip={() => { }} />}
-
-      {showAuth && <PostPaymentAuth onComplete={handleAuthSuccess} onSkip={handleAuthSuccess} userProfile={userProfile} />}
-
-      <BottomNav currentScreen={currentTab} onNavigate={(tab) => setCurrentTab(tab)} />
     </div>
   );
 };
