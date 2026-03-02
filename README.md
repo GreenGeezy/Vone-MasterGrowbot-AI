@@ -42,7 +42,7 @@ MasterGrowbot utilizes a multi-model strategy to balance performance, cost, and 
 
 | Feature | Model | Purpose |
 | :--- | :--- | :--- |
-| **Plant Diagnosis** | `gemini-3-pro-preview` | High-order multimodal reasoning to analyze image bytes for pests, diseases, and stress. |
+| **Plant Diagnosis** | `gemini-3.1-pro-preview` | High-order multimodal reasoning to analyze image bytes for pests, diseases, and stress. |
 | **Log Analysis** | `gemini-3-flash-preview` | Fast text summarization and trend detection in the cultivation journal. |
 | **Daily Insights** | `gemini-3-flash-preview` | Generation of context-aware cultivation tips on the Home dashboard. |
 

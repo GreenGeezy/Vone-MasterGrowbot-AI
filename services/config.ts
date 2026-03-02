@@ -2,9 +2,9 @@ import { Capacitor } from '@capacitor/core';
 
 export const CONFIG = {
     MODELS: {
-        DIAGNOSIS: 'gemini-3-pro-preview',    // User Requested (Preview)
-        CHAT_LIVE: 'gemini-1.5-flash-001',    // Stable (Flash)
-        INSIGHTS: 'gemini-3-pro-preview',     // User Requested (Preview)
+        DIAGNOSIS: 'gemini-3.1-pro-preview',
+        CHAT_LIVE: 'gemini-1.5-flash-001',
+        INSIGHTS: 'gemini-3.1-pro-preview',
     },
 
     // 2. SUPABASE CONFIGURATION

@@ -22,7 +22,7 @@ const cleanBase64 = (data: string) =>
 
 /**
  * AI Plant Diagnosis (Vision + Logic)
- * Uses 'gemini-1.5-pro-001' (Pinned Stable) via Gateway
+ * Uses 'gemini-3.1-pro-preview'
  */
 export async function diagnosePlant(
   base64Image: string,
@@ -165,8 +165,7 @@ export async function diagnosePlant(
 }
 
 /**
- * Chat with Coach (Text / Voice)
- * Uses 'gemini-1.5-flash-001' (Pinned Stable) via Gateway
+ * AI Message Handling
  */
 export async function sendMessage(
   message: string,
@@ -193,9 +192,7 @@ export async function sendMessage(
 
   while (attempt < MAX_RETRIES) {
     attempt++;
-    console.log(`[Gemini] Sending message (Attempt ${attempt}/${MAX_RETRIES})...`);
-
-    // STAY ON CLASSIC GATEWAY FOR CHAT (V1.5)
+    // Invoke internal gateway for fallback routing
     const { data, error } = await supabase.functions.invoke('gemini-gateway', { body });
 
     if (!error) {
@@ -241,7 +238,6 @@ export async function sendMessage(
 
 /**
  * Ensures history alternates User -> Model -> User -> Model
- * Gemini 1.5/Advanced is strict about this.
  */
 function sanitizeHistory(history: { role: string; content: string }[]): { role: string; content: string }[] {
   if (!history || history.length === 0) return [];
