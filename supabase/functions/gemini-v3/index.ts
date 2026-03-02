@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
     // 6. Initialize Gemini Client
     // Use v1alpha to support 'media_resolution' and 'thinking_config'
     const genAI = new GoogleGenerativeAI(apiKey);
-    const modelId = "gemini-3-pro-preview";
+    const modelId = "gemini-3.1-pro-preview";
 
     const model = genAI.getGenerativeModel({
       model: modelId,

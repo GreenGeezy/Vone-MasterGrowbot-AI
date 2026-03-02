@@ -22,7 +22,7 @@ const cleanBase64 = (data: string) =>
 
 /**
  * AI Plant Diagnosis (Vision + Logic)
- * Uses 'gemini-1.5-pro-001' (Pinned Stable) via Gateway
+ * Uses 'gemini-3.1-pro-preview' via Gateway
  */
 export async function diagnosePlant(
   base64Image: string,
@@ -165,8 +165,7 @@ export async function diagnosePlant(
 }
 
 /**
- * Chat with Coach (Text / Voice)
- * Uses 'gemini-1.5-flash-001' (Pinned Stable) via Gateway
+ * Messaging Utility
  */
 export async function sendMessage(
   message: string,
@@ -174,7 +173,7 @@ export async function sendMessage(
   attachment?: { data: string; type: string; mimeType: string }
 ) {
   const body: any = {
-    model: CONFIG.MODELS.CHAT_LIVE,
+    model: CONFIG.MODELS.INSIGHTS,
     mode: 'chat',
     prompt: message,
     // Filter out artificial messages and sanitize for alternation logic
@@ -195,7 +194,6 @@ export async function sendMessage(
     attempt++;
     console.log(`[Gemini] Sending message (Attempt ${attempt}/${MAX_RETRIES})...`);
 
-    // STAY ON CLASSIC GATEWAY FOR CHAT (V1.5)
     const { data, error } = await supabase.functions.invoke('gemini-gateway', { body });
 
     if (!error) {
@@ -241,7 +239,6 @@ export async function sendMessage(
 
 /**
  * Ensures history alternates User -> Model -> User -> Model
- * Gemini 1.5/Advanced is strict about this.
  */
 function sanitizeHistory(history: { role: string; content: string }[]): { role: string; content: string }[] {
   if (!history || history.length === 0) return [];
@@ -344,7 +341,7 @@ export async function getStrainInsights(strainName: string, description?: string
     const invokePromise = supabase.functions.invoke('gemini-v3', {
       body: {
         model: CONFIG.MODELS.INSIGHTS,
-        mode: 'insight', // Use simple generation mode to avoid Chat history errors
+        mode: 'insight',
         prompt: prompt
       }
     });

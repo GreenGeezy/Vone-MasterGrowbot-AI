@@ -3,7 +3,7 @@ state-of-the-art reasoning. It is designed to bring any idea to life by
 mastering agentic workflows, autonomous coding, and complex multimodal tasks.
 This guide covers key features of the Gemini 3 model family and how to get the
 most out of it.  
-[Try Gemini 3 Pro](https://aistudio.google.com?model=gemini-3-pro-preview) [Try Gemini 3 Flash](https://aistudio.google.com?model=gemini-3-flash-preview) [Try Nano Banana Pro](https://aistudio.google.com?model=gemini-3-pro-image-preview)
+[Try Gemini 3 Pro](https://aistudio.google.com?model=gemini-3.1-pro-preview) [Try Gemini 3 Flash](https://aistudio.google.com?model=gemini-3-flash-preview) [Try Nano Banana Pro](https://aistudio.google.com?model=gemini-3-pro-image-preview)
 
 Explore our [collection of Gemini 3 apps](https://aistudio.google.com/app/apps?source=showcase&showcaseTag=gemini-3) to
 see how the model handles advanced reasoning, autonomous coding, and complex
@@ -18,7 +18,7 @@ Get started with a few lines of code:
     client = genai.Client()
 
     response = client.models.generate_content(
-        model="gemini-3-pro-preview",
+        model="gemini-3.1-pro-preview",
         contents="Find the race condition in this multi-threaded C++ snippet: [code here]",
     )
 
@@ -32,7 +32,7 @@ Get started with a few lines of code:
 
     async function run() {
       const response = await ai.models.generateContent({
-        model: "gemini-3-pro-preview",
+        model: "gemini-3.1-pro-preview",
         contents: "Find the race condition in this multi-threaded C++ snippet: [code here]",
       });
 
@@ -43,7 +43,7 @@ Get started with a few lines of code:
 
 ### REST
 
-    curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent" \
+    curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent" \
       -H "x-goog-api-key: $GEMINI_API_KEY" \
       -H 'Content-Type: application/json' \
       -X POST \
@@ -68,7 +68,7 @@ All Gemini 3 models are currently in preview.
 
 | Model ID | Context Window (In / Out) | Knowledge Cutoff | Pricing (Input / Output)\* |
 |---|---|---|---|
-| **gemini-3-pro-preview** | 1M / 64k | Jan 2025 | $2 / $12 (\<200k tokens) $4 / $18 (\>200k tokens) |
+| **gemini-3.1-pro-preview** | 1M / 64k | Jan 2025 | $2 / $12 (\<200k tokens) $4 / $18 (\>200k tokens) |
 | **gemini-3-flash-preview** | 1M / 64k | Jan 2025 | $0.50 / $3 |
 | **gemini-3-pro-image-preview** | 65k / 32k | Jan 2025 | $2 (Text Input) / $0.134 (Image Output)\*\* |
 
@@ -122,7 +122,7 @@ thinking levels that are not currently supported by Gemini 3 Pro:
     client = genai.Client()
 
     response = client.models.generate_content(
-        model="gemini-3-pro-preview",
+        model="gemini-3.1-pro-preview",
         contents="How does AI work?",
         config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_level="low")
@@ -138,7 +138,7 @@ thinking levels that are not currently supported by Gemini 3 Pro:
     const ai = new GoogleGenAI({});
 
     const response = await ai.models.generateContent({
-        model: "gemini-3-pro-preview",
+        model: "gemini-3.1-pro-preview",
         contents: "How does AI work?",
         config: {
           thinkingConfig: {
@@ -151,7 +151,7 @@ thinking levels that are not currently supported by Gemini 3 Pro:
 
 ### REST
 
-    curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent" \
+    curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent" \
       -H "x-goog-api-key: $GEMINI_API_KEY" \
       -H 'Content-Type: application/json' \
       -X POST \
@@ -203,7 +203,7 @@ model uses optimal defaults based on the media type.
     client = genai.Client(http_options={'api_version': 'v1alpha'})
 
     response = client.models.generate_content(
-        model="gemini-3-pro-preview",
+        model="gemini-3.1-pro-preview",
         contents=[
             types.Content(
                 parts=[
@@ -231,7 +231,7 @@ model uses optimal defaults based on the media type.
 
     async function run() {
       const response = await ai.models.generateContent({
-        model: "gemini-3-pro-preview",
+        model: "gemini-3.1-pro-preview",
         contents: [
           {
             parts: [
@@ -257,7 +257,7 @@ model uses optimal defaults based on the media type.
 
 ### REST
 
-    curl "https://generativelanguage.googleapis.com/v1alpha/models/gemini-3-pro-preview:generateContent" \
+    curl "https://generativelanguage.googleapis.com/v1alpha/models/gemini-3.1-pro-preview:generateContent" \
       -H "x-goog-api-key: $GEMINI_API_KEY" \
       -H 'Content-Type: application/json' \
       -X POST \
@@ -567,7 +567,7 @@ Gemini 3 models allow you to combine [Structured Outputs](https://ai.google.dev/
     client = genai.Client()
 
     response = client.models.generate_content(
-        model="gemini-3-pro-preview",
+        model="gemini-3.1-pro-preview",
         contents="Search for all details for the latest Euro.",
         config={
             "tools": [
@@ -598,7 +598,7 @@ Gemini 3 models allow you to combine [Structured Outputs](https://ai.google.dev/
 
     async function run() {
       const response = await ai.models.generateContent({
-        model: "gemini-3-pro-preview",
+        model: "gemini-3.1-pro-preview",
         contents: "Search for all details for the latest Euro.",
         config: {
           tools: [
@@ -618,7 +618,7 @@ Gemini 3 models allow you to combine [Structured Outputs](https://ai.google.dev/
 
 ### REST
 
-    curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent" \
+    curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent" \
       -H "x-goog-api-key: $GEMINI_API_KEY" \
       -H 'Content-Type: application/json' \
       -X POST \
@@ -1162,7 +1162,7 @@ Learn more about prompt design strategies in the [prompt engineering guide](http
 3. **Is there a free tier for Gemini 3?** Gemini 3 Flash
    `gemini-3-flash-preview` has a free tier in the Gemini API. You can try both
    Gemini 3 Pro and Flash for free in Google AI Studio, but currently, there is no
-   free tier available for `gemini-3-pro-preview` in the Gemini API.
+   free tier available for `gemini-3.1-pro-preview` in the Gemini API.
 
 4. **Will my old `thinking_budget` code still work?** Yes, `thinking_budget` is
    still supported for backward compatibility, but we recommend migrating to
@@ -1182,7 +1182,7 @@ Learn more about prompt design strategies in the [prompt engineering guide](http
 
 ## Next steps
 
-- Get started with the [Gemini 3 Cookbook](https://colab.research.google.com/github/google-gemini/cookbook/blob/main/quickstarts/Get_started.ipynb#templateParams=%7B%22MODEL_ID%22%3A+%22gemini-3-pro-preview%22%7D)
+- Get started with the [Gemini 3 Cookbook](https://colab.research.google.com/github/google-gemini/cookbook/blob/main/quickstarts/Get_started.ipynb#templateParams=%7B%22MODEL_ID%22%3A+%22gemini-3.1-pro-preview%22%7D)
 - Check the dedicated Cookbook guide on [thinking levels](https://colab.research.google.com/github/google-gemini/cookbook/blob/main/quickstarts/Get_started_thinking_REST.ipynb#gemini3) and how to migrate from thinking budget to thinking levels.
 
 ## Gemini 3 Model Specifications & Capabilities
@@ -1195,7 +1195,7 @@ The best model in the world for multimodal understanding, and our most powerful 
 
 #### Expand to learn more
 
-[Try in Google AI Studio](https://aistudio.google.com?model=gemini-3-pro-preview)
+[Try in Google AI Studio](https://aistudio.google.com?model=gemini-3.1-pro-preview)
 
 ##### Model details
 
@@ -1203,11 +1203,11 @@ The best model in the world for multimodal understanding, and our most powerful 
 
 | Property | Description |
 | :--- | :--- |
-| Model code | `gemini-3-pro-preview` |
+| Model code | `gemini-3.1-pro-preview` |
 | Supported data types | **Inputs**: Text, Image, Video, Audio, and PDF<br>**Output**: Text |
 | Token limits | **Input token limit**: 1,048,576<br>**Output token limit**: 65,536 |
 | Capabilities | **Audio generation**: Not supported<br>**Batch API**: Supported<br>**Caching**: Supported<br>**Code execution**: Supported<br>**File search**: Supported<br>**Function calling**: Supported<br>**Grounding with Google Maps**: Not supported<br>**Image generation**: Not supported<br>**Live API**: Not supported<br>**Search grounding**: Supported<br>**Structured outputs**: Supported<br>**Thinking**: Supported<br>**URL context**: Supported |
-| Versions | Read the [model version patterns](https://ai.google.dev/gemini-api/docs/models/gemini#model-versions) for more details.<br>- `Preview: gemini-3-pro-preview` |
+| Versions | Read the [model version patterns](https://ai.google.dev/gemini-api/docs/models/gemini#model-versions) for more details.<br>- `Preview: gemini-3.1-pro-preview` |
 | Latest update | November 2025 |
 | Knowledge cutoff | January 2025 |
 
