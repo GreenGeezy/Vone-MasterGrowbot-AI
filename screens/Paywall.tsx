@@ -58,7 +58,10 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
   }, []);
 
   const handleStartTrial = async () => {
-    if (!selectedPkgIdentifier) return;
+    if (!selectedPkgIdentifier) {
+      onPurchase();
+      return;
+    }
     setIsPurchasing(true);
     setError(null);
 
@@ -242,7 +245,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
           <ArrowRight size={12} className="text-gray-300" />
           <span className="flex items-center gap-1 text-gray-900"><X size={12} /> Cancel Anytime</span>
         </div>
-        <button onClick={handleStartTrial} disabled={isPurchasing || !selectedPkgIdentifier} className="w-full bg-green-600 text-white font-black text-lg py-4 rounded-2xl shadow-xl shadow-green-200 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:shadow-none">
+        <button onClick={handleStartTrial} disabled={isPurchasing} className="w-full bg-green-600 text-white font-black text-lg py-4 rounded-2xl shadow-xl shadow-green-200 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:shadow-none">
           {isPurchasing ? <span className="animate-pulse">Processing...</span> : <>Start Your Free 3-Day Trial Now <ArrowRight strokeWidth={3} size={20} /></>}
         </button>
         <div className="text-center mt-4 space-y-3">
@@ -257,7 +260,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
           </div>
         </div>
       </div>
-      {error && <div className="absolute top-6 left-6 right-6 bg-red-500 text-white p-3 rounded-xl text-center text-xs font-bold shadow-2xl animate-in slide-in-from-top-2 z-[70]">{error}</div>}
+      {/* {error && <div className="absolute top-6 left-6 right-6 bg-red-500 text-white p-3 rounded-xl text-center text-xs font-bold shadow-2xl animate-in slide-in-from-top-2 z-[70]">{error}</div>} */}
     </div>
   );
 };
