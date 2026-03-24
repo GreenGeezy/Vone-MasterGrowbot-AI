@@ -41,8 +41,21 @@ const App: React.FC = () => {
 
       await SplashScreen.hide();
 
+      // Ensure we have a session (or create an anonymous one) before configuring RevenueCat
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        const { data, error } = await supabase.auth.signInAnonymously();
+        if (!error && data?.session) {
+          session = data.session;
+        }
+      }
+
       if (Capacitor.getPlatform() === 'android') {
-        await Purchases.configure({ apiKey: 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' });
+        if (session && session.user) {
+          await Purchases.configure({ apiKey: 'goog_kqOynvNRCABzUPrpfyFvlMvHUna', appUserID: session.user.id });
+        } else {
+          await Purchases.configure({ apiKey: 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' });
+        }
       }
 
       // --- AUTH DEEP LINK HANDLING ---
@@ -314,7 +327,13 @@ const App: React.FC = () => {
           {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} onAddTask={handleAddTask} plant={plants[0]} defaultProfile={userProfile} onAddPlant={handleAddPlant} />}
           {currentTab === AppScreen.STRAINS && <StrainSearch onAddPlant={handleAddPlant} />}
           {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
-          {currentTab === AppScreen.PROFILE && <Profile userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onViewTutorial={() => setShowTutorial(true)} onSignOut={() => { localStorage.clear(); window.location.reload(); }} />}
+          {currentTab === AppScreen.PROFILE && <Profile userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onViewTutorial={() => setShowTutorial(true)} onSignOut={async () => {
+            if (Capacitor.getPlatform() !== 'web') {
+              try { await Purchases.logOut(); } catch (e) { console.error("Error logging out of RevenueCat:", e); }
+            }
+            localStorage.clear();
+            window.location.reload();
+          }} />}
         </div>
       </ErrorBoundary>
 

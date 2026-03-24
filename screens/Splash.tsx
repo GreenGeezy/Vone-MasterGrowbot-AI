@@ -47,8 +47,13 @@ const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
           }
         } else {
           // No active session -> New User
-          // FIXED: Do NOT auto-redirect. Wait for button click.
-          console.log("No session. Waiting for user interaction.");
+          console.log("No session. Creating anonymous session...");
+          const { error } = await supabase.auth.signInAnonymously();
+          if (error) {
+            console.error("Failed to create anonymous session:", error);
+          } else {
+            console.log("Anonymous session created successfully.");
+          }
         }
       } catch (error) {
         console.error("User status check failed.", error);
