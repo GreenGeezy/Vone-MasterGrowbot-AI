@@ -51,7 +51,7 @@ export const uploadImage = async (base64: string, path: string): Promise<string 
   if (!supabase) return null;
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return null; // Skip upload for anonymous users
+    if (!session) return null; // Should not trigger now due to anon auth
 
     const blob = base64ToBlob(base64);
     const { error: uploadError } = await supabase.storage
@@ -81,8 +81,7 @@ export const saveJournalEntry = async (entry: {
   const { data: { session } } = await supabase.auth.getSession();
 
   const newEntry = {
-    id: `local_${Date.now()}`,
-    user_id: session?.user.id || 'anon',
+    user_id: session?.user.id,
     plant_id: entry.plant_id,
     entry_type: entry.entry_type,
     content: entry.content,
@@ -91,16 +90,9 @@ export const saveJournalEntry = async (entry: {
     created_at: new Date().toISOString()
   };
 
-  if (!session) {
-    const entries = getLocal(STORAGE_KEYS.JOURNAL);
-    entries.push(newEntry);
-    setLocal(STORAGE_KEYS.JOURNAL, entries);
-    return newEntry;
-  }
-
   const { data, error } = await supabase
     .from('journal_logs')
-    .insert({ ...newEntry, id: undefined }) // Let DB gen ID
+    .insert(newEntry)
     .select()
     .single();
 
@@ -114,23 +106,7 @@ export const getPendingTasksForToday = async (): Promise<GrowTask[] | null> => {
   const { data: { session } } = await supabase.auth.getSession();
   const today = new Date().toISOString().split('T')[0];
 
-  if (!session) {
-    const tasks = getLocal(STORAGE_KEYS.TASKS);
-    return tasks
-      .filter((t: any) => t.due_date <= today && !t.is_completed)
-      .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
-      .map((t: any) => ({
-        id: t.id,
-        plantId: t.plant_id,
-        title: t.title,
-        isCompleted: t.is_completed,
-        completed: t.is_completed,
-        dueDate: t.due_date,
-        source: t.source,
-        createdAt: t.created_at,
-        type: t.type
-      }));
-  }
+  if (!session) return [];
 
   const { data, error } = await supabase
     .from('tasks')
@@ -159,7 +135,7 @@ export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCo
   const { data: { session } } = await supabase.auth.getSession();
 
   const newTaskObj = {
-    user_id: session?.user.id || 'anon',
+    user_id: session?.user.id,
     plant_id: task.plantId,
     title: task.title,
     is_completed: false,
@@ -170,28 +146,6 @@ export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCo
     notes: task.notes || null,
     created_at: new Date().toISOString()
   };
-
-  if (!session) {
-    const tasks = getLocal(STORAGE_KEYS.TASKS);
-    const localTask = { ...newTaskObj, id: `local_${Date.now()}` };
-    tasks.push(localTask);
-    setLocal(STORAGE_KEYS.TASKS, tasks);
-
-    // Return mapped format
-    return {
-      id: localTask.id,
-      plantId: localTask.plant_id,
-      title: localTask.title,
-      isCompleted: localTask.is_completed,
-      completed: localTask.is_completed,
-      dueDate: localTask.due_date,
-      source: localTask.source,
-      createdAt: localTask.created_at,
-      type: localTask.type,
-      recurrence: localTask.recurrence,
-      notes: localTask.notes
-    };
-  }
 
   const { data, error } = await supabase
     .from('tasks')
@@ -217,15 +171,6 @@ export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCo
 };
 
 export const toggleTaskCompletion = async (taskId: string, isCompleted: boolean): Promise<boolean> => {
-  const { data: { session } } = await supabase.auth.getSession();
-
-  if (!session || taskId.startsWith('local_')) {
-    const tasks = getLocal(STORAGE_KEYS.TASKS);
-    const updated = tasks.map((t: any) => t.id === taskId ? { ...t, is_completed: isCompleted } : t);
-    setLocal(STORAGE_KEYS.TASKS, updated);
-    return true;
-  }
-
   const { error } = await supabase
     .from('tasks')
     .update({ is_completed: isCompleted })
@@ -235,13 +180,6 @@ export const toggleTaskCompletion = async (taskId: string, isCompleted: boolean)
 };
 
 export const updateTaskProperties = async (taskId: string, updates: any): Promise<boolean> => {
-  if (taskId.startsWith('local_')) {
-    const tasks = getLocal(STORAGE_KEYS.TASKS);
-    const newTasks = tasks.map((t: any) => t.id === taskId ? { ...t, ...updates } : t);
-    setLocal(STORAGE_KEYS.TASKS, newTasks);
-    return true;
-  }
-
   const { error } = await supabase.from('tasks').update(updates).eq('id', taskId);
   if (error) {
     console.error("Error updating task:", error);
@@ -251,12 +189,6 @@ export const updateTaskProperties = async (taskId: string, updates: any): Promis
 };
 
 export const deleteTask = async (taskId: string): Promise<boolean> => {
-  if (taskId.startsWith('local_')) {
-    const tasks = getLocal(STORAGE_KEYS.TASKS);
-    setLocal(STORAGE_KEYS.TASKS, tasks.filter((t: any) => t.id !== taskId));
-    return true;
-  }
-
   const { error } = await supabase.from('tasks').delete().eq('id', taskId);
   if (error) {
     console.error("Error deleting task:", error);
@@ -266,12 +198,6 @@ export const deleteTask = async (taskId: string): Promise<boolean> => {
 };
 
 export const deleteJournalEntry = async (entryId: string): Promise<boolean> => {
-  if (entryId.startsWith('local_')) {
-    const entries = getLocal(STORAGE_KEYS.JOURNAL);
-    setLocal(STORAGE_KEYS.JOURNAL, entries.filter((e: any) => e.id !== entryId));
-    return true;
-  }
-
   const { error } = await supabase.from('journal_logs').delete().eq('id', entryId);
   if (error) {
     console.error("Error deleting journal entry:", error);
@@ -480,24 +406,6 @@ export const saveChatMessage = async (
   attachmentUrl?: string,
   attachmentType?: string
 ): Promise<StoredMessage | null> => {
-
-  const newMessage = {
-    id: `msg_${Date.now()}`,
-    session_id: sessionId,
-    role,
-    content,
-    attachment_url: attachmentUrl,
-    attachment_type: attachmentType,
-    created_at: new Date().toISOString()
-  };
-
-  if (sessionId.startsWith('local_')) {
-    const messages = getLocal(STORAGE_KEYS.CHAT_MESSAGES);
-    messages.push(newMessage);
-    setLocal(STORAGE_KEYS.CHAT_MESSAGES, messages);
-    return newMessage;
-  }
-
   const { data, error } = await supabase
     .from('chat_messages')
     .insert({
@@ -515,13 +423,6 @@ export const saveChatMessage = async (
 };
 
 export const getChatMessages = async (sessionId: string): Promise<StoredMessage[]> => {
-  if (sessionId.startsWith('local_')) {
-    const messages = getLocal(STORAGE_KEYS.CHAT_MESSAGES);
-    return messages
-      .filter((m: any) => m.session_id === sessionId)
-      .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  }
-
   const { data, error } = await supabase
     .from('chat_messages')
     .select('*')

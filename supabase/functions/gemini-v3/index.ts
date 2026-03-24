@@ -33,9 +33,14 @@ Deno.serve(async (req) => {
             { global: { headers: { Authorization: authHeader } } }
           );
 
-          const { data: { user } } = await supabaseClient.auth.getUser();
+          const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+
+          if (authError) {
+             console.warn("Rate limiter auth check skipped due to warning/error:", authError.message);
+          }
 
           if (user) {
+            console.log(`Rate limiting for user ID: ${user.id} (Anonymous: ${user.is_anonymous})`);
             const limit = 100;
             const today = new Date().toISOString().split('T')[0];
 

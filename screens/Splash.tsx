@@ -18,37 +18,52 @@ const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
       }
 
       try {
-        // 1. Check for an active session
+        // 1. Enforce Anonymous Authentication (Purge Ghost Sessions)
         const { data: { session } } = await supabase.auth.getSession();
 
-        if (session) {
-          console.log("Active session found. Checking profile...");
-          // 2. Check Profile Data
-          const { data: profile, error } = await getUserProfile();
-
-          if (error || !profile) {
-            // Session valid but profile missing -> Wait for user to start
-            console.log("Profile missing. Staying on Splash.");
-            return;
+        if (!session || !session.user?.is_anonymous) {
+          console.log("Purging legacy state and signing in anonymously...");
+          // Clean up old email/oauth sessions from before UI was removed
+          await supabase.auth.signOut();
+          
+          // Purge legacy local storage to ensure fresh state (DO NOT wipe profile to save subscription state)
+          const keysToPurge = [
+            'mg_local_chat_sessions', 'mg_local_chat_messages', 
+            'mg_local_tasks', 'mg_local_journal', 'mg_local_tickets', 
+            'mg_local_feedback'
+          ];
+          keysToPurge.forEach(k => localStorage.removeItem(k));
+          
+          // Generate fresh anonymous JWT
+          const { error: authError } = await supabase.auth.signInAnonymously();
+          if (authError) {
+            console.error("Anonymous Sign-In Failed:", authError);
+            return; // Stop execution if auth fails, prevent hitting a wall later
           }
+        }
 
-          // 3. Verify Onboarding Fields
-          const isProfileComplete =
-            profile.experience &&
-            profile.environment &&
-            profile.goal;
+        console.log("Active anonymous session verified. Checking profile...");
+        
+        // 2. Check Profile Data
+        const { data: profile, error } = await getUserProfile();
 
-          if (isProfileComplete) {
-            console.log("Profile complete. Redirecting to Home.");
-            if (onSessionActive) onSessionActive();
-          } else {
-            console.log("Profile incomplete. Wait for user.");
-            // Do not auto-redirect; let them click "Start" to fix profile
-          }
+        if (error || !profile) {
+          // Session valid but profile missing -> Wait for user to start
+          console.log("Profile missing. Staying on Splash.");
+          return;
+        }
+
+        // 3. Verify Onboarding Fields
+        const isProfileComplete =
+          profile.experience &&
+          profile.environment &&
+          profile.goal;
+
+        if (isProfileComplete) {
+          console.log("Profile complete. Redirecting to Home.");
+          if (onSessionActive) onSessionActive();
         } else {
-          // No active session -> New User
-          // FIXED: Do NOT auto-redirect. Wait for button click.
-          console.log("No session. Waiting for user interaction.");
+          console.log("Profile incomplete. Wait for user interaction.");
         }
       } catch (error) {
         console.error("User status check failed.", error);
