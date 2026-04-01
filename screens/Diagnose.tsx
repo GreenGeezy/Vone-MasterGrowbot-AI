@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Camera as CameraIcon, Upload, X, Zap, Activity, CheckSquare, Square, ChevronRight, Droplet, Calendar, Scale, ShieldAlert, Wind, CheckCircle, Share2, Save, RotateCcw, ScanLine } from 'lucide-react';
 import { diagnosePlant, ExtendedDiagnosisResult } from '../services/geminiService';
 import { Plant, UserProfile } from '../types';
@@ -6,8 +6,12 @@ import Growbot from '../components/Growbot';
 import { STRAIN_DATABASE } from '../data/strains';
 import { Share } from '@capacitor/share';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
 import { InAppReview } from '@capacitor-community/in-app-review';
 import { formatMetricDisplay, formatDiagnosisReport } from '../utils/diagnosisFormatter';
+import { checkFeatureAccess } from '../services/tokenService';
+import { CONFIG } from '../services/config';
+import { createPublicReport } from '../services/dbService';
 
 /**
  * Health Score Mapping help
@@ -45,6 +49,7 @@ interface DiagnoseProps {
   onAddTask?: (title: string, date: string, source: 'ai_diagnosis' | 'user') => void;
   defaultProfile?: UserProfile | null;
   onAddPlant?: (strain: any) => void;
+  onNeedTokens?: () => void;
 }
 
 const RecoveryChecklist = ({ steps, themeColor, onAddTask }: { steps: string[], themeColor: string, onAddTask?: (t: string) => void }) => {
@@ -82,9 +87,16 @@ const LOADING_PHRASES = [
   "Building your custom care plan..."
 ];
 
-const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onAddTask, defaultProfile, onAddPlant }) => {
+const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onAddTask, defaultProfile, onAddPlant, onNeedTokens }) => {
   const [image, setImage] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  // Web-only state
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [primaryImageIndex, setPrimaryImageIndex] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isCreatingLink, setIsCreatingLink] = useState(false);
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ExtendedDiagnosisResult | null>(null);
 
@@ -126,7 +138,36 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     }
   }, [loading]);
 
+  const handleWebFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []).slice(0, 3);
+    if (files.length === 0) return;
+    const readers: Promise<string>[] = files.map(
+      (file) =>
+        new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(ev.target?.result as string);
+          reader.readAsDataURL(file);
+        })
+    );
+    Promise.all(readers).then((dataUrls) => {
+      setUploadedImages(dataUrls);
+      setPrimaryImageIndex(0);
+      setPreviewImage(dataUrls[0]);
+    });
+  };
+
   const processImage = async (dataUrl: string) => {
+    if (Capacitor.getPlatform() === 'web') {
+      const accessResult = checkFeatureAccess(CONFIG.TOKEN_COSTS.DIAGNOSIS);
+      if (!accessResult.allowed) {
+        if (accessResult.reason === 'daily_cap_reached') {
+          alert('You have reached the 100 AI call daily limit on your Pro Annual plan. Try again tomorrow.');
+        } else {
+          onNeedTokens?.();
+        }
+        return;
+      }
+    }
     setImage(dataUrl);
     setPreviewImage(null);
     setLoading(true);
@@ -188,6 +229,47 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
 
   const handleShare = async () => {
     if (!result) return;
+
+    if (!Capacitor.isNativePlatform()) {
+      try {
+        setIsCreatingLink(true);
+        const resizeForShare = (dataUrl: string): Promise<string> =>
+          new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+              const scale = Math.min(800 / img.width, 800 / img.height, 1);
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.round(img.width * scale);
+              canvas.height = Math.round(img.height * scale);
+              canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+              resolve(canvas.toDataURL('image/jpeg', 0.7));
+            };
+            img.src = dataUrl;
+          });
+
+        const imagesToStore = uploadedImages.length > 0 ? uploadedImages : (image ? [image] : []);
+        const resizedUrls = await Promise.all(imagesToStore.map(resizeForShare));
+
+        const shareToken = await createPublicReport({
+          diagnosisData: result,
+          imageUrls: resizedUrls,
+          strain,
+          growMethod,
+        });
+
+        const shareUrl = `${window.location.origin}/share/${shareToken}`;
+        await navigator.clipboard.writeText(shareUrl);
+        setShareLinkCopied(true);
+        setTimeout(() => setShareLinkCopied(false), 3000);
+      } catch {
+        alert('Could not create share link. Please try again.');
+      } finally {
+        setIsCreatingLink(false);
+      }
+      return;
+    }
+
+    // Native path — unchanged
     try {
       const reportText = formatDiagnosisReport(result);
       await Share.share({
@@ -351,7 +433,9 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
 
           <div className="grid grid-cols-2 gap-4 pb-4">
             <button onClick={handleSave} className="py-4 bg-gray-900 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"><Save size={18} /> Save to Journal</button>
-            <button onClick={handleShare} className="py-4 bg-gray-100 text-gray-900 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-gray-200"><Share2 size={18} /> Share Result</button>
+            <button onClick={handleShare} className="py-4 bg-gray-100 text-gray-900 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-gray-200">
+              {isCreatingLink ? 'Creating link...' : shareLinkCopied ? '✓ Link Copied!' : <><Share2 size={18} /> Share Result</>}
+            </button>
           </div>
         </div>
       </div>
@@ -458,8 +542,48 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
           </div>
         </div>
 
-        <button onClick={handleStartCamera} className="w-full bg-gray-900 text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-gray-200 flex items-center justify-center gap-3 active:scale-95 transition-transform"><CameraIcon size={24} className="text-green-400" /> Scan with Camera</button>
-        <button onClick={handleGalleryUpload} className="w-full bg-white text-gray-600 py-4 rounded-[2rem] font-bold border border-gray-200 flex items-center justify-center gap-2"><Upload size={18} /> Upload from Gallery</button>
+        {!Capacitor.isNativePlatform() ? (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleWebFileSelect}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full bg-gray-900 text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-gray-200 flex items-center justify-center gap-3 active:scale-95 transition-transform"
+            >
+              <Upload size={24} className="text-green-400" />
+              Upload Plant Photo(s)
+              <span className="text-xs font-normal opacity-60 ml-1">Up to 3 images</span>
+            </button>
+            {uploadedImages.length > 0 && (
+              <div className="flex gap-2 mt-3">
+                {uploadedImages.map((img, i) => (
+                  <div
+                    key={i}
+                    onClick={() => { setPrimaryImageIndex(i); setPreviewImage(img); }}
+                    className={`relative w-20 h-20 rounded-xl overflow-hidden border-2 cursor-pointer
+                      ${i === primaryImageIndex ? 'border-green-500 shadow-md' : 'border-gray-200'}`}
+                  >
+                    <img src={img} className="w-full h-full object-cover" alt={`Upload ${i + 1}`} />
+                    {i === primaryImageIndex && (
+                      <div className="absolute bottom-0 inset-x-0 bg-green-500 text-white text-[8px] font-black text-center py-0.5">MAIN</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <button onClick={handleStartCamera} className="w-full bg-gray-900 text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-gray-200 flex items-center justify-center gap-3 active:scale-95 transition-transform"><CameraIcon size={24} className="text-green-400" /> Scan with Camera</button>
+            <button onClick={handleGalleryUpload} className="w-full bg-white text-gray-600 py-4 rounded-[2rem] font-bold border border-gray-200 flex items-center justify-center gap-2"><Upload size={18} /> Upload from Gallery</button>
+          </>
+        )}
       </div>
     </div>
   );

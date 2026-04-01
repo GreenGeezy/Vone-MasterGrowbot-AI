@@ -5,14 +5,18 @@ import { getCustomStrains, saveCustomStrain, uploadImage } from '../services/dbS
 import { getStrainInsights } from '../services/geminiService';
 import { Strain } from '../types';
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
+import { checkFeatureAccess } from '../services/tokenService';
+import { CONFIG } from '../services/config';
 import sproutIcon from '../src/assets/images/sprout-icon.png';
 import purpleGrowRoom from '../src/assets/images/purple-grow-room.jpg';
 
 interface StrainSearchProps {
     onAddPlant: (strain: Strain) => void; // Callback to add to Garden
+    onNeedTokens?: () => void;
 }
 
-const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
+const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant, onNeedTokens }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState<'All' | 'Custom'>('All');
     const [customStrains, setCustomStrains] = useState<Strain[]>([]);
@@ -72,6 +76,17 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
 
     const handleGetInsights = async () => {
         if (!selectedStrain) return;
+        if (Capacitor.getPlatform() === 'web') {
+            const accessResult = checkFeatureAccess(CONFIG.TOKEN_COSTS.STRAIN_INSIGHT);
+            if (!accessResult.allowed) {
+                if (accessResult.reason === 'daily_cap_reached') {
+                    alert('Daily AI limit reached on your Pro Annual plan. Try again tomorrow.');
+                } else {
+                    onNeedTokens?.();
+                }
+                return;
+            }
+        }
         setIsAiLoading(true);
         setAiInsight(null);
         const result = await getStrainInsights(selectedStrain.name, selectedStrain.description);
@@ -122,6 +137,17 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
         }, [strain]);
 
         const handleAi = async () => {
+            if (Capacitor.getPlatform() === 'web') {
+                const accessResult = checkFeatureAccess(CONFIG.TOKEN_COSTS.STRAIN_INSIGHT);
+                if (!accessResult.allowed) {
+                    if (accessResult.reason === 'daily_cap_reached') {
+                        alert('Daily AI limit reached on your Pro Annual plan. Try again tomorrow.');
+                    } else {
+                        onNeedTokens?.();
+                    }
+                    return;
+                }
+            }
             setLocalIsLoading(true);
             const result = await getStrainInsights(strain.name, strain.description);
             setLocalAiInsight(result);

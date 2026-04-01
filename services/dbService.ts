@@ -471,6 +471,43 @@ export const getChatMessages = async (sessionId: string): Promise<StoredMessage[
 
 // --- Account Deletion ---
 
+// --- Public Report System ---
+
+export const createPublicReport = async (opts: {
+  diagnosisData: object;
+  imageUrls: string[];
+  strain?: string;
+  growMethod?: string;
+}): Promise<string> => {
+  const { data, error } = await supabase
+    .from('public_reports')
+    .insert({
+      diagnosis_data: opts.diagnosisData,
+      image_urls: opts.imageUrls,
+      strain: opts.strain || null,
+      grow_method: opts.growMethod || null,
+    })
+    .select('share_token')
+    .single();
+
+  if (error) throw new Error(`Failed to create public report: ${error.message}`);
+  return data.share_token as string;
+};
+
+export const getPublicReport = async (shareToken: string): Promise<any | null> => {
+  const { data, error } = await supabase
+    .from('public_reports')
+    .select('*')
+    .eq('share_token', shareToken)
+    .maybeSingle();
+
+  if (error) {
+    console.error('getPublicReport error:', error);
+    return null;
+  }
+  return data;
+};
+
 export const deleteUserData = async (): Promise<boolean> => {
   const { data: { session } } = await supabase.auth.getSession();
 

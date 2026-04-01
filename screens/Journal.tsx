@@ -4,8 +4,11 @@ import NoteCreator from '../components/NoteCreator';
 import StrainCard from '../components/StrainCard';
 import { analyzeGrowLog } from '../services/geminiService';
 import { STRAIN_DATABASE } from '../data/strains';
+import { Capacitor } from '@capacitor/core';
+import { checkFeatureAccess } from '../services/tokenService';
+import { CONFIG } from '../services/config';
 
-const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onUpdatePlant }) => {
+const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onUpdatePlant, onNeedTokens }) => {
   const [showCreator, setShowCreator] = useState(false);
   const [showTaskCreator, setShowTaskCreator] = useState(false); // New Task Modal
 
@@ -28,6 +31,17 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
       ...entry,
       imageUri: entry.image || entry.imageUri // Handle potential property name mismatch
     };
+    if (Capacitor.getPlatform() === 'web') {
+      const accessResult = checkFeatureAccess(CONFIG.TOKEN_COSTS.JOURNAL_ANALYSIS);
+      if (!accessResult.allowed) {
+        if (accessResult.reason === 'daily_cap_reached') {
+          alert('Daily AI limit reached on your Pro Annual plan. Try again tomorrow.');
+        } else {
+          onNeedTokens?.();
+          return; // Don't save yet — user needs to get credits then retry
+        }
+      }
+    }
     const aiData = await analyzeGrowLog(entry.notes);
     onAddEntry({ ...finalEntry, aiAnalysis: { summary: aiData } });
     setShowCreator(false);

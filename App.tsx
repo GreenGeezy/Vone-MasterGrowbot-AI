@@ -22,6 +22,11 @@ import { STRAIN_DATABASE } from './data/strains';
 import ErrorBoundary from './components/ErrorBoundary';
 
 import { getDailyInsight, wakeUpBackend } from './services/geminiService';
+import TokenShop from './screens/TokenShop';
+import TokenActivate from './screens/TokenActivate';
+import ShareReport from './screens/ShareReport';
+import { CONFIG } from './services/config';
+import { getTokenState, checkFeatureAccess } from './services/tokenService';
 
 const App: React.FC = () => {
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
@@ -32,6 +37,9 @@ const App: React.FC = () => {
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false); // New Tutorial State
+  const [showTokenShop, setShowTokenShop] = useState(false);
+  const [showTokenActivate, setShowTokenActivate] = useState(false);
+  const [showShareReport, setShowShareReport] = useState(false);
   const isAuthProcessing = useRef(false);
 
   useEffect(() => {
@@ -40,6 +48,23 @@ const App: React.FC = () => {
       wakeUpBackend();
 
       await SplashScreen.hide();
+
+      if (Capacitor.getPlatform() === 'web') {
+        // Public share page: /share/[token]
+        const parts = window.location.pathname.split('/');
+        if (parts[1] === 'share' && parts[2]) {
+          setShowShareReport(true);
+          return; // Skip all onboarding, auth, and subscription logic
+        }
+        // Return from Whop checkout
+        const params = new URLSearchParams(window.location.search);
+        if (params.get(CONFIG.WHOP.SUCCESS_PARAM) === '1') {
+          window.history.replaceState({}, document.title, window.location.pathname);
+          setOnboardingStatus(OnboardingStep.COMPLETED);
+          setShowTokenActivate(true);
+          return;
+        }
+      }
 
       // Ensure we have a session (or create an anonymous one) before configuring RevenueCat
       let { data: { session } } = await supabase.auth.getSession();
@@ -124,9 +149,8 @@ const App: React.FC = () => {
             isSubscribed = true;
           }
         } else {
-          // Web/Dev Logic: If they reached 'COMPLETED' or have profile, assume sub for now unless explicit logout
-          // For strict testing: assumes true if profile exists locally
-          if (profileData) isSubscribed = true;
+          // Web: always grant app access — token credits gate individual AI features, not the app itself
+          isSubscribed = true;
         }
       } catch (e) {
         console.warn("Purchases check failed (dev mode?)", e);
@@ -317,16 +341,19 @@ const App: React.FC = () => {
 
   if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={() => setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE)} />;
   if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) return <Onboarding onComplete={(p) => { setUserProfile(p); setOnboardingStatus(OnboardingStep.SUMMARY); }} />;
-  if (onboardingStatus === OnboardingStep.SUMMARY) return <OnboardingSummary profile={userProfile!} onContinue={() => { setOnboardingStatus(OnboardingStep.COMPLETED); setShowPaywall(true); }} />;
+  if (onboardingStatus === OnboardingStep.SUMMARY) return <OnboardingSummary profile={userProfile!} onContinue={() => {
+    setOnboardingStatus(OnboardingStep.COMPLETED);
+    // Web branch: no paywall on onboarding — user enters app with 3 free credits
+  }} />;
 
   return (
     <div className="h-screen w-screen bg-surface overflow-hidden relative">
       <ErrorBoundary>
         <div className="h-full w-full overflow-y-auto pb-24">
           {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onAddPlant={handleAddPlant} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
-          {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} onAddTask={handleAddTask} plant={plants[0]} defaultProfile={userProfile} onAddPlant={handleAddPlant} />}
-          {currentTab === AppScreen.STRAINS && <StrainSearch onAddPlant={handleAddPlant} />}
-          {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
+          {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} onAddTask={handleAddTask} plant={plants[0]} defaultProfile={userProfile} onAddPlant={handleAddPlant} onNeedTokens={() => setShowTokenShop(true)} />}
+          {currentTab === AppScreen.STRAINS && <StrainSearch onAddPlant={handleAddPlant} onNeedTokens={() => setShowTokenShop(true)} />}
+          {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} onNeedTokens={() => setShowTokenShop(true)} />}
           {currentTab === AppScreen.PROFILE && <Profile userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onViewTutorial={() => setShowTutorial(true)} onSignOut={async () => {
             if (Capacitor.getPlatform() !== 'web') {
               try { await Purchases.logOut(); } catch (e) { console.error("Error logging out of RevenueCat:", e); }
@@ -336,6 +363,20 @@ const App: React.FC = () => {
           }} />}
         </div>
       </ErrorBoundary>
+
+      {showShareReport && <ShareReport />}
+      {showTokenShop && (
+        <TokenShop
+          onClose={() => setShowTokenShop(false)}
+          onTokensActivated={() => setShowTokenShop(false)}
+        />
+      )}
+      {showTokenActivate && (
+        <TokenActivate
+          onComplete={() => setShowTokenActivate(false)}
+          onBack={() => { setShowTokenActivate(false); setShowTokenShop(true); }}
+        />
+      )}
 
       {showTutorial && <GetStartedTutorial onComplete={completeTutorial} />}
 
