@@ -339,7 +339,19 @@ const App: React.FC = () => {
     handleUpdateProfile({ hasSeenTutorial: true });
   };
 
-  if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={() => setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE)} />;
+  if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={() => {
+    if (Capacitor.getPlatform() === 'web') {
+      // Web: skip quiz and summary entirely — enter app directly with 3 free credits + tutorial
+      const defaultProfile: UserProfile = { experience: 'Novice', isOnboarded: true, hasSeenTutorial: false };
+      setUserProfile(defaultProfile);
+      localStorage.setItem('mastergrowbot_profile', JSON.stringify(defaultProfile));
+      setOnboardingStatus(OnboardingStep.COMPLETED);
+      setShowTutorial(true);
+      loadUserData();
+    } else {
+      setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE);
+    }
+  }} />;
   if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) return <Onboarding onComplete={(p) => { setUserProfile(p); setOnboardingStatus(OnboardingStep.SUMMARY); }} />;
   if (onboardingStatus === OnboardingStep.SUMMARY) return <OnboardingSummary profile={userProfile!} onContinue={() => {
     setOnboardingStatus(OnboardingStep.COMPLETED);
@@ -347,7 +359,8 @@ const App: React.FC = () => {
   }} />;
 
   return (
-    <div className="h-screen w-screen bg-surface overflow-hidden relative">
+    <div className={`h-screen overflow-hidden ${Capacitor.getPlatform() === 'web' ? 'flex justify-center bg-gradient-to-br from-green-50 to-emerald-100' : 'w-screen bg-surface relative'}`}>
+    <div className={Capacitor.getPlatform() === 'web' ? 'h-full w-full max-w-[430px] bg-surface overflow-hidden relative shadow-2xl' : 'h-full w-full relative'}>
       <ErrorBoundary>
         <div className="h-full w-full overflow-y-auto pb-24">
           {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onAddPlant={handleAddPlant} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
@@ -386,6 +399,7 @@ const App: React.FC = () => {
       {showAuth && <PostPaymentAuth onComplete={handleAuthSuccess} onSkip={handleAuthSuccess} userProfile={userProfile} />}
 
       <BottomNav currentScreen={currentTab} onNavigate={(tab) => setCurrentTab(tab)} />
+    </div>
     </div>
   );
 };
