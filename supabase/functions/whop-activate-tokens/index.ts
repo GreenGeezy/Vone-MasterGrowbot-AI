@@ -38,14 +38,14 @@ Deno.serve(async (req) => {
     // 4. Create Supabase admin client (service_role — needed to write to claimed_purchases)
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 5. Query Whop API for recent succeeded payments by email
+    // 5. Query Whop API for recent paid payments by email
+    // Correct endpoint: /api/v1/payments with query= for email search, statuses=paid
     const encodedEmail = encodeURIComponent(email);
     const whopRes = await fetch(
-      `https://api.whop.com/v5/payments?email=${encodedEmail}&status=succeeded`,
+      `https://api.whop.com/api/v1/payments?query=${encodedEmail}&statuses=paid&order=created_at&direction=desc&first=10`,
       {
         headers: {
           'Authorization': `Bearer ${whopApiKey}`,
-          'Content-Type': 'application/json',
         },
       }
     );
@@ -92,24 +92,25 @@ Deno.serve(async (req) => {
 
       if (existing) continue; // Already claimed — skip
 
-      // Determine plan type by payment.plan.name (case-insensitive substring match)
-      const name: string = (payment.plan?.name || payment.product?.name || '').toLowerCase();
+      // Determine plan type by payment.product.title (case-insensitive substring match)
+      // Whop API v1: plan object only has {id}, product object has {id, title, route}
+      const name: string = (payment.product?.title || '').toLowerCase();
 
       if (name.includes('seedling pack')) {
         planType = 'credits';
         creditsAmount = 10;
-        planName = payment.plan?.name || 'Seedling Pack';
+        planName = payment.product?.title || 'Seedling Pack';
       } else if (name.includes('grower pack')) {
         planType = 'credits';
         creditsAmount = 25;
-        planName = payment.plan?.name || 'Grower Pack';
+        planName = payment.product?.title || 'Grower Pack';
       } else if (name.includes('master pack')) {
         planType = 'credits';
         creditsAmount = 60;
-        planName = payment.plan?.name || 'Master Pack';
+        planName = payment.product?.title || 'Master Pack';
       } else if (name.includes('pro annual')) {
         planType = 'annual';
-        planName = payment.plan?.name || 'Pro Annual';
+        planName = payment.product?.title || 'Pro Annual';
       }
 
       if (planType) {
