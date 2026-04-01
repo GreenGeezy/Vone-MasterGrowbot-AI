@@ -29,6 +29,11 @@ Deno.serve(async (req) => {
       throw new Error('Missing WHOP_API_KEY environment variable');
     }
 
+    const whopCompanyId = Deno.env.get('WHOP_COMPANY_ID');
+    if (!whopCompanyId) {
+      throw new Error('Missing WHOP_COMPANY_ID environment variable');
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     if (!supabaseUrl || !supabaseServiceKey) {
@@ -39,10 +44,10 @@ Deno.serve(async (req) => {
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
     // 5. Query Whop API for recent paid payments by email
-    // Correct endpoint: /api/v1/payments with query= for email search, statuses=paid
+    // company_id is required to scope the query to this Whop company
     const encodedEmail = encodeURIComponent(email);
     const whopRes = await fetch(
-      `https://api.whop.com/api/v1/payments?query=${encodedEmail}&statuses=paid&order=created_at&direction=desc&first=10`,
+      `https://api.whop.com/api/v1/payments?query=${encodedEmail}&statuses=paid&company_id=${whopCompanyId}&order=created_at&direction=desc&first=10`,
       {
         headers: {
           'Authorization': `Bearer ${whopApiKey}`,
