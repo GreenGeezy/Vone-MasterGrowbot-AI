@@ -77,7 +77,7 @@ const GetStartedTutorial: React.FC<GetStartedTutorialProps> = ({ onComplete }) =
             </button>
 
             {/* Main Card */}
-            <div className={`w-full max-w-sm rounded-[3rem] p-8 shadow-2xl transition-all duration-500 ${current.color} border border-white/50 relative overflow-hidden`}>
+            <div className={`w-full max-w-sm rounded-3xl p-7 shadow-2xl transition-all duration-500 ${current.color} border border-white/50 relative overflow-hidden`}>
                 {/* Background Blur Blob */}
                 <div className="absolute -top-20 -right-20 w-64 h-64 bg-white/40 rounded-full blur-3xl"></div>
 
@@ -114,7 +114,7 @@ const GetStartedTutorial: React.FC<GetStartedTutorialProps> = ({ onComplete }) =
             {/* Action Button */}
             <button
                 onClick={handleNext}
-                className="w-full max-w-xs bg-gray-900 text-white font-black text-lg py-5 rounded-2xl shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-3"
+                className="w-full max-w-xs bg-gray-900 text-white font-black text-lg py-4 rounded-2xl shadow-xl hover:bg-gray-700 hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-3"
             >
                 {current.action} <ChevronRight strokeWidth={3} size={20} />
             </button>

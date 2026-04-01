@@ -2,8 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>MasterGrowbot AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MasterGrowbot AI — Your Personal AI Grow Assistant</title>
+    <meta name="description" content="AI-powered plant health analysis, strain intelligence, and grow journaling. Spot problems before they spread." />
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script>
@@ -21,9 +22,14 @@
             boxShadow: {
               'card': '0 10px 40px -10px rgba(0,0,0,0.08)',
               'soft': '0 4px 20px -2px rgba(148, 163, 184, 0.1)',
+              'lg-up': '0 -4px 20px rgba(0,0,0,0.06)',
             },
             animation: {
-              'scan': 'scan 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite'
+              'scan': 'scan 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite',
+              'bounce-slow': 'bounce 2s ease-in-out infinite',
+              'spin-slow': 'spin 3s linear infinite',
+              'pulse-glow': 'pulse 3s ease-in-out infinite',
+              'float': 'float 6s ease-in-out infinite',
             },
             keyframes: {
               scan: {
@@ -31,6 +37,10 @@
                 '10%': { opacity: '1' },
                 '90%': { opacity: '1' },
                 '100%': { top: '100%', opacity: '0' }
+              },
+              float: {
+                '0%, 100%': { transform: 'translateY(0px)' },
+                '50%': { transform: 'translateY(-12px)' }
               }
             }
           }
@@ -38,8 +48,33 @@
       }
     </script>
     <style>
+      /* Base */
       body { background-color: #F8FAFC; -webkit-tap-highlight-color: transparent; }
-      ::-webkit-scrollbar { width: 0px; background: transparent; }
+
+      /* Cursor: every interactive element gets pointer on desktop */
+      button, [role="button"], a, label, select, [tabindex]:not([tabindex="-1"]) { cursor: pointer; }
+
+      /* Thin scrollbar — visible on desktop, invisible on mobile WebView */
+      ::-webkit-scrollbar { width: 5px; height: 5px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: rgba(5,150,105,0.18); border-radius: 10px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(5,150,105,0.35); }
+
+      /* Smooth scrolling everywhere */
+      * { scroll-behavior: smooth; }
+
+      /* Keyboard focus — accessible ring without the ugly default */
+      :focus-visible { outline: 2px solid #059669; outline-offset: 2px; border-radius: 6px; }
+
+      /* Remove tap highlight on all elements for cleaner web feel */
+      * { -webkit-tap-highlight-color: transparent; }
+
+      /* Text stays selectable on web (unlike native app) */
+      body { user-select: text; -webkit-user-select: text; }
+      button, [role="button"] { user-select: none; -webkit-user-select: none; }
+
+      /* Prevent horizontal overflow on outer page */
+      html, body { overflow-x: hidden; }
     </style>
   </head>
   <body>

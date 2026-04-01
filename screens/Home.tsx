@@ -40,7 +40,7 @@ const Home: React.FC<any> = ({ plants, tasks, onToggleTask, onNavigateToPlant, o
           </div>
         ) : (
           tasks.map((task: any) => (
-            <div key={task.id} onClick={() => onToggleTask(task.id)} className={`flex items-center gap-4 p-5 rounded-2xl mb-3 shadow-sm transition-all active:scale-95 ${task.isCompleted ? 'bg-gray-50 border border-transparent opacity-60' : 'bg-white border border-gray-100'}`}>
+            <div key={task.id} onClick={() => onToggleTask(task.id)} className={`flex items-center gap-4 p-5 rounded-2xl mb-3 shadow-sm transition-all cursor-pointer select-none ${task.isCompleted ? 'bg-gray-50 border border-transparent opacity-60 hover:opacity-80' : 'bg-white border border-gray-100 hover:border-green-200 hover:shadow-md hover:-translate-y-0.5'}`}>
               {task.isCompleted ? <CheckCircle2 className="text-green-500" fill="currentColor" color="white" size={24} /> : <Circle className="text-gray-300" size={24} />}
               <div className="flex-1">
                 <span className={`block text-sm font-bold transition-all ${task.isCompleted ? "line-through text-gray-400" : "text-text-main"}`}>{task.title}</span>

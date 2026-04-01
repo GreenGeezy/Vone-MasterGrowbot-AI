@@ -104,10 +104,10 @@ const TokenShop: React.FC<TokenShopProps> = ({ onClose, featureCostCredits, onTo
           <button
             key={pack.key}
             onClick={() => { window.location.href = CONFIG.WHOP.PACKS[pack.key].url; }}
-            className={`w-full text-left p-5 rounded-[1.5rem] border-2 transition-all active:scale-[0.98] relative overflow-hidden
+            className={`w-full text-left p-5 rounded-2xl border-2 transition-all duration-200 relative overflow-hidden hover:-translate-y-0.5 hover:shadow-xl
               ${pack.highlight
-                ? 'bg-green-600 border-green-600 text-white shadow-xl shadow-green-200'
-                : 'bg-white border-gray-200 text-gray-900 hover:border-green-300 shadow-sm'
+                ? 'bg-green-600 border-green-600 text-white shadow-lg shadow-green-200 hover:bg-emerald-600 hover:border-emerald-600'
+                : 'bg-white border-gray-200 text-gray-900 hover:border-green-400 shadow-sm'
               }`}
           >
             {pack.badge && (
@@ -154,7 +154,7 @@ const TokenShop: React.FC<TokenShopProps> = ({ onClose, featureCostCredits, onTo
               <button
                 onClick={handleActivate}
                 disabled={activating || !activateEmail.trim()}
-                className="w-full py-3 bg-gray-900 text-white rounded-xl font-black text-sm uppercase tracking-wider active:scale-95 transition-transform disabled:opacity-50"
+                className="w-full py-3 bg-gray-900 text-white rounded-xl font-black text-sm uppercase tracking-wider hover:bg-gray-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {activating ? 'Activating...' : 'Activate'}
               </button>
