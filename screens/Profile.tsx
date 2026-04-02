@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { UserProfile } from '../types';
 import {
     User, LogOut, Shield, Settings, ChevronRight, Camera,
@@ -178,8 +179,10 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
         </div>
     );
 
+    const isWeb = Capacitor.getPlatform() === 'web';
+
     return (
-        <div className="bg-gray-50 h-full overflow-y-auto pb-24 font-sans relative">
+        <div className={`bg-gray-50 font-sans relative ${isWeb ? 'min-h-full pb-8' : 'h-full overflow-y-auto pb-24'}`}>
 
             {/* 1. Header & Avatar */}
             <div className="pt-12 pb-8 px-6 text-center relative">

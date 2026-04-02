@@ -63,8 +63,10 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
     ...tasks.map((t: any) => ({ ...t, feedType: 'task', date: t.dueDate })) // Map dueDate to date for sorting
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+  const isWeb = Capacitor.getPlatform() === 'web';
+
   return (
-    <div className="bg-surface min-h-screen pb-32 pt-12 relative px-6">
+    <div className={`bg-surface min-h-screen relative px-6 ${isWeb ? 'pb-8 pt-6' : 'pb-32 pt-12'}`}>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-text-main">Journal</h1>
       </div>
@@ -126,7 +128,13 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
       </div>
 
       {/* FAB with Speed Dial */}
-      <div className="fixed bottom-24 right-6 z-40 flex flex-col items-end gap-3">
+      <div
+        className="z-40 flex flex-col items-end gap-3"
+        style={isWeb
+          ? { position: 'fixed', bottom: '32px', right: 'max(24px, calc((100vw - 720px) / 2 + 24px))' }
+          : { position: 'fixed', bottom: '96px', right: '24px' }
+        }
+      >
         {showFabMenu && (
           <>
             <button onClick={() => { setShowFabMenu(false); setShowTaskCreator(true); }} className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-full font-bold shadow-lg animate-in slide-in-from-bottom-2">

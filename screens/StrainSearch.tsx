@@ -241,8 +241,10 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant, onNeedTokens })
         );
     };
 
+    const isWeb = Capacitor.getPlatform() === 'web';
+
     return (
-        <div className="bg-surface min-h-screen pb-24 pt-12 px-6 flex flex-col font-sans">
+        <div className={`bg-surface min-h-screen px-6 flex flex-col font-sans ${isWeb ? 'pb-8 pt-6' : 'pb-24 pt-12'}`}>
 
             {/* 1. Header */}
             <div className="mb-6">
@@ -269,7 +271,7 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant, onNeedTokens })
             </div>
 
             {/* 3. List */}
-            <div className="flex-1 space-y-3 overflow-y-auto -mx-6 px-6 pb-20">
+            <div className={isWeb ? 'grid grid-cols-2 gap-3 pb-4' : 'flex-1 space-y-3 overflow-y-auto -mx-6 px-6 pb-20'}>
                 {customStrains.length > 0 && searchQuery === '' && (
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2 mb-1">Your Genetics</h3>
                 )}

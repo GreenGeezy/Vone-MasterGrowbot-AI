@@ -12,6 +12,7 @@ import Paywall from './screens/Paywall';
 import PostPaymentAuth from './screens/PostPaymentAuth';
 import GetStartedTutorial from './screens/GetStartedTutorial';
 import BottomNav from './components/BottomNav';
+import WebTopNav from './components/WebTopNav';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
@@ -358,11 +359,14 @@ const App: React.FC = () => {
     // Web branch: no paywall on onboarding — user enters app with 3 free credits
   }} />;
 
+  const isWeb = Capacitor.getPlatform() === 'web';
+
   return (
-    <div className={`h-screen overflow-hidden ${Capacitor.getPlatform() === 'web' ? 'flex justify-center bg-gradient-to-br from-green-50 to-emerald-100' : 'w-screen bg-surface relative'}`}>
-    <div className={Capacitor.getPlatform() === 'web' ? 'h-full w-full max-w-[430px] bg-surface overflow-hidden relative shadow-2xl' : 'h-full w-full relative'}>
+    <div className={`h-screen overflow-hidden ${isWeb ? 'flex justify-center bg-gradient-to-br from-green-50 to-emerald-100' : 'w-screen bg-surface relative'}`}>
+    <div className={isWeb ? 'h-full w-full max-w-[720px] bg-surface overflow-hidden relative shadow-2xl flex flex-col' : 'h-full w-full relative'}>
+      {isWeb && <WebTopNav currentScreen={currentTab} onNavigate={(tab) => setCurrentTab(tab)} onOpenTokenShop={() => setShowTokenShop(true)} />}
       <ErrorBoundary>
-        <div className="h-full w-full overflow-y-auto pb-24">
+        <div className={isWeb ? 'flex-1 overflow-y-auto pt-16 pb-8' : 'h-full w-full overflow-y-auto pb-24'}>
           {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onAddPlant={handleAddPlant} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
           {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} onAddTask={handleAddTask} plant={plants[0]} defaultProfile={userProfile} onAddPlant={handleAddPlant} onNeedTokens={() => setShowTokenShop(true)} />}
           {currentTab === AppScreen.STRAINS && <StrainSearch onAddPlant={handleAddPlant} onNeedTokens={() => setShowTokenShop(true)} />}
@@ -398,7 +402,7 @@ const App: React.FC = () => {
 
       {showAuth && <PostPaymentAuth onComplete={handleAuthSuccess} onSkip={handleAuthSuccess} userProfile={userProfile} />}
 
-      <BottomNav currentScreen={currentTab} onNavigate={(tab) => setCurrentTab(tab)} />
+      {!isWeb && <BottomNav currentScreen={currentTab} onNavigate={(tab) => setCurrentTab(tab)} />}
     </div>
     </div>
   );
