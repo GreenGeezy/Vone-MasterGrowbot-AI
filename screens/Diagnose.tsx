@@ -557,8 +557,8 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
               className="w-full bg-gray-900 text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-gray-200 flex items-center justify-center gap-3 active:scale-95 transition-transform"
             >
               <Upload size={24} className="text-green-400" />
-              Upload Plant Photo(s)
-              <span className="text-xs font-normal opacity-60 ml-1">Up to 3 images</span>
+              Upload Photo or Image
+              <span className="text-xs font-normal opacity-60 ml-1">of your Plant or Grow</span>
             </button>
             {uploadedImages.length > 0 && (
               <div className="flex gap-2 mt-3">
