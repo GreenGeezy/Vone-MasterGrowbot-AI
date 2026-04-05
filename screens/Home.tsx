@@ -1,13 +1,22 @@
 import React, { useState } from 'react';
 import PlantCard from '../components/PlantCard';
 import Growbot from '../components/Growbot';
-import { Sun, CheckCircle2, Circle, Plus } from 'lucide-react';
+import { Sun, CheckCircle2, Circle, Plus, Zap } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { getTokenState, isAnnualPlanValid } from '../services/tokenService';
 
-const Home: React.FC<any> = ({ plants, tasks, onToggleTask, onNavigateToPlant, onAddPlant }) => {
+const Home: React.FC<any> = ({ plants, tasks, onToggleTask, onNavigateToPlant, onAddPlant, onOpenTokenShop }) => {
   const pendingTasks = tasks.filter((t: any) => !t.isCompleted);
   const completedCount = tasks.filter((t: any) => t.isCompleted).length;
   const isWeb = Capacitor.getPlatform() === 'web';
+
+  const tokenState = getTokenState();
+  const isAnnual = isAnnualPlanValid(tokenState);
+  const creditLabel = isAnnual
+    ? 'Pro Plan'
+    : tokenState.free_uses_remaining > 0
+    ? `${tokenState.free_uses_remaining} free credit${tokenState.free_uses_remaining !== 1 ? 's' : ''} left`
+    : `${Math.floor(tokenState.balance)} credit${Math.floor(tokenState.balance) !== 1 ? 's' : ''}`;
 
   const TaskList = () => (
     <div className="space-y-3">
@@ -83,6 +92,18 @@ const Home: React.FC<any> = ({ plants, tasks, onToggleTask, onNavigateToPlant, o
         <div className="text-right">
           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Completed</span>
           <div className="text-2xl font-black text-green-500">{completedCount}</div>
+          {isWeb && !isAnnual && (
+            <div className="mt-2 flex flex-col items-end gap-1">
+              <span className="text-[11px] text-gray-400 font-medium">{creditLabel}</span>
+              <button
+                onClick={onOpenTokenShop}
+                className="flex items-center gap-1 text-[11px] font-bold text-primary hover:text-emerald-700 transition-colors"
+              >
+                <Zap size={11} />
+                Get More Credits
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

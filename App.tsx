@@ -367,7 +367,7 @@ const App: React.FC = () => {
       {isWeb && <WebTopNav currentScreen={currentTab} onNavigate={(tab) => setCurrentTab(tab)} onOpenTokenShop={() => setShowTokenShop(true)} />}
       <ErrorBoundary>
         <div className={isWeb ? 'flex-1 overflow-y-auto pt-16 pb-8' : 'h-full w-full overflow-y-auto pb-24'}>
-          {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onAddPlant={handleAddPlant} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
+          {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onAddPlant={handleAddPlant} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} onOpenTokenShop={() => setShowTokenShop(true)} />}
           {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} onAddTask={handleAddTask} plant={plants[0]} defaultProfile={userProfile} onAddPlant={handleAddPlant} onNeedTokens={() => setShowTokenShop(true)} />}
           {currentTab === AppScreen.STRAINS && <StrainSearch onAddPlant={handleAddPlant} onNeedTokens={() => setShowTokenShop(true)} />}
           {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} onNeedTokens={() => setShowTokenShop(true)} />}
