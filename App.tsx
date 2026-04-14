@@ -12,6 +12,7 @@ import Paywall from './screens/Paywall';
 import PostPaymentAuth from './screens/PostPaymentAuth';
 import GetStartedTutorial from './screens/GetStartedTutorial';
 import BottomNav from './components/BottomNav';
+import OnboardingFlow from './screens/onboarding/OnboardingFlow';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
@@ -360,7 +361,47 @@ const App: React.FC = () => {
     handleUpdateProfile({ hasSeenTutorial: true });
   };
 
-  if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={() => setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE)} />;
+  // New 12-screen onboarding flow for new users
+  if (onboardingStatus === OnboardingStep.SPLASH) {
+    return (
+      <OnboardingFlow
+        onComplete={(onboardingData) => {
+          // Map onboarding strings → UserProfile typed values
+          const expMap: Record<string, UserProfile['experience']> = {
+            first_grow: 'Novice', beginner: 'Novice', intermediate: 'Intermediate',
+            advanced: 'Expert', expert: 'Pro',
+          };
+          const envMap: Record<string, UserProfile['grow_mode']> = {
+            indoor_tent: 'Indoor', indoor_room: 'Indoor', outdoor: 'Outdoor',
+            greenhouse: 'Greenhouse',
+          };
+          const goalMap: Record<string, UserProfile['goal']> = {
+            max_yield: 'Maximize Yield', top_quality: 'Improve Quality', learn_skills: 'Learn Skills',
+            low_maintenance: 'Maximize Yield', stealth: 'Maximize Yield',
+          };
+          const spaceMap: Record<string, UserProfile['space']> = {
+            soil: 'Small', coco: 'Medium', hydro: 'Large', living_soil: 'Medium',
+          };
+
+          const newProfile: UserProfile = {
+            experience: expMap[onboardingData.experience] || 'Novice',
+            grow_mode: envMap[onboardingData.environment] || 'Indoor',
+            goal: goalMap[onboardingData.goal] || 'Maximize Yield',
+            space: spaceMap[onboardingData.medium] || 'Medium',
+            isOnboarded: true,
+            hasSeenTutorial: false,
+            streak: 0,
+            lastVisit: new Date().toISOString().split('T')[0],
+          };
+          setUserProfile(newProfile);
+          localStorage.setItem('mastergrowbot_profile', JSON.stringify(newProfile));
+          setOnboardingStatus(OnboardingStep.COMPLETED);
+          setShowTutorial(false);
+          loadUserData();
+        }}
+      />
+    );
+  }
   if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) return <Onboarding onComplete={(p) => { setUserProfile(p); setOnboardingStatus(OnboardingStep.SUMMARY); }} />;
   if (onboardingStatus === OnboardingStep.SUMMARY) return <OnboardingSummary profile={userProfile!} onContinue={() => { setOnboardingStatus(OnboardingStep.COMPLETED); setShowPaywall(true); }} />;
 
