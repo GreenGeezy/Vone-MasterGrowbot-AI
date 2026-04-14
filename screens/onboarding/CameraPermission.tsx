@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import OnboardingProgressBar from '../../components/OnboardingProgressBar';
 import { Camera, Zap, Shield, ChevronRight } from 'lucide-react';
-import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
+import { Camera as CapacitorCamera } from '@capacitor/camera';
 
 interface CameraPermissionProps {
   onPermissionGranted: () => void;
@@ -31,15 +32,19 @@ const CameraPermission: React.FC<CameraPermissionProps> = ({ onPermissionGranted
   const [requesting, setRequesting] = useState(false);
 
   const handleRequestPermission = async () => {
+    // On web — no camera permission dialog, just proceed
+    if (!Capacitor.isNativePlatform()) {
+      onPermissionGranted();
+      return;
+    }
+
     setRequesting(true);
     try {
-      // Taking a photo with requestPermissions triggers the system dialog on iOS
       await CapacitorCamera.requestPermissions({ permissions: ['camera'] });
       onPermissionGranted();
     } catch (e) {
-      // User denied or error — still advance (they can enable later in Settings)
-      console.warn('Camera permission denied or error:', e);
-      onPermissionGranted(); // Still proceed — they can enable later
+      console.warn('Camera permission error:', e);
+      onPermissionGranted(); // Proceed anyway — user can enable in Settings
     } finally {
       setRequesting(false);
     }
@@ -71,10 +76,6 @@ const CameraPermission: React.FC<CameraPermissionProps> = ({ onPermissionGranted
           <div className="w-32 h-32 bg-[#059669]/10 border-2 border-[#059669]/30 rounded-3xl flex items-center justify-center">
             <Camera size={56} className="text-[#059669]" strokeWidth={1.5} />
           </div>
-          {/* Pulse rings */}
-          <div className="absolute inset-0 rounded-3xl border-2 border-[#059669]/20 animate-ping" style={{ animationDuration: '2s' }} />
-          <div className="absolute -inset-4 rounded-[2.5rem] border border-[#059669]/10 animate-ping" style={{ animationDuration: '2.5s', animationDelay: '0.5s' }} />
-          {/* Badge */}
           <div className="absolute -top-2 -right-2 bg-[#059669] rounded-full px-2 py-0.5 flex items-center gap-1 shadow-lg">
             <Zap size={10} className="text-white" />
             <span className="text-white text-[10px] font-black">AI</span>

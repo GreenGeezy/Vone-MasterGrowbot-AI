@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Purchases, PurchasesPackage } from '@revenuecat/purchases-capacitor';
+import { Capacitor } from '@capacitor/core';
 import { CheckCircle, Zap, Lock, ChevronRight } from 'lucide-react';
+import type { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 
 interface OnboardingPaywallProps {
   onPurchase: () => void;
@@ -63,7 +64,9 @@ const OnboardingPaywall: React.FC<OnboardingPaywallProps> = ({ onPurchase }) => 
   }, []);
 
   const loadPackages = async () => {
+    if (!Capacitor.isNativePlatform()) return; // RevenueCat only works on native
     try {
+      const { Purchases } = await import('@revenuecat/purchases-capacitor');
       const offerings = await Purchases.getOfferings();
       const current = offerings.current;
       if (!current?.availablePackages?.length) return;
@@ -140,7 +143,14 @@ const OnboardingPaywall: React.FC<OnboardingPaywallProps> = ({ onPurchase }) => 
     setPurchasing(true);
     setError('');
 
+    // On web, skip payment and proceed directly (testing / web preview)
+    if (!Capacitor.isNativePlatform()) {
+      setTimeout(() => { setPurchasing(false); onPurchase(); }, 800);
+      return;
+    }
+
     try {
+      const { Purchases } = await import('@revenuecat/purchases-capacitor');
       if (selectedPkg.rcPackage) {
         const { customerInfo } = await Purchases.purchasePackage({ aPackage: selectedPkg.rcPackage });
         if (typeof customerInfo.entitlements.active['pro'] !== 'undefined') {
@@ -148,7 +158,6 @@ const OnboardingPaywall: React.FC<OnboardingPaywallProps> = ({ onPurchase }) => 
           return;
         }
       }
-      // Fallback for dev / no package loaded
       onPurchase();
     } catch (err: any) {
       if (err?.userCancelled || err?.code === '1') {
@@ -162,9 +171,11 @@ const OnboardingPaywall: React.FC<OnboardingPaywallProps> = ({ onPurchase }) => 
   };
 
   const handleRestore = async () => {
+    if (!Capacitor.isNativePlatform()) return;
     setRestoring(true);
     setError('');
     try {
+      const { Purchases } = await import('@revenuecat/purchases-capacitor');
       const { customerInfo } = await Purchases.restorePurchases();
       if (typeof customerInfo.entitlements.active['pro'] !== 'undefined') {
         onPurchase();

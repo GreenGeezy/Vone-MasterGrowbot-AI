@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { InAppReview } from '@capacitor-community/in-app-review';
+import { Capacitor } from '@capacitor/core';
 import { ChevronRight, Star, CheckCircle } from 'lucide-react';
 
 interface CongratsReviewProps {
@@ -49,15 +49,17 @@ const CongratsReview: React.FC<CongratsReviewProps> = ({ onNext, experienceLevel
   const [countDown, setCountDown] = useState(3);
 
   useEffect(() => {
-    // Request in-app review after 1 second
+    // Request in-app review after 1 second (iOS/Android only)
     const reviewTimer = setTimeout(async () => {
-      try {
-        await InAppReview.requestReview();
-        setReviewRequested(true);
-      } catch (e) {
-        console.warn('In-app review failed:', e);
-        setReviewRequested(true);
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const { InAppReview } = await import('@capacitor-community/in-app-review');
+          await InAppReview.requestReview();
+        } catch (e) {
+          console.warn('In-app review failed:', e);
+        }
       }
+      setReviewRequested(true);
     }, 1000);
 
     // Enable CTA after 3 seconds

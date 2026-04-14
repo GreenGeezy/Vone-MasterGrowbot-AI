@@ -43,7 +43,7 @@ const OnboardingWelcome: React.FC<OnboardingWelcomeProps> = ({ onGetStarted }) =
               </div>
               {/* Scan line */}
               <div className="absolute inset-0 rounded-full overflow-hidden">
-                <div className="w-full h-0.5 bg-[#059669]/60 animate-scan" />
+                <div className="absolute w-full h-0.5 bg-[#059669]/60 animate-scan" />
               </div>
               {/* Corner dots */}
               <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-[#059669] rounded-tl-md" />

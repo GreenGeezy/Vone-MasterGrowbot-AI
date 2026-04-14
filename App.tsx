@@ -364,6 +364,7 @@ const App: React.FC = () => {
   // New 12-screen onboarding flow for new users
   if (onboardingStatus === OnboardingStep.SPLASH) {
     return (
+      <ErrorBoundary>
       <OnboardingFlow
         onComplete={(onboardingData) => {
           // Map onboarding strings → UserProfile typed values
@@ -400,6 +401,7 @@ const App: React.FC = () => {
           loadUserData();
         }}
       />
+      </ErrorBoundary>
     );
   }
   if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) return <Onboarding onComplete={(p) => { setUserProfile(p); setOnboardingStatus(OnboardingStep.SUMMARY); }} />;
