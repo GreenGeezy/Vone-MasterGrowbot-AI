@@ -292,28 +292,54 @@ function sanitizeHistory(history: { role: string; content: string }[]): { role: 
 }
 
 /**
- * Daily Insight (Home Screen)
- * Restored function required by Home.tsx
+ * Internal helper — invokes gemini-v3 with 'insight' mode.
+ * Replaces the legacy gemini-gateway path to consolidate invocations on a
+ * single edge function (reduces Supabase invocation count / cost).
+ */
+async function invokeInsightV3(prompt: string, timeoutMs = 30000): Promise<string> {
+  const invokePromise = supabase.functions.invoke('gemini-v3', {
+    body: {
+      model: CONFIG.MODELS.INSIGHTS,
+      mode: 'insight',
+      prompt,
+    },
+  });
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Insight Request Timed Out')), timeoutMs)
+  );
+  const response = await Promise.race([invokePromise, timeoutPromise]) as any;
+  if (response.error) throw response.error;
+  return response.data?.result || '';
+}
+
+/**
+ * Daily Insight (Home Screen) — migrated to gemini-v3 (was gemini-gateway)
  */
 export async function getDailyInsight(userProfile?: UserProfile): Promise<string> {
   const experience = userProfile?.experience || 'General';
   const prompt = `Generate a single, short (under 15 words), motivating cannabis cultivation tip for a ${experience} grower. No hashtags.`;
 
   try {
-    const response = await sendMessage(prompt);
-    return response.replace(/"/g, ''); // Remove quotes if AI adds them
+    const response = await invokeInsightV3(prompt);
+    return response.replace(/"/g, '').trim() || 'Check your pH and temperature daily for best results!';
   } catch (e) {
-    return "Check your pH and temperature daily for best results!";
+    console.warn('[DailyInsight] v3 call failed, using fallback:', e);
+    return 'Check your pH and temperature daily for best results!';
   }
 }
 
 /**
- * Grow Log Analysis (Journal)
- * Restored function required by Journal.tsx
+ * Grow Log Analysis (Journal) — migrated to gemini-v3 (was gemini-gateway)
  */
 export async function analyzeGrowLog(notes: string, tags: string[] = []): Promise<string> {
   const prompt = `Analyze this grow journal note: "${notes}". Tags: ${tags.join(', ')}. Provide a 1-sentence observation on plant health.`;
-  return await sendMessage(prompt);
+  try {
+    const response = await invokeInsightV3(prompt);
+    return response.trim() || 'Log saved. No specific observations detected.';
+  } catch (e) {
+    console.warn('[GrowLog] v3 call failed, using fallback:', e);
+    return 'Log saved. No specific observations detected.';
+  }
 }
 
 /**
@@ -362,14 +388,19 @@ export async function getStrainInsights(strainName: string, description?: string
 
 /**
  * Wake Up Backend (Cold Start Fix)
- * Pings the Edge Function on app launch to pre-warm the instance.
+ * Pings gemini-v3 (the only function the app uses) to pre-warm the instance.
+ * Previously pinged gemini-gateway — migrated to consolidate on a single
+ * edge function and reduce Supabase invocation count.
  */
 export async function wakeUpBackend() {
-  console.log("[Gemini] Waking up backend...");
+  console.log('[Gemini] Waking up backend (v3)...');
   try {
-    // Send a dummy request with 'wakeup' mode to avoid expensive API calls
-    await supabase.functions.invoke('gemini-gateway', { body: { mode: 'wakeup' } });
+    // Tiny prompt to wake the v3 isolate. We don't await the result meaningfully —
+    // any response (including error) means the isolate is warm.
+    await supabase.functions.invoke('gemini-v3', {
+      body: { mode: 'insight', model: CONFIG.MODELS.INSIGHTS, prompt: 'ping' },
+    });
   } catch (e) {
-    console.log("[Gemini] Wake-up ping sent.");
+    console.log('[Gemini] Wake-up ping dispatched.');
   }
 }

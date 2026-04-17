@@ -1,7 +1,18 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { CheckCircle, Zap, Lock, Star, Shield, Crown } from 'lucide-react';
+import { CheckCircle, Zap, Lock, Star, Shield, Crown, Sparkles } from 'lucide-react';
 import type { PurchasesPackage } from '@revenuecat/purchases-capacitor';
+
+// Dynamic-safe haptic helper. No-op on web or if plugin missing.
+// Never statically import native plugins (CLAUDE.md Capacitor Plugin Safety rule).
+const tapHaptic = async (style: 'light' | 'medium' | 'heavy' = 'light') => {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const { Haptics, ImpactStyle } = await import('@capacitor/haptics');
+    const map = { light: ImpactStyle.Light, medium: ImpactStyle.Medium, heavy: ImpactStyle.Heavy };
+    await Haptics.impact({ style: map[style] });
+  } catch { /* plugin not installed — silently skip */ }
+};
 
 interface OnboardingPaywallProps {
   onPurchase: () => void;
@@ -174,6 +185,7 @@ const OnboardingPaywall: React.FC<OnboardingPaywallProps> = ({ onPurchase }) => 
     const selectedPkg = packages.find(p => p.id === selected);
     if (!selectedPkg) return;
 
+    tapHaptic('medium');
     setPurchasing(true);
     setError('');
 
@@ -305,7 +317,7 @@ const OnboardingPaywall: React.FC<OnboardingPaywallProps> = ({ onPurchase }) => 
           return (
             <button
               key={pkg.id}
-              onClick={() => setSelected(pkg.id)}
+              onClick={() => { tapHaptic('light'); setSelected(pkg.id); }}
               className={`relative w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left active:scale-[0.98] ${
                 isSelected
                   ? isLifetime
@@ -314,15 +326,20 @@ const OnboardingPaywall: React.FC<OnboardingPaywallProps> = ({ onPurchase }) => 
                   : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
               }`}
             >
-              {/* Floating badge — top-right */}
+              {/* Floating badge — top-right, with pulse on yearly to draw the eye */}
               {pkg.badge && (
                 <div className={`absolute -top-2.5 right-4 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-md ${
                   pkg.badgeStyle === 'gold'
                     ? 'bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-900 border border-amber-300'
-                    : 'bg-gradient-to-r from-[#059669] to-emerald-600 text-white'
+                    : 'bg-gradient-to-r from-[#059669] to-emerald-600 text-white animate-pulse'
                 }`}>
                   {pkg.badge}
                 </div>
+              )}
+
+              {/* Animated check halo on selected card */}
+              {isSelected && !isLifetime && (
+                <div className="absolute -top-1 -left-1 w-6 h-6 rounded-full bg-[#059669]/20 animate-ping pointer-events-none" />
               )}
 
               {/* Radio dot */}
@@ -382,6 +399,28 @@ const OnboardingPaywall: React.FC<OnboardingPaywallProps> = ({ onPurchase }) => 
           );
         })}
       </div>
+
+      {/* Savings callout — animates in only when Yearly is selected */}
+      {selected === 'yearly' && (() => {
+        const y = packages.find(p => p.id === 'yearly');
+        const anchor = y?.anchorPrice?.replace(/[^0-9.]/g, '');
+        const price = y?.price?.replace(/[^0-9.]/g, '');
+        if (!anchor || !price) return null;
+        const saved = Math.round(parseFloat(anchor) - parseFloat(price));
+        if (saved <= 0) return null;
+        return (
+          <div className="px-6 mt-3" style={{ animation: 'fadeInUp 400ms ease-out' }}>
+            <div className="flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 rounded-xl py-2 px-3">
+              <Sparkles size={13} className="text-[#059669]" />
+              <span className="text-[#047857] text-xs font-black tracking-tight">
+                You save ${saved}/year vs. weekly
+              </span>
+              <Sparkles size={13} className="text-[#059669]" />
+            </div>
+            <style>{`@keyframes fadeInUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+          </div>
+        );
+      })()}
 
       {/* Trust badges strip */}
       <div className="px-6 mt-5">
