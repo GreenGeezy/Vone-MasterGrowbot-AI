@@ -80,7 +80,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
         const ticketId = `MG-${Math.floor(1000 + Math.random() * 9000)}`;
         const subject = `Support Ticket ${ticketId}: ${supportForm.issue}`;
         const body = `Name: ${supportForm.name}\nEmail: ${supportForm.email}\n\nMessage:\n${supportForm.message}`;
-        const mailtoLink = `mailto:Agcomsol@gmail.com,Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        const mailtoLink = `mailto:Agcomsol@gmail.com,support@mastergrowbot.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         window.location.href = mailtoLink;
         alert(`Ticket #${ticketId} Generated! We will contact you shortly.`);
         setShowSupportModal(false);
@@ -90,7 +90,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
     const handleShareFeedback = () => {
         const subject = "App Feedback - MasterGrowbot AI";
         const body = "Thank You for Being Part of Our Elite MasterGrowbot AI Growers Community...\n\n[Your Feedback Here]";
-        const mailtoLink = `mailto:Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        const mailtoLink = `mailto:support@mastergrowbot.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         window.location.href = mailtoLink;
         setShowFeedbackModal(false);
     };
@@ -104,7 +104,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 const body = `User: ${userProfile.email} (${userProfile.id})\nRequest Date: ${new Date().toISOString()}\n\nPlease delete all data associated with this user logic.`;
 
                 // Use the existing email trigger logic (using mailto as fallback immediate action + db log)
-                const mailtoLink = `mailto:Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                const mailtoLink = `mailto:support@mastergrowbot.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
                 // Ideally log to DB if possible, but Email is the required "initiation" step
                 const { submitUserFeedback } = await import('../services/dbService');
@@ -119,7 +119,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
             } catch (e) {
                 console.error("Deletion error:", e);
                 // Fallback
-                alert("Please email Support@futuristiccannabis.ai to complete your deletion request.");
+                alert("Please email support@mastergrowbot.com to complete your deletion request.");
                 onSignOut();
             }
         }
@@ -335,7 +335,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                         Delete Profile & Data
                     </button>
                     <p className="text-[10px] text-gray-400 text-center mt-4 leading-relaxed px-4">
-                        To request data deletion after uninstalling the app, visit <span onClick={() => openLink('https://mastergrowbot.com/privacy-policy')} className="text-blue-500 underline cursor-pointer">mastergrowbot.com/privacy-policy</span> or email <a href="mailto:support@futuristiccannabis.ai" className="text-blue-500 underline">support@futuristiccannabis.ai</a>.
+                        To request data deletion after uninstalling the app, visit <span onClick={() => openLink('https://mastergrowbot.com/privacy-policy')} className="text-blue-500 underline cursor-pointer">mastergrowbot.com/privacy-policy</span> or email <a href="mailto:support@mastergrowbot.com" className="text-blue-500 underline">support@mastergrowbot.com</a>.
                     </p>
                 </div>
 
@@ -413,14 +413,14 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                             <button onClick={() => setShowSupportModal(false)} className="p-2 bg-gray-100 rounded-full"><X size={18} /></button>
                         </div>
                         <p className="text-xs text-gray-500 font-medium mb-4 leading-relaxed">
-                            Thank you for being a MasterGrowbot AI subscriber! Fill out the form below or email <a href="mailto:support@futuristiccannabis.ai" className="text-blue-500 underline">support@futuristiccannabis.ai</a> for personalized custom help from a dedicated team member.
+                            Thank you for being a MasterGrowbot AI subscriber! Fill out the form below or email <a href="mailto:support@mastergrowbot.com" className="text-blue-500 underline">support@mastergrowbot.com</a> for personalized custom help from a dedicated team member.
                         </p>
                         <form onSubmit={async (e) => {
                             e.preventDefault();
                             const ticketId = `MG-${Math.floor(1000 + Math.random() * 9000)}`;
                             const subject = `Support Ticket ${ticketId}: ${supportForm.issue}`;
                             const body = `Name: ${supportForm.name}\nEmail: ${supportForm.email}\n\nMessage:\n${supportForm.message}`;
-                            const mailtoLink = `mailto:Agcomsol@gmail.com,Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                            const mailtoLink = `mailto:Agcomsol@gmail.com,support@mastergrowbot.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
                             const { createSupportTicket } = await import('../services/dbService');
                             createSupportTicket(supportForm).catch(console.error);
