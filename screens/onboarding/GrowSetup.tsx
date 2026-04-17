@@ -42,13 +42,13 @@ const SelectRow = ({ options, selected, onSelect }: { options: typeof ENVIRONMEN
         onClick={() => onSelect(opt.id)}
         className={`flex flex-col items-start p-3 rounded-xl border-2 transition-all active:scale-[0.97] text-left ${
           selected === opt.id
-            ? 'bg-[#059669]/15 border-[#059669]'
-            : 'bg-white/5 border-white/10'
+            ? 'bg-[#ECFDF5] border-[#059669] shadow-md shadow-emerald-500/20'
+            : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
         }`}
       >
         <span className="text-xl mb-1">{opt.emoji}</span>
-        <span className={`font-black text-sm ${selected === opt.id ? 'text-white' : 'text-white/80'}`}>{opt.label}</span>
-        <span className="text-white/40 text-[10px]">{opt.sub}</span>
+        <span className={`font-black text-sm ${selected === opt.id ? 'text-slate-900' : 'text-slate-800'}`}>{opt.label}</span>
+        <span className="text-slate-500 text-[10px]">{opt.sub}</span>
       </button>
     ))}
   </div>
@@ -62,57 +62,51 @@ const GrowSetup: React.FC<GrowSetupProps> = ({ onNext, onBack }) => {
   const canContinue = environment && medium && lighting;
 
   return (
-    <div className="min-h-screen bg-[#0A1628] flex flex-col px-6 pt-14 pb-10 font-sans overflow-y-auto">
-      {/* Progress */}
+    <div className="min-h-screen bg-white flex flex-col px-6 pt-14 pb-10 font-sans overflow-y-auto">
       <div className="mb-8">
         <OnboardingProgressBar current={6} total={9} />
       </div>
 
-      {/* Header */}
       <div className="mb-6">
-        <button onClick={onBack} className="text-white/40 text-sm font-bold mb-4 flex items-center gap-1">
+        <button onClick={onBack} className="text-slate-400 text-sm font-bold mb-4 flex items-center gap-1">
           ← Back
         </button>
         <p className="text-[#059669] text-sm font-bold uppercase tracking-widest mb-2">Step 6 of 9</p>
-        <h1 className="text-3xl font-black text-white leading-tight mb-2">
+        <h1 className="text-3xl font-black text-slate-900 leading-tight mb-2">
           Tell us about<br />
           <span className="text-[#059669]">your setup</span>
         </h1>
-        <p className="text-white/50 text-sm">This lets us give you setup-specific advice and schedules.</p>
+        <p className="text-slate-500 text-sm">This lets us give you setup-specific advice and schedules.</p>
       </div>
 
-      {/* Environment */}
       <div className="mb-5">
-        <div className="text-white/60 text-xs font-black uppercase tracking-widest mb-3">
+        <div className="text-slate-600 text-xs font-black uppercase tracking-widest mb-3">
           🏡 Growing Environment
         </div>
         <SelectRow options={ENVIRONMENTS} selected={environment} onSelect={setEnvironment} />
       </div>
 
-      {/* Medium */}
       <div className="mb-5">
-        <div className="text-white/60 text-xs font-black uppercase tracking-widest mb-3">
+        <div className="text-slate-600 text-xs font-black uppercase tracking-widest mb-3">
           🌱 Growing Medium
         </div>
         <SelectRow options={MEDIUMS} selected={medium} onSelect={setMedium} />
       </div>
 
-      {/* Lighting */}
       <div className="mb-6">
-        <div className="text-white/60 text-xs font-black uppercase tracking-widest mb-3">
+        <div className="text-slate-600 text-xs font-black uppercase tracking-widest mb-3">
           💡 Light Source
         </div>
         <SelectRow options={LIGHTING} selected={lighting} onSelect={setLighting} />
       </div>
 
-      {/* CTA */}
       <button
         onClick={() => canContinue && onNext({ environment: environment!, medium: medium!, lighting: lighting! })}
         disabled={!canContinue}
         className={`w-full py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-2 transition-all active:scale-95 ${
           canContinue
-            ? 'bg-[#059669] text-white shadow-2xl shadow-[#059669]/40'
-            : 'bg-white/10 text-white/30'
+            ? 'bg-[#059669] text-white shadow-xl shadow-[#059669]/30'
+            : 'bg-slate-100 text-slate-400'
         }`}
       >
         Continue <ChevronRight size={20} />

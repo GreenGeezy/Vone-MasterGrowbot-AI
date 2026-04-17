@@ -6,7 +6,8 @@ import Growbot from '../components/Growbot';
 import { STRAIN_DATABASE } from '../data/strains';
 import { Share } from '@capacitor/share';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
-import { InAppReview } from '@capacitor-community/in-app-review';
+import { Capacitor } from '@capacitor/core';
+// InAppReview dynamically imported below — static import crashes on web
 import { formatMetricDisplay, formatDiagnosisReport } from '../utils/diagnosisFormatter';
 
 /**
@@ -146,8 +147,9 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
         const newCount = currentCount + 1;
         localStorage.setItem('diagnosis_success_count', newCount.toString());
 
-        if (newCount === 3) {
+        if (newCount === 3 && Capacitor.isNativePlatform()) {
           console.log("Triggering In-App Review...");
+          const { InAppReview } = await import('@capacitor-community/in-app-review');
           await InAppReview.requestReview();
         }
       } catch (e) {

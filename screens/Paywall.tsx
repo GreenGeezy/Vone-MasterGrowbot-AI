@@ -3,7 +3,9 @@ import {
   X, Check, Shield, Star, Zap, ArrowRight, Lock,
   LifeBuoy, Headphones, Dna, Clock, BookOpen
 } from 'lucide-react';
-import { Purchases, PurchasesPackage, PACKAGE_TYPE } from '@revenuecat/purchases-capacitor';
+import type { PurchasesPackage } from '@revenuecat/purchases-capacitor';
+// Purchases dynamically imported below — static import crashes on web
+// PACKAGE_TYPE enum values: 'WEEKLY' | 'MONTHLY' | 'ANNUAL'
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import Growbot from '../components/Growbot';
@@ -27,9 +29,9 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
     try {
       if (!Capacitor.isNativePlatform()) {
         const mockPackages = [
-          { identifier: 'mg_weekly', packageType: PACKAGE_TYPE.WEEKLY, product: { priceString: '$7.99', title: 'Weekly Access', description: 'Short term help' } } as any,
-          { identifier: 'mg_monthly', packageType: PACKAGE_TYPE.MONTHLY, product: { priceString: '$29.99', title: 'Monthly Pro', description: 'Ongoing optimization' } } as any,
-          { identifier: 'mg_annual', packageType: PACKAGE_TYPE.ANNUAL, product: { priceString: '$199.99', title: 'Annual Saver', description: 'Best value year round' } } as any,
+          { identifier: 'mg_weekly', packageType: 'WEEKLY', product: { priceString: '$9.99', title: 'Weekly Access', description: 'Short term help' } } as any,
+          { identifier: 'mg_monthly', packageType: 'MONTHLY', product: { priceString: '$29.99', title: 'Monthly Pro', description: 'Ongoing optimization' } } as any,
+          { identifier: 'mg_annual', packageType: 'ANNUAL', product: { priceString: '$99.99', title: 'Annual Saver', description: 'Best value year round' } } as any,
         ];
         setPackages(mockPackages);
         setSelectedPkgIdentifier('mg_monthly');
@@ -41,13 +43,14 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error("Connection to App Store timed out. Please check your network.")), 8000)
         );
+        const { Purchases } = await import('@revenuecat/purchases-capacitor');
         const offeringsPromise = Purchases.getOfferings();
 
         const offerings = await Promise.race([offeringsPromise, timeoutPromise]) as any;
 
         if (offerings.current && offerings.current.availablePackages.length > 0) {
           setPackages(offerings.current.availablePackages);
-          const monthly = offerings.current.availablePackages.find((p: any) => p.packageType === PACKAGE_TYPE.MONTHLY);
+          const monthly = offerings.current.availablePackages.find((p: any) => p.packageType === 'MONTHLY');
           setSelectedPkgIdentifier(monthly ? monthly.identifier : offerings.current.availablePackages[0].identifier);
         } else {
           setError("No subscription plans found at this time. Please try again.");
@@ -80,6 +83,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
 
       const pkg = packages.find(p => p.identifier === selectedPkgIdentifier);
       if (pkg) {
+        const { Purchases } = await import('@revenuecat/purchases-capacitor');
         const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkg });
         // Corrected Entity ID: 'pro' based on user screenshots
         if (customerInfo.entitlements.active['pro']) {
@@ -104,6 +108,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
     setIsPurchasing(true);
     try {
       if (Capacitor.isNativePlatform()) {
+        const { Purchases } = await import('@revenuecat/purchases-capacitor');
         const { customerInfo } = await Purchases.restorePurchases();
         if (customerInfo.entitlements.active['pro']) {
           alert("Success! Your subscription has been restored.");
@@ -131,8 +136,8 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
     if (!selectedPkg) return "Select a plan";
     const price = selectedPkg.product.priceString;
     let period = "month";
-    if (selectedPkg.packageType === PACKAGE_TYPE.WEEKLY) period = "week";
-    if (selectedPkg.packageType === PACKAGE_TYPE.ANNUAL) period = "year";
+    if (selectedPkg.packageType === 'WEEKLY') period = "week";
+    if (selectedPkg.packageType === 'ANNUAL') period = "year";
     return `After free trial, auto-bills ${price}/${period}`;
   };
 
@@ -212,8 +217,8 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
         <div className="grid grid-cols-1 gap-4">
           {packages.map((pkg) => {
             const isSelected = selectedPkgIdentifier === pkg.identifier;
-            const isMonthly = pkg.packageType === PACKAGE_TYPE.MONTHLY;
-            const isAnnual = pkg.packageType === PACKAGE_TYPE.ANNUAL;
+            const isMonthly = pkg.packageType === 'MONTHLY';
+            const isAnnual = pkg.packageType === 'ANNUAL';
             return (
               <div key={pkg.identifier} onClick={() => setSelectedPkgIdentifier(pkg.identifier)} className={`relative rounded-2xl border-2 p-4 transition-all active:scale-[0.98] ${isSelected ? 'border-green-500 bg-green-50/50' : 'border-gray-100 bg-white'}`}>
                 {isMonthly && <div className="absolute -top-3 left-4 bg-green-500 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full flex items-center gap-1 shadow-md"><Star size={10} fill="currentColor" /> Most Popular</div>}

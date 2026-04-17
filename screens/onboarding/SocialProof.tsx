@@ -43,42 +43,40 @@ const SocialProof: React.FC<SocialProofProps> = ({ onNext, onBack }) => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0A1628] flex flex-col px-6 pt-14 pb-10 font-sans">
-      {/* Progress */}
+    <div className="min-h-screen bg-white flex flex-col px-6 pt-14 pb-10 font-sans">
       <div className="mb-8">
         <OnboardingProgressBar current={4} total={9} />
       </div>
 
-      {/* Header */}
       <div className="mb-8">
-        <button onClick={onBack} className="text-white/40 text-sm font-bold mb-4 flex items-center gap-1">
+        <button onClick={onBack} className="text-slate-400 text-sm font-bold mb-4 flex items-center gap-1">
           ← Back
         </button>
         <div className={`transition-all duration-500 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <p className="text-[#059669] text-sm font-bold uppercase tracking-widest mb-2">Step 4 of 9</p>
-          <h1 className="text-3xl font-black text-white leading-tight mb-2">
-            Join <span className="text-[#059669]">2,847 growers</span><br />already thriving
+          <h1 className="text-3xl font-black text-slate-900 leading-tight mb-2">
+            Trusted by <span className="text-[#059669]">Elite Growers</span><br />Worldwide
           </h1>
-          <p className="text-white/50 text-sm">Real results from real growers — no fake reviews.</p>
+          <p className="text-slate-500 text-sm">Real results from real growers — no fake reviews.</p>
         </div>
       </div>
 
       {/* Social Stats Bar */}
       <div className={`flex gap-3 mb-6 transition-all duration-500 delay-100 ${visible ? 'opacity-100' : 'opacity-0'}`}>
-        <div className="flex-1 bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black text-white">4.9</div>
+        <div className="flex-1 bg-white border border-slate-200 shadow-sm rounded-2xl p-4 text-center">
+          <div className="text-2xl font-black text-slate-900">4.9</div>
           <div className="flex justify-center mt-1">
             {[1,2,3,4,5].map(i => <Star key={i} size={10} className="text-yellow-400 fill-yellow-400" />)}
           </div>
-          <div className="text-white/40 text-[10px] mt-1 uppercase font-bold">App Store</div>
+          <div className="text-slate-500 text-[10px] mt-1 uppercase font-bold">App Store</div>
         </div>
-        <div className="flex-1 bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black text-white">2,847</div>
+        <div className="flex-1 bg-[#ECFDF5] border border-[#059669]/30 shadow-sm rounded-2xl p-4 text-center">
+          <div className="text-2xl font-black text-slate-900">2,847</div>
           <div className="text-[#059669] text-[10px] font-black uppercase mt-1">Active Growers</div>
         </div>
-        <div className="flex-1 bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black text-white">94%</div>
-          <div className="text-white/40 text-[10px] mt-1 uppercase font-bold">Success Rate</div>
+        <div className="flex-1 bg-white border border-slate-200 shadow-sm rounded-2xl p-4 text-center">
+          <div className="text-2xl font-black text-slate-900">94%</div>
+          <div className="text-slate-500 text-[10px] mt-1 uppercase font-bold">Success Rate</div>
         </div>
       </div>
 
@@ -87,15 +85,15 @@ const SocialProof: React.FC<SocialProofProps> = ({ onNext, onBack }) => {
         {TESTIMONIALS.map((t, i) => (
           <div
             key={i}
-            className={`bg-white/5 border border-white/10 rounded-2xl p-4 transition-all duration-500 ${
+            className={`bg-white border border-slate-200 shadow-sm rounded-2xl p-4 transition-all duration-500 ${
               visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
             }`}
             style={{ transitionDelay: `${(i + 2) * 100}ms` }}
           >
             <div className="flex items-start justify-between mb-2">
               <div>
-                <div className="text-white font-black text-sm">{t.name}</div>
-                <div className="text-white/40 text-xs">{t.location}</div>
+                <div className="text-slate-900 font-black text-sm">{t.name}</div>
+                <div className="text-slate-500 text-xs">{t.location}</div>
               </div>
               <div className="flex gap-0.5">
                 {Array.from({ length: t.stars }).map((_, j) => (
@@ -103,19 +101,18 @@ const SocialProof: React.FC<SocialProofProps> = ({ onNext, onBack }) => {
                 ))}
               </div>
             </div>
-            <p className="text-white/70 text-sm leading-relaxed mb-3">"{t.text}"</p>
+            <p className="text-slate-700 text-sm leading-relaxed mb-3">"{t.text}"</p>
             <div className="flex gap-2">
-              <span className="bg-[#059669]/20 text-[#059669] text-[10px] font-black px-2 py-1 rounded-full uppercase">{t.yield}</span>
-              <span className="bg-white/5 text-white/50 text-[10px] font-bold px-2 py-1 rounded-full">{t.grow}</span>
+              <span className="bg-[#ECFDF5] text-[#059669] text-[10px] font-black px-2 py-1 rounded-full uppercase border border-[#059669]/20">{t.yield}</span>
+              <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-1 rounded-full">{t.grow}</span>
             </div>
           </div>
         ))}
       </div>
 
-      {/* CTA */}
       <button
         onClick={onNext}
-        className="mt-6 w-full py-5 bg-[#059669] text-white rounded-2xl font-black text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-2xl shadow-[#059669]/40"
+        className="mt-6 w-full py-5 bg-[#059669] text-white rounded-2xl font-black text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-xl shadow-[#059669]/30"
       >
         That Could Be Me <ChevronRight size={20} />
       </button>

@@ -26,26 +26,23 @@ const PainPoints: React.FC<PainPointsProps> = ({ onNext, onBack }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0A1628] flex flex-col px-6 pt-14 pb-10 font-sans">
-      {/* Progress */}
+    <div className="min-h-screen bg-white flex flex-col px-6 pt-14 pb-10 font-sans">
       <div className="mb-8">
         <OnboardingProgressBar current={3} total={9} />
       </div>
 
-      {/* Header */}
       <div className="mb-6">
-        <button onClick={onBack} className="text-white/40 text-sm font-bold mb-4 flex items-center gap-1">
+        <button onClick={onBack} className="text-slate-400 text-sm font-bold mb-4 flex items-center gap-1">
           ← Back
         </button>
         <p className="text-[#059669] text-sm font-bold uppercase tracking-widest mb-2">Step 3 of 9</p>
-        <h1 className="text-3xl font-black text-white leading-tight">
+        <h1 className="text-3xl font-black text-slate-900 leading-tight">
           What challenges<br />
           <span className="text-[#059669]">do you face?</span>
         </h1>
-        <p className="text-white/50 text-sm mt-2">Select all that apply. We'll build solutions around your specific struggles.</p>
+        <p className="text-slate-500 text-sm mt-2">Select all that apply. We'll build solutions around your specific struggles.</p>
       </div>
 
-      {/* Options — multi-select */}
       <div className="flex-1 space-y-3">
         {OPTIONS.map(opt => {
           const isSelected = selected.includes(opt.id);
@@ -55,19 +52,19 @@ const PainPoints: React.FC<PainPointsProps> = ({ onNext, onBack }) => {
               onClick={() => toggle(opt.id)}
               className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all active:scale-[0.98] text-left ${
                 isSelected
-                  ? 'bg-[#059669]/15 border-[#059669] shadow-lg shadow-[#059669]/20'
-                  : 'bg-white/5 border-white/10 hover:border-white/20'
+                  ? 'bg-[#ECFDF5] border-[#059669] shadow-lg shadow-emerald-500/20'
+                  : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
               }`}
             >
               <span className="text-3xl leading-none">{opt.emoji}</span>
               <div className="flex-1">
-                <div className={`font-black text-base ${isSelected ? 'text-white' : 'text-white/80'}`}>
+                <div className={`font-black text-base ${isSelected ? 'text-slate-900' : 'text-slate-800'}`}>
                   {opt.label}
                 </div>
-                <div className="text-white/40 text-xs mt-0.5">{opt.sub}</div>
+                <div className="text-slate-500 text-xs mt-0.5">{opt.sub}</div>
               </div>
               <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                isSelected ? 'bg-[#059669] border-[#059669]' : 'border-white/20'
+                isSelected ? 'bg-[#059669] border-[#059669]' : 'border-slate-300'
               }`}>
                 {isSelected && (
                   <svg width="12" height="9" viewBox="0 0 12 9" fill="none">
@@ -80,10 +77,9 @@ const PainPoints: React.FC<PainPointsProps> = ({ onNext, onBack }) => {
         })}
       </div>
 
-      {/* CTA */}
       <button
         onClick={() => onNext(selected.length > 0 ? selected : ['none'])}
-        className="mt-6 w-full py-5 bg-[#059669] text-white rounded-2xl font-black text-lg flex items-center justify-center gap-2 transition-all active:scale-95 shadow-2xl shadow-[#059669]/40"
+        className="mt-6 w-full py-5 bg-[#059669] text-white rounded-2xl font-black text-lg flex items-center justify-center gap-2 transition-all active:scale-95 shadow-xl shadow-[#059669]/30"
       >
         {selected.length === 0 ? 'Skip' : `Continue (${selected.length} selected)`} <ChevronRight size={20} />
       </button>

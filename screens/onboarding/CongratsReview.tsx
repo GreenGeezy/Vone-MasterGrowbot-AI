@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { ChevronRight, Star, CheckCircle } from 'lucide-react';
+import { ChevronRight, Star, CheckCircle, Sparkles } from 'lucide-react';
 
 interface CongratsReviewProps {
   onNext: () => void;
   experienceLevel: string;
+  scanImage?: string;
 }
 
 const CONFETTI_COLORS = ['#059669', '#34D399', '#6EE7B7', '#FCD34D', '#60A5FA', '#F472B6'];
@@ -43,13 +44,12 @@ const Confetti: React.FC = () => {
   );
 };
 
-const CongratsReview: React.FC<CongratsReviewProps> = ({ onNext, experienceLevel }) => {
+const CongratsReview: React.FC<CongratsReviewProps> = ({ onNext, experienceLevel, scanImage }) => {
   const [ctaEnabled, setCtaEnabled] = useState(false);
   const [reviewRequested, setReviewRequested] = useState(false);
   const [countDown, setCountDown] = useState(3);
 
   useEffect(() => {
-    // Request in-app review after 1 second (iOS/Android only)
     const reviewTimer = setTimeout(async () => {
       if (Capacitor.isNativePlatform()) {
         try {
@@ -62,10 +62,8 @@ const CongratsReview: React.FC<CongratsReviewProps> = ({ onNext, experienceLevel
       setReviewRequested(true);
     }, 1000);
 
-    // Enable CTA after 3 seconds
     const ctaTimer = setTimeout(() => setCtaEnabled(true), 3000);
 
-    // Countdown
     const interval = setInterval(() => {
       setCountDown(prev => {
         if (prev <= 1) { clearInterval(interval); return 0; }
@@ -88,26 +86,44 @@ const CongratsReview: React.FC<CongratsReviewProps> = ({ onNext, experienceLevel
   ];
 
   return (
-    <div className="min-h-screen bg-[#0A1628] flex flex-col items-center px-6 pt-16 pb-10 font-sans relative overflow-hidden">
-      {/* Confetti */}
+    <div className="min-h-screen bg-gradient-to-b from-[#ECFDF5] via-white to-white flex flex-col items-center px-6 pt-14 pb-10 font-sans relative overflow-hidden">
       <Confetti />
 
       {/* Background glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-80 bg-[#059669]/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-[#059669]/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Badge */}
-      <div className="relative mb-6">
-        <div className="w-28 h-28 bg-gradient-to-br from-[#059669] to-emerald-700 rounded-full flex items-center justify-center shadow-2xl shadow-[#059669]/50">
-          <span className="text-5xl">🏆</span>
-        </div>
-        <div className="absolute -bottom-1 -right-1 w-10 h-10 bg-yellow-400 rounded-full flex items-center justify-center shadow-lg">
-          <Star size={18} className="text-yellow-900 fill-yellow-900" />
-        </div>
+      {/* Plant photo badge (or sparkle fallback) */}
+      <div className="relative mb-6 z-10">
+        {scanImage ? (
+          <div className="relative">
+            <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-2xl shadow-emerald-500/30 ring-4 ring-[#059669]/30">
+              <img src={scanImage} alt="Your plant" className="w-full h-full object-cover" />
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-11 h-11 bg-[#059669] rounded-full flex items-center justify-center shadow-lg shadow-[#059669]/40 border-2 border-white">
+              <CheckCircle size={22} className="text-white" strokeWidth={2.5} />
+            </div>
+            <div className="absolute -top-2 -left-2 w-10 h-10 bg-yellow-400 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
+              <Sparkles size={16} className="text-yellow-900" strokeWidth={2.5} />
+            </div>
+          </div>
+        ) : (
+          <div className="relative">
+            <div className="w-32 h-32 bg-gradient-to-br from-[#059669] to-emerald-700 rounded-full flex items-center justify-center shadow-2xl shadow-[#059669]/40">
+              <Sparkles size={56} className="text-white" strokeWidth={1.8} />
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-11 h-11 bg-yellow-400 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
+              <Star size={20} className="text-yellow-900 fill-yellow-900" />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Headline */}
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-black text-white mb-2">
+      <div className="text-center mb-8 z-10">
+        <div className="inline-block bg-[#059669] text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest mb-3 shadow-lg shadow-[#059669]/30">
+          Setup Complete
+        </div>
+        <h1 className="text-4xl font-black text-slate-900 mb-2">
           You're all set!
         </h1>
         <p className="text-[#059669] font-bold text-lg">
@@ -116,30 +132,32 @@ const CongratsReview: React.FC<CongratsReviewProps> = ({ onNext, experienceLevel
            experienceLevel === 'expert' ? 'Ready to optimize and dominate! 💪' :
            'Your best grows are ahead of you! 🌿'}
         </p>
-        <p className="text-white/50 text-sm mt-2">MasterGrowbot is ready to guide every step.</p>
+        <p className="text-slate-500 text-sm mt-2">MasterGrowbot is ready to guide every step.</p>
       </div>
 
       {/* Milestones */}
-      <div className="w-full space-y-2.5 mb-8">
+      <div className="w-full space-y-2.5 mb-6 z-10">
         {MILESTONES.map((m, i) => (
           <div
             key={i}
-            className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3.5"
+            className="flex items-center gap-3 bg-white border border-slate-200 shadow-sm rounded-xl p-3.5"
             style={{ animationDelay: `${i * 100}ms` }}
           >
-            <CheckCircle size={18} className="text-[#059669] flex-shrink-0" />
-            <span className="text-white/80 text-sm font-semibold">{m}</span>
+            <div className="w-7 h-7 rounded-full bg-[#ECFDF5] border border-[#059669]/30 flex items-center justify-center flex-shrink-0">
+              <CheckCircle size={16} className="text-[#059669]" strokeWidth={2.5} />
+            </div>
+            <span className="text-slate-800 text-sm font-semibold">{m}</span>
           </div>
         ))}
       </div>
 
       {/* Review prompt (shown after review dialog closes) */}
       {reviewRequested && (
-        <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 mb-6 text-center">
+        <div className="w-full bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200 rounded-2xl p-4 mb-6 text-center z-10 shadow-sm">
           <div className="flex justify-center gap-1 mb-2">
             {[1,2,3,4,5].map(i => <Star key={i} size={20} className="text-yellow-400 fill-yellow-400" />)}
           </div>
-          <p className="text-white/60 text-sm">Thanks for rating MasterGrowbot! Your review helps other growers find us.</p>
+          <p className="text-slate-700 text-sm">Thanks for rating MasterGrowbot! Your review helps other growers find us.</p>
         </div>
       )}
 
@@ -149,14 +167,14 @@ const CongratsReview: React.FC<CongratsReviewProps> = ({ onNext, experienceLevel
       <button
         onClick={onNext}
         disabled={!ctaEnabled}
-        className={`w-full py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-2 transition-all active:scale-95 ${
+        className={`w-full py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-2 transition-all active:scale-95 z-10 ${
           ctaEnabled
-            ? 'bg-[#059669] text-white shadow-2xl shadow-[#059669]/40'
-            : 'bg-white/10 text-white/40'
+            ? 'bg-[#059669] text-white shadow-xl shadow-[#059669]/30'
+            : 'bg-slate-100 text-slate-400'
         }`}
       >
         {ctaEnabled ? (
-          <>Start Growing with AI <ChevronRight size={20} /></>
+          <>Unlock Your Full Grow Plan <ChevronRight size={20} /></>
         ) : (
           <>Get ready... ({countDown})</>
         )}

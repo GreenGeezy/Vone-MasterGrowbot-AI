@@ -13,7 +13,8 @@ import PostPaymentAuth from './screens/PostPaymentAuth';
 import GetStartedTutorial from './screens/GetStartedTutorial';
 import BottomNav from './components/BottomNav';
 import OnboardingFlow from './screens/onboarding/OnboardingFlow';
-import { Purchases } from '@revenuecat/purchases-capacitor';
+import OnboardingPaywall from './screens/onboarding/OnboardingPaywall';
+// Purchases dynamically imported below — static import crashes on web
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
@@ -40,14 +41,20 @@ const App: React.FC = () => {
       // 0. Wake up Backend (Fixes Chat Cold Start)
       wakeUpBackend();
 
-      await SplashScreen.hide();
+      if (Capacitor.isNativePlatform()) await SplashScreen.hide();
 
       if (Capacitor.getPlatform() === 'android') {
         const apiKey = import.meta.env.VITE_REVENUECAT_ANDROID_KEY;
-        if (apiKey) await Purchases.configure({ apiKey });
+        if (apiKey) {
+          const { Purchases } = await import('@revenuecat/purchases-capacitor');
+          await Purchases.configure({ apiKey });
+        }
       } else if (Capacitor.getPlatform() === 'ios') {
         const apiKey = import.meta.env.VITE_REVENUECAT_IOS_KEY;
-        if (apiKey) await Purchases.configure({ apiKey });
+        if (apiKey) {
+          const { Purchases } = await import('@revenuecat/purchases-capacitor');
+          await Purchases.configure({ apiKey });
+        }
       }
 
       // --- AUTH DEEP LINK HANDLING ---
@@ -89,18 +96,20 @@ const App: React.FC = () => {
         }
       };
 
-      // 1. Check for Cold Start Deep Link (Crucial for Android)
-      const launchUrl = await CapacitorApp.getLaunchUrl();
-      if (launchUrl?.url && launchUrl.url.includes('code=')) {
-        handleAuthDeepLink(launchUrl.url);
-      }
-
-      // 2. Runtime Deep Link Listener
-      CapacitorApp.addListener('appUrlOpen', async (data) => {
-        if (data.url.includes('code=')) {
-          handleAuthDeepLink(data.url);
+      // 1. Check for Cold Start Deep Link (Crucial for Android) — native only
+      if (Capacitor.isNativePlatform()) {
+        const launchUrl = await CapacitorApp.getLaunchUrl();
+        if (launchUrl?.url && launchUrl.url.includes('code=')) {
+          handleAuthDeepLink(launchUrl.url);
         }
-      });
+
+        // 2. Runtime Deep Link Listener — native only
+        CapacitorApp.addListener('appUrlOpen', async (data) => {
+          if (data.url.includes('code=')) {
+            handleAuthDeepLink(data.url);
+          }
+        });
+      }
 
       // --- SESSION MANAGEMENT LOGIC ---
       const savedProfile = localStorage.getItem('mastergrowbot_profile');
@@ -110,8 +119,8 @@ const App: React.FC = () => {
       // 1. Check Subscription Status (Simulated check, replace with actual Entitlement logic in prod)
       try {
         if (Capacitor.getPlatform() !== 'web') {
+          const { Purchases } = await import('@revenuecat/purchases-capacitor');
           const { customerInfo } = await Purchases.getCustomerInfo();
-          // Check for active entitlement "pro" or similar. Mocking true for local dev context if profile exists
           if (typeof customerInfo.entitlements.active['pro'] !== "undefined") {
             isSubscribed = true;
           }
@@ -405,7 +414,19 @@ const App: React.FC = () => {
     );
   }
   if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) return <Onboarding onComplete={(p) => { setUserProfile(p); setOnboardingStatus(OnboardingStep.SUMMARY); }} />;
-  if (onboardingStatus === OnboardingStep.SUMMARY) return <OnboardingSummary profile={userProfile!} onContinue={() => { setOnboardingStatus(OnboardingStep.COMPLETED); setShowPaywall(true); }} />;
+  // Legacy users (saved profile, no active subscription) land here. Skip OnboardingSummary and
+  // show the new light-mode OnboardingPaywall directly — converts returning non-subscribers.
+  if (onboardingStatus === OnboardingStep.SUMMARY) return (
+    <ErrorBoundary>
+      <OnboardingPaywall
+        onPurchase={() => {
+          setOnboardingStatus(OnboardingStep.COMPLETED);
+          setShowAuth(true);
+          loadUserData();
+        }}
+      />
+    </ErrorBoundary>
+  );
 
   return (
     <div className="h-screen w-screen bg-surface overflow-hidden relative">

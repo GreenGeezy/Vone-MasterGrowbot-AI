@@ -172,6 +172,7 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
         <CongratsReview
           onNext={() => setScreen('paywall')}
           experienceLevel={data.experience}
+          scanImage={scanImage}
         />
       );
 
