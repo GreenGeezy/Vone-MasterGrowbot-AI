@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import OnboardingProgressBar from '../../components/OnboardingProgressBar';
-import { ChevronRight, Star } from 'lucide-react';
+import { ChevronRight, Star, Sparkles, Zap, Clock } from 'lucide-react';
 
 interface SocialProofProps {
   onNext: () => void;
@@ -61,22 +61,37 @@ const SocialProof: React.FC<SocialProofProps> = ({ onNext, onBack }) => {
         </div>
       </div>
 
-      {/* Social Stats Bar */}
+      {/* Factual capability bar — App Store Guideline 2.3.7 compliant.
+          Replaces unverifiable rating/growers stats with verifiable product facts
+          that still anchor premium positioning. Each stat is a factual claim
+          about the app itself, not unsubstantiated user metrics. */}
       <div className={`flex gap-3 mb-6 transition-all duration-500 delay-100 ${visible ? 'opacity-100' : 'opacity-0'}`}>
-        <div className="flex-1 bg-white border border-slate-200 shadow-sm rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black text-slate-900">4.9</div>
-          <div className="flex justify-center mt-1">
-            {[1,2,3,4,5].map(i => <Star key={i} size={10} className="text-yellow-400 fill-yellow-400" />)}
-          </div>
-          <div className="text-slate-500 text-[10px] mt-1 uppercase font-bold">App Store</div>
-        </div>
         <div className="flex-1 bg-[#ECFDF5] border border-[#059669]/30 shadow-sm rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black text-slate-900">2,847</div>
-          <div className="text-[#059669] text-[10px] font-black uppercase mt-1">Active Growers</div>
+          <div className="flex justify-center mb-1.5">
+            <div className="w-8 h-8 bg-[#059669] rounded-full flex items-center justify-center">
+              <Sparkles size={16} className="text-white" strokeWidth={2.5} />
+            </div>
+          </div>
+          <div className="text-[11px] font-black text-slate-900 leading-tight">Gemini 3.1<br/>Pro AI</div>
+          <div className="text-[#059669] text-[9px] font-black uppercase mt-1">Powered</div>
         </div>
         <div className="flex-1 bg-white border border-slate-200 shadow-sm rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black text-slate-900">94%</div>
-          <div className="text-slate-500 text-[10px] mt-1 uppercase font-bold">Success Rate</div>
+          <div className="flex justify-center mb-1.5">
+            <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center">
+              <Zap size={16} className="text-[#059669]" strokeWidth={2.5} />
+            </div>
+          </div>
+          <div className="text-[11px] font-black text-slate-900 leading-tight">Instant<br/>Results</div>
+          <div className="text-slate-500 text-[9px] font-bold uppercase mt-1">Under 15s</div>
+        </div>
+        <div className="flex-1 bg-white border border-slate-200 shadow-sm rounded-2xl p-4 text-center">
+          <div className="flex justify-center mb-1.5">
+            <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center">
+              <Clock size={16} className="text-[#059669]" strokeWidth={2.5} />
+            </div>
+          </div>
+          <div className="text-[11px] font-black text-slate-900 leading-tight">24/7 AI<br/>Access</div>
+          <div className="text-slate-500 text-[9px] font-bold uppercase mt-1">Unlimited</div>
         </div>
       </div>
 

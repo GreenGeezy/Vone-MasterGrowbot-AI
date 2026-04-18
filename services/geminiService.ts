@@ -55,14 +55,33 @@ export async function diagnosePlant(
 
   // Strict JSON Prompt
   const prompt = `
-    Analyze this plant image strictly.
-    Analyze the image for abiotic environmental stress. Determine the PRIORITY issue among:
+    Analyze this plant image strictly and RIGOROUSLY. Accuracy matters more than confidence.
+
+    STEP 1 — GROWTH STAGE DETERMINATION (choose exactly one based on VISIBLE evidence):
+    - "Seedling": cotyledons visible or fewer than 3 sets of true leaves, no branching.
+    - "Vegetative": actively producing fan leaves and nodes, NO pistils/hairs, NO bud sites forming.
+    - "Early Flower": white pistils emerging at nodes, calyxes just starting to form, little to no visible trichomes, buds small and wispy.
+    - "Late Flower": dense buds formed, majority of pistils still white or just starting to turn orange/brown (under 50%), trichomes present but mostly clear to milky.
+    - "Harvest": clear harvest indicators present — ≥70% pistils darkened/curled in, calyxes swollen, trichomes cloudy/milky (some amber), fan leaves often yellowing (senescence).
+
+    STEP 2 — HARVEST WINDOW (must be consistent with Step 1):
+    Base the estimate on VISIBLE indicators, not generic strain timelines:
+    - Pistil color: mostly white = far (6+ weeks). 30–50% darkened = mid (3–5 weeks). 50–70% darkened = close (1–3 weeks). 70%+ darkened with curl-in = NOW (0–7 days).
+    - Trichome color (if visible): all clear = not ready. Mostly cloudy/milky = peak THC window. Amber appearing = harvest now for couchlock, past peak for head-high.
+    - Calyx swelling + fan leaf yellowing = harvest imminent.
+    Output format examples: "Harvest Now (0–7 days)", "1–2 Weeks", "3–5 Weeks", "6–8 Weeks", or "N/A" if stage is Seedling/Vegetative.
+    If the image does not clearly show buds/pistils/trichomes, output "Insufficient detail — retake close-up of top cola" instead of guessing.
+
+    STEP 3 — PRIORITY ISSUE (abiotic environmental stress):
     1. Lighting (Bleaching/Stretching)
     2. Temperature (Heat Stress/Tacoing)
     3. Humidity (Mold/Droop)
-    If no stress is visible, the priority is 'Optimal'.
+    4. Nutrient deficiency/toxicity (if visible leaf symptoms)
+    If no stress is visible, diagnosis is 'Healthy' and priority is 'Optimal'.
 
-    REQUIRED OUTPUT (JSON ONLY):
+    STEP 4 — CONFIDENCE: Lower your confidence score if the image is blurry, poorly lit, too far away, or shows only leaves without buds when assessing harvest.
+
+    REQUIRED OUTPUT (JSON ONLY, no prose, no markdown fences):
     {
       "diagnosis": "Precise identification of the main issue (or 'Healthy')",
       "severity": "low" | "medium" | "high",
@@ -74,7 +93,7 @@ export async function diagnosePlant(
       "fixSteps": ["Step 1", "Step 2", "Step 3"],
       "preventionTips": ["Proactive tip 1", "Proactive tip 2"],
       "yieldEstimate": "Estimate dry weight or 'N/A' if veg",
-      "harvestWindow": "Predicted time to harvest (e.g. '3-4 Weeks') or 'N/A'",
+      "harvestWindow": "Evidence-based window per Step 2 rules, or 'N/A' for veg/seedling, or 'Insufficient detail' if image lacks harvest indicators",
       "nutrientTargets": { "ec": "1.8", "ph": "6.0" },
       "environmentTargets": { "vpd": "1.2", "temp": "75F", "rh": "45%" },
       "environmentSummary": "Light Stress (Adjust Intensity) | Heat Risk (Check Venting) | High Humidity (Risk) | Optimal Climate",
