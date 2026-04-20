@@ -73,7 +73,7 @@ const SocialProof: React.FC<SocialProofProps> = ({ onNext, onBack }) => {
             </div>
           </div>
           <div className="text-[11px] font-black text-slate-900 leading-tight">Cannabis-Trained<br/>Expert AI</div>
-          <div className="text-[#059669] text-[9px] font-black uppercase mt-1">500+ Strains</div>
+          <div className="text-[#059669] text-[9px] font-black uppercase mt-1">100+ Strain Profiles</div>
         </div>
         <div className="flex-1 bg-white border border-slate-200 shadow-sm rounded-2xl p-4 text-center">
           <div className="flex justify-center mb-1.5">

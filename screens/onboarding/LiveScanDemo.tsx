@@ -261,7 +261,7 @@ const LiveScanDemo: React.FC<LiveScanDemoProps> = ({ onScanComplete, onSkip, onB
               {STATUS_MESSAGES[statusIndex]}
             </p>
             <p className="text-slate-400 text-xs mt-1">
-              Ready in ~{etaSeconds}s • Cannabis-trained AI • 500+ strains analyzed
+              Ready in ~{etaSeconds}s • Cannabis-trained AI • 100+ strains and growing
             </p>
           </div>
 
