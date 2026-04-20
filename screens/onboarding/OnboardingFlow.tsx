@@ -148,6 +148,13 @@ const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) => {
     case 'scan_demo':
       return (
         <LiveScanDemo
+          onboardingContext={{
+            experience: data.experience,
+            goal: data.goal,
+            environment: data.environment,
+            medium: data.medium,
+            lighting: data.lighting,
+          }}
           onScanComplete={(result, imageDataUrl) => {
             setScanResult(result);
             setScanImage(imageDataUrl);

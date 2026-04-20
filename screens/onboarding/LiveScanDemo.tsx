@@ -3,13 +3,13 @@ import OnboardingProgressBar from '../../components/OnboardingProgressBar';
 import { Capacitor } from '@capacitor/core';
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { diagnosePlant, wakeUpBackend, ExtendedDiagnosisResult } from '../../services/geminiService';
-import { ScanLine, Camera, Leaf, AlertCircle, Upload } from 'lucide-react';
+import { UserProfile } from '../../types';
+import { ScanLine, Camera, Leaf, AlertCircle, Upload, Image as ImageIcon } from 'lucide-react';
 
 // ---- Fallback demo result ----
-// Rendered only if the real gemini-v3 call fails during onboarding (unauthenticated,
-// cold-start timeout, network flake, etc). Production iOS/Android apps never hit this
-// path because they call diagnosePlant from the authenticated Diagnose.tsx screen.
-// This guarantees the onboarding sales funnel never breaks for a new user.
+// Rendered only if the real gemini-v3 call fails during onboarding (network flake,
+// unexpected backend outage, etc). With verify_jwt=false on gemini-v3, anonymous
+// onboarding users now reach the real AI. This guarantees the funnel never dead-ends.
 const FALLBACK_DEMO_RESULT: ExtendedDiagnosisResult = {
   diagnosis: 'Mild Nitrogen Deficiency',
   severity: 'medium',
@@ -35,27 +35,87 @@ const FALLBACK_DEMO_RESULT: ExtendedDiagnosisResult = {
   healthLabel: 'Good',
 } as ExtendedDiagnosisResult;
 
+interface OnboardingContext {
+  experience?: string;
+  goal?: string;
+  environment?: string;
+  medium?: string;
+  lighting?: string;
+}
+
 interface LiveScanDemoProps {
   onScanComplete: (result: any, imageDataUrl: string) => void;
   onSkip: () => void;
   onBack: () => void;
+  onboardingContext?: OnboardingContext;
 }
 
 type DemoState = 'intro' | 'scanning' | 'error';
 
-const LiveScanDemo: React.FC<LiveScanDemoProps> = ({ onScanComplete, onSkip, onBack }) => {
+// Cycling status messages shown during the scan — keep the user engaged while
+// Gemini 3.1 Pro thinks (typically 8–15s). Each message references a real step
+// in the diagnosis pipeline so users perceive premium, tailored analysis.
+const STATUS_MESSAGES = [
+  'Analyzing image with your growing goals…',
+  'Detecting plant genetics and strain markers…',
+  'Cross-referencing your growing method…',
+  'Reading leaf color and chlorophyll signals…',
+  'Checking pistil and trichome indicators…',
+  'Calculating optimal harvest window…',
+  'Scanning for nutrient deficiencies…',
+  'Evaluating environmental stress patterns…',
+  'Generating personalized recommendations…',
+];
+
+// Map onboarding experience strings to UserProfile.experience values so the
+// prompt adapts ("Expert=Technical, Novice=Simple terms").
+const mapExperience = (raw?: string): UserProfile['experience'] => {
+  switch (raw) {
+    case 'first_grow':
+    case 'beginner':
+      return 'Novice';
+    case 'intermediate':
+      return 'Intermediate';
+    case 'advanced':
+      return 'Expert';
+    case 'expert':
+      return 'Pro';
+    default:
+      return 'Novice';
+  }
+};
+
+const mapEnvironment = (raw?: string): 'Indoor' | 'Outdoor' | 'Greenhouse' => {
+  switch (raw) {
+    case 'outdoor':
+      return 'Outdoor';
+    case 'greenhouse':
+      return 'Greenhouse';
+    default:
+      return 'Indoor';
+  }
+};
+
+const LiveScanDemo: React.FC<LiveScanDemoProps> = ({ onScanComplete, onSkip, onBack, onboardingContext }) => {
   const [demoState, setDemoState] = useState<DemoState>('intro');
   const [scanProgress, setScanProgress] = useState(0);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [statusIndex, setStatusIndex] = useState(0);
+  const [etaSeconds, setEtaSeconds] = useState(15);
   const scanInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const statusInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const etaInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  const isWeb = !Capacitor.isNativePlatform();
+  const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
     return () => {
       if (scanInterval.current) clearInterval(scanInterval.current);
+      if (statusInterval.current) clearInterval(statusInterval.current);
+      if (etaInterval.current) clearInterval(etaInterval.current);
     };
   }, []);
 
@@ -63,49 +123,61 @@ const LiveScanDemo: React.FC<LiveScanDemoProps> = ({ onScanComplete, onSkip, onB
     setCapturedImage(dataUrl);
     setDemoState('scanning');
     setScanProgress(0);
+    setStatusIndex(0);
+    setEtaSeconds(15);
 
+    // Progress bar crawls to 90% over ~15s, locks there until AI returns
     let progress = 0;
     scanInterval.current = setInterval(() => {
-      progress += Math.random() * 8 + 2;
+      progress += Math.random() * 5 + 1.5;
       if (progress >= 90) {
         progress = 90;
         if (scanInterval.current) clearInterval(scanInterval.current);
       }
       setScanProgress(Math.min(progress, 90));
-    }, 150);
+    }, 200);
 
-    // Fire-and-forget cold-start ping. Safe no-op if already warm.
-    // Does NOT block the scan — we race it with the real call.
-    try { wakeUpBackend(); } catch { /* intentionally ignored */ }
+    // Cycling status subtext every 2s
+    statusInterval.current = setInterval(() => {
+      setStatusIndex((i) => (i + 1) % STATUS_MESSAGES.length);
+    }, 2000);
+
+    // Countdown ETA (floor at "a few seconds")
+    etaInterval.current = setInterval(() => {
+      setEtaSeconds((s) => (s > 3 ? s - 1 : 3));
+    }, 1000);
+
+    // Warm the backend; does NOT block the real request
+    try { wakeUpBackend(); } catch { /* ignore */ }
+
+    const cleanupTimers = () => {
+      if (scanInterval.current) clearInterval(scanInterval.current);
+      if (statusInterval.current) clearInterval(statusInterval.current);
+      if (etaInterval.current) clearInterval(etaInterval.current);
+    };
 
     const finish = (result: ExtendedDiagnosisResult) => {
-      if (scanInterval.current) clearInterval(scanInterval.current);
+      cleanupTimers();
       setScanProgress(100);
-      setTimeout(() => {
-        onScanComplete(result, dataUrl);
-      }, 600);
+      setTimeout(() => onScanComplete(result, dataUrl), 600);
     };
 
     try {
       const base64 = dataUrl.split(',')[1] || dataUrl;
+      const experience = mapExperience(onboardingContext?.experience);
+      const growMethod = mapEnvironment(onboardingContext?.environment);
       const result = await diagnosePlant(base64, {
-        growMethod: 'Indoor',
-        stage: 'Vegetative',
+        growMethod,
+        userProfile: { experience } as UserProfile,
       });
       finish(result);
     } catch (err) {
-      // Onboarding must never dead-end. Production iOS/Android users hit
-      // diagnosePlant from the authenticated Diagnose screen — this path only
-      // runs for brand-new users during onboarding, where JWT cold-starts,
-      // anon-key edge cases, or network flakes can fail the verify_jwt check
-      // on gemini-v3. Fall back to a realistic demo result so the funnel
-      // continues into ScanResults → CongratsReview → Paywall.
-      // eslint-disable-next-line no-console
-      console.warn('[LiveScanDemo] diagnosePlant failed during onboarding, using demo result:', err);
+      console.warn('[LiveScanDemo] diagnosePlant failed, using demo result:', err);
       finish(FALLBACK_DEMO_RESULT);
     }
   };
 
+  // Native camera
   const handleOpenCamera = async () => {
     try {
       const image = await CapacitorCamera.getPhoto({
@@ -115,14 +187,29 @@ const LiveScanDemo: React.FC<LiveScanDemoProps> = ({ onScanComplete, onSkip, onB
         allowEditing: false,
         width: 1200,
       });
-      if (image.dataUrl) {
-        await startScanning(image.dataUrl);
-      }
-    } catch (e) {
-      // User cancelled — stay on intro
+      if (image.dataUrl) await startScanning(image.dataUrl);
+    } catch {
+      /* user cancelled */
     }
   };
 
+  // Native gallery
+  const handleOpenGallery = async () => {
+    try {
+      const image = await CapacitorCamera.getPhoto({
+        quality: 80,
+        resultType: CameraResultType.DataUrl,
+        source: CameraSource.Photos,
+        allowEditing: false,
+        width: 1200,
+      });
+      if (image.dataUrl) await startScanning(image.dataUrl);
+    } catch {
+      /* user cancelled */
+    }
+  };
+
+  // Web file select (both camera and gallery use <input type=file> with/without capture attr)
   const handleWebFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -134,7 +221,7 @@ const LiveScanDemo: React.FC<LiveScanDemoProps> = ({ onScanComplete, onSkip, onB
     reader.readAsDataURL(file);
   };
 
-  // Scanning state — kept dark intentionally (looks like a professional camera scanner)
+  // --- Scanning state ---
   if (demoState === 'scanning' && capturedImage) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col font-sans">
@@ -164,8 +251,19 @@ const LiveScanDemo: React.FC<LiveScanDemoProps> = ({ onScanComplete, onSkip, onB
           <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
             <div className="h-full bg-[#059669] rounded-full transition-all duration-300" style={{ width: `${scanProgress}%` }} />
           </div>
+
+          {/* Cycling status subtext + ETA */}
+          <div className="mt-4 min-h-[48px]">
+            <p key={statusIndex} className="text-slate-700 text-sm font-bold animate-fadeIn">
+              {STATUS_MESSAGES[statusIndex]}
+            </p>
+            <p className="text-slate-400 text-xs mt-1">
+              Ready in ~{etaSeconds}s • Powered by Gemini 3.1 Pro
+            </p>
+          </div>
+
           <div className="mt-4 space-y-1">
-            {['Leaf color analysis', 'Nutrient pattern detection', 'Stress indicator scan', 'Generating recommendations'].map((step, i) => (
+            {['Leaf color analysis', 'Nutrient pattern detection', 'Harvest window calculation', 'Personalized recommendations'].map((step, i) => (
               <div key={i} className={`flex items-center gap-2 text-sm transition-opacity duration-500 ${scanProgress > i * 22 ? 'opacity-100' : 'opacity-30'}`}>
                 <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${scanProgress > (i + 1) * 22 ? 'bg-[#059669]' : 'bg-slate-300'}`} />
                 <span className="text-slate-600">{step}</span>
@@ -177,7 +275,7 @@ const LiveScanDemo: React.FC<LiveScanDemoProps> = ({ onScanComplete, onSkip, onB
     );
   }
 
-  // Error state
+  // --- Error state ---
   if (demoState === 'error') {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6 font-sans">
@@ -195,7 +293,7 @@ const LiveScanDemo: React.FC<LiveScanDemoProps> = ({ onScanComplete, onSkip, onB
     );
   }
 
-  // Intro state
+  // --- Intro state ---
   return (
     <div className="min-h-screen bg-white flex flex-col px-6 pt-14 pb-10 font-sans">
       <div className="mb-8">
@@ -210,9 +308,7 @@ const LiveScanDemo: React.FC<LiveScanDemoProps> = ({ onScanComplete, onSkip, onB
           <span className="text-[#059669]">action — live</span>
         </h1>
         <p className="text-slate-500 text-sm">
-          {isWeb
-            ? 'Upload a photo of any plant to watch the AI diagnose it instantly.'
-            : 'Take a photo of any plant right now and watch the AI diagnose it instantly.'}
+          Take a photo of any plant or upload one from your gallery — watch the AI diagnose it instantly.
         </p>
       </div>
 
@@ -246,15 +342,28 @@ const LiveScanDemo: React.FC<LiveScanDemoProps> = ({ onScanComplete, onSkip, onB
         </div>
       </div>
 
-      {isWeb && (
-        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleWebFileSelect} />
+      {/* Hidden web file inputs — `capture=environment` opens camera, no attr opens gallery */}
+      {!isNative && (
+        <>
+          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleWebFileSelect} />
+          <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={handleWebFileSelect} />
+        </>
       )}
 
+      {/* PRIMARY: Take photo & analyze (camera) */}
       <button
-        onClick={isWeb ? () => fileInputRef.current?.click() : handleOpenCamera}
+        onClick={isNative ? handleOpenCamera : () => cameraInputRef.current?.click()}
         className="w-full py-5 bg-[#059669] text-white rounded-2xl font-black text-lg flex items-center justify-center gap-3 active:scale-95 transition-transform shadow-xl shadow-[#059669]/30 mb-3"
       >
-        {isWeb ? <><Upload size={22} /> Upload a Plant Photo</> : <><Camera size={22} /> Scan a Plant Now</>}
+        <Camera size={22} /> Take Photo & Analyze
+      </button>
+
+      {/* SECONDARY: Upload from gallery */}
+      <button
+        onClick={isNative ? handleOpenGallery : () => galleryInputRef.current?.click()}
+        className="w-full py-4 bg-white border-2 border-slate-200 text-slate-900 rounded-2xl font-black text-base flex items-center justify-center gap-2 active:scale-95 transition-transform mb-3"
+      >
+        <ImageIcon size={20} className="text-[#059669]" /> Upload from Gallery
       </button>
 
       <button onClick={onSkip} className="text-slate-400 text-sm font-bold text-center py-2">

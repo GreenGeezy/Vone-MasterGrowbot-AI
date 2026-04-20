@@ -12,7 +12,11 @@ entrypoint = "./functions/gemini-gateway/index.ts"
 
 [functions.gemini-v3]
 enabled = true
-verify_jwt = true
+# verify_jwt = false so anonymous onboarding users can hit the AI scan demo.
+# The function's internal rate limiter already fails open when no auth header
+# is present (see functions/gemini-v3/index.ts). The Supabase anon key is
+# still required by the platform to reach the function at all.
+verify_jwt = false
 import_map = "./functions/gemini-v3/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
