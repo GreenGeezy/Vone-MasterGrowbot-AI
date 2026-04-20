@@ -53,8 +53,9 @@ interface LiveScanDemoProps {
 type DemoState = 'intro' | 'scanning' | 'error';
 
 // Cycling status messages shown during the scan — keep the user engaged while
-// Gemini 3.1 Pro thinks (typically 8–15s). Each message references a real step
-// in the diagnosis pipeline so users perceive premium, tailored analysis.
+// the cannabis-trained model thinks (typically 15–25s with high-resolution vision
+// and deep reasoning). Each message references a real step in the diagnosis
+// pipeline so users perceive premium, tailored analysis.
 const STATUS_MESSAGES = [
   'Analyzing image with your growing goals…',
   'Detecting plant genetics and strain markers…',
@@ -124,7 +125,9 @@ const LiveScanDemo: React.FC<LiveScanDemoProps> = ({ onScanComplete, onSkip, onB
     setDemoState('scanning');
     setScanProgress(0);
     setStatusIndex(0);
-    setEtaSeconds(15);
+    // Real-world latency for image + high thinking level is typically 15-22s.
+    // Start at 20 and floor at 2 so the countdown feels accurate rather than optimistic.
+    setEtaSeconds(20);
 
     // Progress bar crawls to 90% over ~15s, locks there until AI returns
     let progress = 0;
@@ -144,7 +147,7 @@ const LiveScanDemo: React.FC<LiveScanDemoProps> = ({ onScanComplete, onSkip, onB
 
     // Countdown ETA (floor at "a few seconds")
     etaInterval.current = setInterval(() => {
-      setEtaSeconds((s) => (s > 3 ? s - 1 : 3));
+      setEtaSeconds((s) => (s > 2 ? s - 1 : 2));
     }, 1000);
 
     // Warm the backend; does NOT block the real request
@@ -258,7 +261,7 @@ const LiveScanDemo: React.FC<LiveScanDemoProps> = ({ onScanComplete, onSkip, onB
               {STATUS_MESSAGES[statusIndex]}
             </p>
             <p className="text-slate-400 text-xs mt-1">
-              Ready in ~{etaSeconds}s • Powered by Gemini 3.1 Pro
+              Ready in ~{etaSeconds}s • Cannabis-trained AI • 500+ strains analyzed
             </p>
           </div>
 

@@ -38,6 +38,35 @@ const ScanResults: React.FC<ScanResultsProps> = ({ result, imageDataUrl, onNext 
 
   const healthScore = result?.healthScore ? Math.floor(result.healthScore) : null;
 
+  // Never show bare "N/A" to the user — translate stage into an actionable
+  // harvest-timing hint so the card always carries useful info.
+  const getHarvestDisplay = (): string => {
+    const raw: string = (result?.harvestWindow || '').toString().trim();
+    const stage: string = (result?.growthStage || '').toString();
+    const lower = raw.toLowerCase();
+    if (raw && lower !== 'n/a' && !lower.includes('insufficient')) return raw;
+    switch (stage) {
+      case 'Seedling':    return 'Veg First';
+      case 'Vegetative':  return 'In Veg Stage';
+      case 'Early Flower': return '6–8 Weeks';
+      case 'Late Flower': return '1–3 Weeks';
+      case 'Harvest':     return 'Ready Now';
+      default:            return 'Check Buds';
+    }
+  };
+  const harvestDisplay = getHarvestDisplay();
+
+  // Nutrient Strength (EC) card — "EC" alone confuses new growers. Show a
+  // beginner-friendly qualitative label plus the numeric EC value.
+  const getNutrientStrengthLabel = (ecRaw: string): string => {
+    const ec = parseFloat(ecRaw);
+    if (isNaN(ec)) return ecRaw;
+    if (ec < 1.0) return 'Light';
+    if (ec < 1.6) return 'Medium';
+    if (ec < 2.2) return 'Strong';
+    return 'Max';
+  };
+
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans">
       {/* Image header */}
@@ -76,16 +105,21 @@ const ScanResults: React.FC<ScanResultsProps> = ({ result, imageDataUrl, onNext 
               <div className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">Health Score</div>
             </div>
           )}
-          {result?.harvestWindow && (
-            <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-3 text-center">
-              <div className="text-slate-900 font-black text-sm leading-tight">{result.harvestWindow}</div>
-              <div className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">Harvest</div>
-            </div>
-          )}
+          <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-3 text-center">
+            <div className="text-slate-900 font-black text-sm leading-tight">{harvestDisplay}</div>
+            <div className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">Optimal Harvest Time</div>
+          </div>
           {result?.nutrientTargets?.ec && (
             <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-3 text-center">
-              <div className="text-slate-900 font-black text-sm leading-tight">{result.nutrientTargets.ec}</div>
-              <div className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">EC Target</div>
+              <div className="text-slate-900 font-black text-sm leading-tight">
+                {getNutrientStrengthLabel(result.nutrientTargets.ec)}
+              </div>
+              <div className="text-slate-500 text-[10px] font-bold uppercase mt-0.5">
+                Nutrient Strength
+              </div>
+              <div className="text-slate-400 text-[9px] font-bold mt-0.5">
+                EC {result.nutrientTargets.ec}
+              </div>
             </div>
           )}
         </div>

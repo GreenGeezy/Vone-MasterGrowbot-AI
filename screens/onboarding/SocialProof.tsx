@@ -72,8 +72,8 @@ const SocialProof: React.FC<SocialProofProps> = ({ onNext, onBack }) => {
               <Sparkles size={16} className="text-white" strokeWidth={2.5} />
             </div>
           </div>
-          <div className="text-[11px] font-black text-slate-900 leading-tight">Gemini 3.1<br/>Pro AI</div>
-          <div className="text-[#059669] text-[9px] font-black uppercase mt-1">Powered</div>
+          <div className="text-[11px] font-black text-slate-900 leading-tight">Cannabis-Trained<br/>Expert AI</div>
+          <div className="text-[#059669] text-[9px] font-black uppercase mt-1">500+ Strains</div>
         </div>
         <div className="flex-1 bg-white border border-slate-200 shadow-sm rounded-2xl p-4 text-center">
           <div className="flex justify-center mb-1.5">
