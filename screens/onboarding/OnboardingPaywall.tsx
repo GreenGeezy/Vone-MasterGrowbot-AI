@@ -30,8 +30,15 @@ interface PackageOption {
   rcPackage?: PurchasesPackage;
 }
 
-// Fallback prices shown when RevenueCat is unavailable (web preview / no network)
-// Order: Yearly first (highlighted/recommended), Weekly, Lifetime (anchor)
+// Feature flag — set to true once mastergrowbot_pro_lifetime is approved by
+// Apple AND added as a `lifetime` package in the RevenueCat `default` offering.
+// Keeping this false lets us ship v1.2 with only the two v3 subscriptions so
+// we aren't waiting on a non-consumable IAP review to launch.
+const SHOW_LIFETIME = false;
+
+// Fallback prices shown when RevenueCat is unavailable (web preview / no network).
+// Order: Yearly first (highlighted/recommended), Weekly. Lifetime is gated by
+// SHOW_LIFETIME and appended below when enabled.
 const FALLBACK_PACKAGES: PackageOption[] = [
   {
     id: 'yearly',
@@ -50,15 +57,17 @@ const FALLBACK_PACKAGES: PackageOption[] = [
     perDay: '$1.43/day',
     subtext: 'Billed weekly · Cancel anytime',
   },
-  {
-    id: 'lifetime',
-    label: 'Lifetime',
-    badge: 'FOREVER',
-    badgeStyle: 'gold',
-    price: '$199',
-    perDay: 'One-time',
-    subtext: 'Pay once · Unlock forever',
-  },
+  ...(SHOW_LIFETIME
+    ? [{
+        id: 'lifetime',
+        label: 'Lifetime',
+        badge: 'FOREVER',
+        badgeStyle: 'gold' as const,
+        price: '$199',
+        perDay: 'One-time',
+        subtext: 'Pay once · Unlock forever',
+      }]
+    : []),
 ];
 
 const INCLUDED_FEATURES = [
@@ -121,10 +130,12 @@ const OnboardingPaywall: React.FC<OnboardingPaywallProps> = ({ onPurchase }) => 
         p.identifier === '$rc_weekly' ||
         p.identifier.includes('weekly')
       );
-      const lifetimePkg = current.availablePackages.find(p =>
-        p.identifier === 'lifetime' ||
-        p.identifier.includes('lifetime')
-      );
+      const lifetimePkg = SHOW_LIFETIME
+        ? current.availablePackages.find(p =>
+            p.identifier === 'lifetime' ||
+            p.identifier.includes('lifetime')
+          )
+        : undefined;
 
       // Compute anchor (yearly-equivalent cost of weekly plan) for price comparison
       const weeklyPrice = weeklyPkg?.product.price;
