@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { ChevronRight, Star, CheckCircle, Sparkles } from 'lucide-react';
+import { ChevronRight, CheckCircle, Sparkles } from 'lucide-react';
 
 interface CongratsReviewProps {
   onNext: () => void;
@@ -111,8 +111,8 @@ const CongratsReview: React.FC<CongratsReviewProps> = ({ onNext, experienceLevel
             <div className="w-32 h-32 bg-gradient-to-br from-[#059669] to-emerald-700 rounded-full flex items-center justify-center shadow-2xl shadow-[#059669]/40">
               <Sparkles size={56} className="text-white" strokeWidth={1.8} />
             </div>
-            <div className="absolute -bottom-1 -right-1 w-11 h-11 bg-yellow-400 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
-              <Star size={20} className="text-yellow-900 fill-yellow-900" />
+            <div className="absolute -bottom-1 -right-1 w-11 h-11 bg-[#059669] rounded-full flex items-center justify-center shadow-lg border-2 border-white">
+              <CheckCircle size={22} className="text-white" strokeWidth={2.5} />
             </div>
           </div>
         )}
@@ -151,13 +151,17 @@ const CongratsReview: React.FC<CongratsReviewProps> = ({ onNext, experienceLevel
         ))}
       </div>
 
-      {/* Review prompt (shown after review dialog closes) */}
+      {/* Neutral follow-up after the Apple review sheet appears. We do NOT
+          assume the user rated — Apple Guideline 5.6.1 prohibits implying or
+          thanking users for reviews they may not have submitted. */}
       {reviewRequested && (
-        <div className="w-full bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200 rounded-2xl p-4 mb-6 text-center z-10 shadow-sm">
-          <div className="flex justify-center gap-1 mb-2">
-            {[1,2,3,4,5].map(i => <Star key={i} size={20} className="text-yellow-400 fill-yellow-400" />)}
+        <div className="w-full bg-[#ECFDF5] border border-[#059669]/20 rounded-2xl p-4 mb-6 text-center z-10 shadow-sm">
+          <div className="flex justify-center mb-2">
+            <div className="w-9 h-9 rounded-full bg-[#059669] flex items-center justify-center">
+              <Sparkles size={18} className="text-white" strokeWidth={2.5} />
+            </div>
           </div>
-          <p className="text-slate-700 text-sm">Thanks for rating MasterGrowbot! Your review helps other growers find us.</p>
+          <p className="text-slate-700 text-sm font-semibold">You're all set — let's build your personalized grow plan.</p>
         </div>
       )}
 
