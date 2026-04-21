@@ -34,7 +34,7 @@ interface PackageOption {
 // Apple AND added as a `lifetime` package in the RevenueCat `default` offering.
 // Keeping this false lets us ship v1.2 with only the two v3 subscriptions so
 // we aren't waiting on a non-consumable IAP review to launch.
-const SHOW_LIFETIME = false;
+const SHOW_LIFETIME = true;
 
 // Fallback prices shown when RevenueCat is unavailable (web preview / no network).
 // Order: Yearly first (highlighted/recommended), Weekly. Lifetime is gated by
