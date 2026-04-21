@@ -57,7 +57,7 @@ const OnboardingWelcome: React.FC<OnboardingWelcomeProps> = ({ onGetStarted }) =
 
         <h1 className="text-4xl font-black text-slate-900 leading-tight mb-4">
           Grow Healthier Plants.<br />
-          <span className="text-[#059669]">Guaranteed.</span>
+          <span className="text-[#059669]">Smarter.</span>
         </h1>
         <p className="text-slate-600 text-base leading-relaxed max-w-xs">
           AI-powered plant diagnosis, personalized grow schedules, and expert guidance — all in your pocket.

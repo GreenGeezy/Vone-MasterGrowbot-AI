@@ -24,7 +24,7 @@ const PAIN_POINT_SOLUTIONS: Record<string, { icon: string; title: string; soluti
   poor_yield: {
     icon: '📈',
     title: 'Yield Optimizer',
-    solution: 'Personalized feeding schedules and training tips proven to boost output by up to 40%.',
+    solution: 'Personalized feeding schedules and training tips designed to help you get the most from every plant.',
   },
   overwatering: {
     icon: '💧',
@@ -44,7 +44,7 @@ const PAIN_POINT_SOLUTIONS: Record<string, { icon: string; title: string; soluti
 };
 
 const GOAL_MESSAGES: Record<string, string> = {
-  max_yield: "We'll focus on maximizing every gram with proven training and feeding protocols.",
+  max_yield: "We'll focus on maximizing every gram with expert training and feeding protocols.",
   top_quality: "We'll dial in your environment and finishing techniques for top-shelf results.",
   learn_skills: "We'll explain the why behind every recommendation so you grow as a grower.",
   low_maintenance: "We'll simplify your grows with automation-friendly schedules and easy routines.",

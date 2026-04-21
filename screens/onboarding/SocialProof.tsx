@@ -13,7 +13,7 @@ const TESTIMONIALS = [
     location: 'Colorado',
     stars: 5,
     text: 'Caught a magnesium deficiency before it wrecked my whole crop. The AI diagnosis was spot-on.',
-    yield: '+34% yield',
+    yield: 'Biggest harvest yet',
     grow: '6 grows',
   },
   {
@@ -29,7 +29,7 @@ const TESTIMONIALS = [
     location: 'Oregon',
     stars: 5,
     text: 'The daily reminders and grow journal keep me on track. My best harvests have been since using this app.',
-    yield: '+52% quality',
+    yield: 'Best buds yet',
     grow: '12+ grows',
   },
 ];
