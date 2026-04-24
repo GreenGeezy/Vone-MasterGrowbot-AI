@@ -103,10 +103,13 @@ export const saveJournalEntry = async (entry: {
 // --- Task Management System ---
 
 export const getPendingTasksForToday = async (): Promise<GrowTask[] | null> => {
+  // FIX (Step 2): Always read the freshest session. If anon sign-in has not
+  // yet resolved, bail out quietly rather than sending a request without a
+  // user_id filter (which would 400 or leak rows under permissive RLS).
   const { data: { session } } = await supabase.auth.getSession();
   const today = new Date().toISOString().split('T')[0];
 
-  if (!session) return [];
+  if (!session?.user?.id) return [];
 
   const { data, error } = await supabase
     .from('tasks')
@@ -132,14 +135,26 @@ export const getPendingTasksForToday = async (): Promise<GrowTask[] | null> => {
 };
 
 export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCompleted' | 'createdAt'>): Promise<GrowTask | null> => {
+  // FIX (Step 3): Without a session.user.id, Postgres rejects the NOT NULL
+  // user_id constraint with a 400. Guard first — callers already handle null.
   const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    console.warn('addNewTask: no authenticated session, skipping DB insert');
+    return null;
+  }
+
+  // FIX (Step 3): Normalize due_date to a YYYY-MM-DD string. Postgres `date`
+  // columns reject ISO datetimes with 'T' in them under strict configurations.
+  const normalizedDueDate = typeof task.dueDate === 'string' && task.dueDate.includes('T')
+    ? task.dueDate.split('T')[0]
+    : task.dueDate;
 
   const newTaskObj = {
-    user_id: session?.user.id,
-    plant_id: task.plantId,
+    user_id: session.user.id,
+    plant_id: task.plantId ?? null,
     title: task.title,
     is_completed: false,
-    due_date: task.dueDate,
+    due_date: normalizedDueDate,
     source: task.source,
     type: task.type || 'other',
     recurrence: task.recurrence || null,
@@ -151,9 +166,12 @@ export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCo
     .from('tasks')
     .insert(newTaskObj)
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) return null;
+  if (error || !data) {
+    if (error) console.error('addNewTask insert error:', error);
+    return null;
+  }
 
   return {
     id: data.id,
@@ -171,11 +189,17 @@ export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCo
 };
 
 export const toggleTaskCompletion = async (taskId: string, isCompleted: boolean): Promise<boolean> => {
+  // FIX (Step 3): Guard against optimistic local task IDs that never reached
+  // the server (e.g. offline, or before session resolved). Don't send bogus
+  // UUID-shaped requests that return 400.
+  if (!taskId || taskId.startsWith('local_') || /^\d+$/.test(taskId)) return true;
+
   const { error } = await supabase
     .from('tasks')
-    .update({ is_completed: isCompleted })
+    .update({ is_completed: Boolean(isCompleted) })
     .eq('id', taskId);
 
+  if (error) console.error('toggleTaskCompletion error:', error);
   return !error;
 };
 
