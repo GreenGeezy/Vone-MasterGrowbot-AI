@@ -52,7 +52,7 @@ const OnboardingWelcome: React.FC<OnboardingWelcomeProps> = ({ onGetStarted, onS
       <div className={`relative z-10 flex flex-col items-center motion-safe:transition-all motion-safe:duration-700 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
         <div className="w-24 h-24 rounded-[26px] bg-gradient-to-br from-white to-[#ECFDF5] border border-white shadow-xl shadow-emerald-500/20 flex items-center justify-center mb-6 relative">
           <div className="absolute inset-1 rounded-[22px] bg-white" />
-          <AppIconMark className="relative w-16 h-16" />
+          <img src="/assets/mastergrowbot-logo.jpg" alt="MasterGrowbot AI" className="relative w-16 h-16 object-contain" />
         </div>
         <div className="flex items-center gap-2 mb-4">
           <span className="text-slate-900 font-black text-[28px] tracking-tight leading-none">MasterGrowbot</span>
@@ -70,7 +70,7 @@ const OnboardingWelcome: React.FC<OnboardingWelcomeProps> = ({ onGetStarted, onS
           <div aria-hidden className="absolute inset-0 rounded-full border border-[#059669]/15" />
           <div aria-hidden className="absolute inset-4 rounded-full border border-[#059669]/10 border-dashed" />
           <div className="absolute inset-8 rounded-full bg-white shadow-[0_20px_60px_-20px_rgba(5,150,105,0.35)] border border-emerald-100 flex items-center justify-center overflow-hidden">
-            <div className="w-28 h-28 relative"><CannabisLeafSvg /></div>
+            <img src="/assets/cannabis-leaf.jpg" alt="" className="w-28 h-28 object-contain" />
             <div className="absolute inset-0 overflow-hidden rounded-full">
               <div className="absolute w-full h-[2px] bg-gradient-to-r from-transparent via-[#059669] to-transparent shadow-[0_0_12px_2px_rgba(5,150,105,0.5)] animate-scan" />
             </div>
