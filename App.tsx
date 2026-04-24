@@ -43,46 +43,17 @@ const App: React.FC = () => {
 
       if (Capacitor.isNativePlatform()) await SplashScreen.hide();
 
-      // FIX (Step 5): Map the Supabase anonymous user ID into RevenueCat as
-      // the appUserID so restore-purchases survives reinstall on the same
-      // Apple ID. We configure() first (required by SDK), then logIn() with
-      // the Supabase UID once the anon session is available.
-      const getSupabaseUserId = async (): Promise<string | null> => {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user?.id) return session.user.id;
-          // Session not yet established — sign in anonymously synchronously
-          const { data } = await supabase.auth.signInAnonymously();
-          return data?.user?.id ?? null;
-        } catch (e) {
-          console.warn('getSupabaseUserId failed:', e);
-          return null;
-        }
-      };
-
       if (Capacitor.getPlatform() === 'android') {
         const apiKey = import.meta.env.VITE_REVENUECAT_ANDROID_KEY;
         if (apiKey) {
           const { Purchases } = await import('@revenuecat/purchases-capacitor');
-          const supabaseUserId = await getSupabaseUserId();
-          await Purchases.configure(
-            supabaseUserId ? { apiKey, appUserID: supabaseUserId } : { apiKey }
-          );
-          if (supabaseUserId) {
-            try { await Purchases.logIn({ appUserID: supabaseUserId }); } catch (e) { console.warn('RC logIn failed:', e); }
-          }
+          await Purchases.configure({ apiKey });
         }
       } else if (Capacitor.getPlatform() === 'ios') {
         const apiKey = import.meta.env.VITE_REVENUECAT_IOS_KEY;
         if (apiKey) {
           const { Purchases } = await import('@revenuecat/purchases-capacitor');
-          const supabaseUserId = await getSupabaseUserId();
-          await Purchases.configure(
-            supabaseUserId ? { apiKey, appUserID: supabaseUserId } : { apiKey }
-          );
-          if (supabaseUserId) {
-            try { await Purchases.logIn({ appUserID: supabaseUserId }); } catch (e) { console.warn('RC logIn failed:', e); }
-          }
+          await Purchases.configure({ apiKey });
         }
       }
 

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import Growbot from '../components/Growbot';
 import { ArrowRight, ShieldCheck, TrendingUp } from 'lucide-react';
-import { supabase, getUserProfile, ensureProfileExists } from '../services/supabaseClient';
+import { supabase, getUserProfile } from '../services/supabaseClient';
 
 interface SplashProps {
   onGetStarted: () => void;
@@ -35,19 +35,15 @@ const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
           keysToPurge.forEach(k => localStorage.removeItem(k));
           
           // Generate fresh anonymous JWT
-          const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
-          if (authError || !authData?.session) {
+          const { error: authError } = await supabase.auth.signInAnonymously();
+          if (authError) {
             console.error("Anonymous Sign-In Failed:", authError);
             return; // Stop execution if auth fails, prevent hitting a wall later
           }
         }
 
-        console.log("Active anonymous session verified. Ensuring profile row...");
-
-        // FIX (Step 2): Guarantee the profile row exists before any feature
-        // reads it. Prevents 406/"missing sub" cascades on first run.
-        await ensureProfileExists();
-
+        console.log("Active anonymous session verified. Checking profile...");
+        
         // 2. Check Profile Data
         const { data: profile, error } = await getUserProfile();
 

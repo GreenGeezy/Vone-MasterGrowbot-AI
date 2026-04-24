@@ -44,14 +44,12 @@ Deno.serve(async (req) => {
             const limit = 100;
             const today = new Date().toISOString().split('T')[0];
 
-            // FIX: maybeSingle() — new anon users have no row yet; .single()
-            // returns PGRST116 which propagated up and caused the 500 we saw.
             const { data: usage, error: usageError } = await supabaseClient
               .from('user_daily_usage')
               .select('request_count')
               .eq('user_id', user.id)
               .eq('date', today)
-              .maybeSingle();
+              .single();
 
             if (!usageError && usage && usage.request_count >= limit) {
               throw new Error(`Daily limit reached (${limit} requests). Please try again tomorrow.`);
