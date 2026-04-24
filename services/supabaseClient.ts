@@ -30,13 +30,39 @@ export const getUserProfile = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { data: null, error: "No user" };
 
+  // FIX (Step 1): .maybeSingle() does NOT throw 406 when the anonymous user
+  // has no profile row yet — it returns { data: null, error: null }.
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
-  return { data: data as UserProfile, error };
+  return { data: data as UserProfile | null, error };
+};
+
+/**
+ * FIX (Step 1): Creates the profile row for the currently authenticated
+ * anonymous user if one does not already exist. Safe to call repeatedly
+ * (upsert on primary key). Call this immediately after signInAnonymously()
+ * resolves so downstream reads always find a row.
+ */
+export const ensureProfileExists = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { data: null, error: 'No user' };
+
+  // Insert with ignoreDuplicates: safe if the row already exists.
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert(
+      { id: user.id, updated_at: new Date().toISOString() },
+      { onConflict: 'id', ignoreDuplicates: true }
+    )
+    .select()
+    .maybeSingle();
+
+  if (error) console.warn('ensureProfileExists: upsert error (non-fatal):', error);
+  return { data, error };
 };
 
 export const updateOnboardingProfile = async (updates: any) => {
@@ -45,7 +71,7 @@ export const updateOnboardingProfile = async (updates: any) => {
 
   const { error } = await supabase
     .from('profiles')
-    .upsert({ id: user.id, ...updates, updated_at: new Date() });
+    .upsert({ id: user.id, ...updates, updated_at: new Date().toISOString() });
 
   if (error) throw error;
 };
