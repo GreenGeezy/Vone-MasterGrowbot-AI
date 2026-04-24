@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import OnboardingProgressBar from '../../components/OnboardingProgressBar';
 import { ChevronRight } from 'lucide-react';
+import { hapticSelect, hapticImpact } from '../../utils/haptics';
 
 interface ExperienceLevelProps {
   onNext: (level: string) => void;
@@ -39,7 +40,7 @@ const ExperienceLevel: React.FC<ExperienceLevelProps> = ({ onNext }) => {
         {OPTIONS.map(opt => (
           <button
             key={opt.id}
-            onClick={() => setSelected(opt.id)}
+            onClick={() => { hapticSelect(); setSelected(opt.id); }}
             className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all active:scale-[0.98] text-left ${
               selected === opt.id
                 ? 'bg-[#ECFDF5] border-[#059669] shadow-lg shadow-emerald-500/20'
@@ -66,7 +67,7 @@ const ExperienceLevel: React.FC<ExperienceLevelProps> = ({ onNext }) => {
 
       {/* CTA */}
       <button
-        onClick={() => selected && onNext(selected)}
+        onClick={() => { if (selected) { hapticImpact(); onNext(selected); } }}
         disabled={!selected}
         className={`mt-6 w-full py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-2 transition-all active:scale-95 ${
           selected

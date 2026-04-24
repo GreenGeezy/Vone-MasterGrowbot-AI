@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import OnboardingProgressBar from '../../components/OnboardingProgressBar';
 import { ChevronRight } from 'lucide-react';
+import { hapticSelect, hapticImpact } from '../../utils/haptics';
 
 interface PainPointsProps {
   onNext: (painPoints: string[]) => void;
@@ -20,6 +21,7 @@ const PainPoints: React.FC<PainPointsProps> = ({ onNext, onBack }) => {
   const [selected, setSelected] = useState<string[]>([]);
 
   const toggle = (id: string) => {
+    hapticSelect();
     setSelected(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
@@ -78,7 +80,7 @@ const PainPoints: React.FC<PainPointsProps> = ({ onNext, onBack }) => {
       </div>
 
       <button
-        onClick={() => onNext(selected.length > 0 ? selected : ['none'])}
+        onClick={() => { hapticImpact(); onNext(selected.length > 0 ? selected : ['none']); }}
         className="mt-6 w-full py-5 bg-[#059669] text-white rounded-2xl font-black text-lg flex items-center justify-center gap-2 transition-all active:scale-95 shadow-xl shadow-[#059669]/30"
       >
         {selected.length === 0 ? 'Skip' : `Continue (${selected.length} selected)`} <ChevronRight size={20} />
