@@ -94,7 +94,7 @@ export const saveJournalEntry = async (entry: {
     .from('journal_logs')
     .insert(newEntry)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
   return data;
@@ -255,19 +255,19 @@ export const createSupportTicket = async (ticket: { name: string, email: string,
   // Submit to DB if possible (RLS might allow anon insert, check policy)
   // If strict RLS, we fallback to just returning success since Email is the primary channel.
   try {
-    const { data, error } = await supabase
-      .from('support_tickets')
-      .insert({
-        user_id: session?.user.id || null,
-        name: ticket.name,
-        email: ticket.email,
-        issue: ticket.issue,
-        message: ticket.message,
-        status: 'open',
-        created_at: new Date().toISOString()
-      })
-      .select()
-      .single();
+  const { data, error } = await supabase
+    .from('support_tickets')
+    .insert({
+      user_id: session?.user.id || null,
+      name: ticket.name,
+      email: ticket.email,
+      issue: ticket.issue,
+      message: ticket.message,
+      status: 'open',
+      created_at: new Date().toISOString()
+    })
+    .select()
+    .maybeSingle();
     if (!error) return data;
   } catch (e) { console.warn("Support DB insert failed (anon)", e); }
 
@@ -281,16 +281,16 @@ export const createSupportTicket = async (ticket: { name: string, email: string,
 export const submitUserFeedback = async (feedback: { rating: number, message: string }) => {
   const { data: { session } } = await supabase.auth.getSession();
   try {
-    const { data, error } = await supabase
-      .from('user_feedback')
-      .insert({
-        user_id: session?.user.id || null, // Allow null in DB scheme if possible
-        rating: feedback.rating,
-        message: feedback.message,
-        created_at: new Date().toISOString()
-      })
-      .select()
-      .single();
+  const { data, error } = await supabase
+    .from('user_feedback')
+    .insert({
+      user_id: session?.user.id || null,
+      rating: feedback.rating,
+      message: feedback.message,
+      created_at: new Date().toISOString()
+    })
+    .select()
+    .maybeSingle();
     if (!error) return data;
   } catch (e) { console.warn("Feedback DB insert failed (anon)", e); }
   return { id: 'local-feedback' };
@@ -338,7 +338,7 @@ export const createChatSession = async (title: string = "New Conversation"): Pro
     .from('chat_sessions')
     .insert({ user_id: session.user.id, title })
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error("Create Session Error (Cloud):", error);
@@ -440,7 +440,7 @@ export const saveChatMessage = async (
       attachment_type: attachmentType
     })
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) { console.error("Save Message Error:", error); return null; }
   return data;

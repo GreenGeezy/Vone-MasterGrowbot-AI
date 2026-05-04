@@ -211,8 +211,8 @@ export async function sendMessage(
 
   while (attempt < MAX_RETRIES) {
     attempt++;
-    // Invoke internal gateway for fallback routing
-    const { data, error } = await supabase.functions.invoke('gemini-gateway', { body });
+    // STRICT REQUIREMENT: ONLY use gemini-v3 edge function
+    const { data, error } = await supabase.functions.invoke('gemini-v3', { body });
 
     if (!error) {
       return data?.result || "I didn't catch that.";

@@ -29,7 +29,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
     try {
       if (!Capacitor.isNativePlatform()) {
         const mockPackages = [
-          { identifier: 'mg_weekly', packageType: 'WEEKLY', product: { priceString: '$9.99', title: 'Weekly Access', description: 'Short term help' } } as any,
+          { identifier: 'mg_weekly', packageType: 'WEEKLY', product: { priceString: '$7.99', title: 'Weekly Access', description: 'Short term help' } } as any,
           { identifier: 'mg_monthly', packageType: 'MONTHLY', product: { priceString: '$29.99', title: 'Monthly Pro', description: 'Ongoing optimization' } } as any,
           { identifier: 'mg_annual', packageType: 'ANNUAL', product: { priceString: '$99.99', title: 'Annual Saver', description: 'Best value year round' } } as any,
         ];

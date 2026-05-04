@@ -7,25 +7,26 @@ import Home from './screens/Home';
 import Diagnose from './screens/Diagnose';
 import StrainSearch from './screens/StrainSearch';
 import Journal from './screens/Journal';
-import Profile from './screens/Profile'; // Import Profile
+import Profile from './screens/Profile';
 import Paywall from './screens/Paywall';
 import PostPaymentAuth from './screens/PostPaymentAuth';
 import GetStartedTutorial from './screens/GetStartedTutorial';
 import BottomNav from './components/BottomNav';
-import OnboardingFlow from './screens/onboarding/OnboardingFlow';
-import OnboardingPaywall from './screens/onboarding/OnboardingPaywall';
-// Purchases dynamically imported below — static import crashes on web
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
-import { supabase } from './services/supabaseClient';
 import { getPendingTasksForToday, toggleTaskCompletion, addNewTask, updateTaskProperties, deleteTask, deleteJournalEntry, deletePlant } from './services/dbService';
 import { STRAIN_DATABASE } from './data/strains';
 import ErrorBoundary from './components/ErrorBoundary';
-
-import { getDailyInsight, wakeUpBackend } from './services/geminiService';
+import { wakeUpBackend } from './services/geminiService';
+import { initializeApp } from './services/appInitializer';
 
 const App: React.FC = () => {
+  // --- Global App Gate ---
+  const [isAppReady, setIsAppReady] = useState(false);
+  const [isReturningSubscriber, setIsReturningSubscriber] = useState(false);
+
+  // --- App State ---
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [currentTab, setCurrentTab] = useState<AppScreen>(AppScreen.HOME);
@@ -33,106 +34,58 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(false); // New Tutorial State
+  const [showTutorial, setShowTutorial] = useState(false);
   const isAuthProcessing = useRef(false);
 
+  // --- Initialization: Hard App Gate ---
   useEffect(() => {
-    const initApp = async () => {
-      // 0. Wake up Backend (Fixes Chat Cold Start)
+    const boot = async () => {
+      console.log('[App] Boot sequence started');
+
+      // Wake backend early (fire-and-forget)
       wakeUpBackend();
 
-      if (Capacitor.isNativePlatform()) await SplashScreen.hide();
-
-      // FIX (Step 5): Map the Supabase anonymous user ID into RevenueCat as
-      // the appUserID so restore-purchases survives reinstall on the same
-      // Apple ID. We configure() first (required by SDK), then logIn() with
-      // the Supabase UID once the anon session is available.
-      const getSupabaseUserId = async (): Promise<string | null> => {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user?.id) return session.user.id;
-          // Session not yet established — sign in anonymously synchronously
-          const { data } = await supabase.auth.signInAnonymously();
-          return data?.user?.id ?? null;
-        } catch (e) {
-          console.warn('getSupabaseUserId failed:', e);
-          return null;
-        }
-      };
-
-      if (Capacitor.getPlatform() === 'android') {
-        const apiKey = import.meta.env.VITE_REVENUECAT_ANDROID_KEY;
-        if (apiKey) {
-          const { Purchases } = await import('@revenuecat/purchases-capacitor');
-          const supabaseUserId = await getSupabaseUserId();
-          await Purchases.configure(
-            supabaseUserId ? { apiKey, appUserID: supabaseUserId } : { apiKey }
-          );
-          if (supabaseUserId) {
-            try { await Purchases.logIn({ appUserID: supabaseUserId }); } catch (e) { console.warn('RC logIn failed:', e); }
-          }
-        }
-      } else if (Capacitor.getPlatform() === 'ios') {
-        const apiKey = import.meta.env.VITE_REVENUECAT_IOS_KEY;
-        if (apiKey) {
-          const { Purchases } = await import('@revenuecat/purchases-capacitor');
-          const supabaseUserId = await getSupabaseUserId();
-          await Purchases.configure(
-            supabaseUserId ? { apiKey, appUserID: supabaseUserId } : { apiKey }
-          );
-          if (supabaseUserId) {
-            try { await Purchases.logIn({ appUserID: supabaseUserId }); } catch (e) { console.warn('RC logIn failed:', e); }
-          }
-        }
+      // Hide native splash screen
+      if (Capacitor.isNativePlatform()) {
+        await SplashScreen.hide();
       }
 
-      // --- AUTH DEEP LINK HANDLING ---
-      // Helper function with Timeout & Error Handling
-      const handleAuthDeepLink = async (urlStr: string) => {
-        if (isAuthProcessing.current) {
-          console.log("Auth already in progress, skipping duplicate link.");
-          return;
-        }
+      // Run the centralized initializer (auth + profile + RevenueCat)
+      const init = await initializeApp();
 
-        const code = new URL(urlStr).searchParams.get('code');
-        if (!code) return;
+      if (!init.isReady) {
+        console.error('[App] Initialization failed');
+        // Still show Splash to let user retry
+        setIsAppReady(true);
+        return;
+      }
 
-        try {
-          isAuthProcessing.current = true;
-          // 60s Timeout to guarantee sufficient time for network operations (especially on mobile)
-          const exchangePromise = supabase.auth.exchangeCodeForSession(code);
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Authentication timed out. Check connection.")), 60000)
-          );
+      setIsReturningSubscriber(init.isReturningSubscriber);
 
-          // Race the exchange against the timeout
-          const { data: sessionData, error } = await Promise.race([exchangePromise, timeoutPromise]) as any;
+      if (init.isReturningSubscriber && init.profile) {
+        // Returning subscriber: skip onboarding, go straight to app
+        const profileData: UserProfile = {
+          ...init.profile,
+          experience: init.profile.experience || 'Novice',
+          grow_mode: init.profile.grow_mode || 'Indoor',
+          goal: init.profile.goal || 'Maximize Yield',
+          space: init.profile.space || 'Medium',
+          isOnboarded: true,
+          streak: init.profile.streak || 0,
+          lastVisit: new Date().toISOString().split('T')[0],
+        };
+        setUserProfile(profileData);
+        localStorage.setItem('mastergrowbot_profile', JSON.stringify(profileData));
+        setOnboardingStatus(OnboardingStep.COMPLETED);
+        loadUserData();
+      }
 
-          if (error) throw error;
-
-          if (sessionData?.session) {
-            alert("Login Success!"); // User requested visible confirmation
-            handleAuthSuccess();
-          }
-        } catch (err: any) {
-          console.error("Auth Exchange Failed:", err);
-          // Only alert meaningful errors
-          if (err.message !== 'Auth session missing!') {
-            alert(`Login Failed: ${err.message || 'Unknown error'}`);
-          }
-        } finally {
-          isAuthProcessing.current = false;
-        }
-      };
-
-      // 1. Check for Cold Start Deep Link (Crucial for Android) — native only
+      // Deep link handling (native only)
       if (Capacitor.isNativePlatform()) {
         const launchUrl = await CapacitorApp.getLaunchUrl();
         if (launchUrl?.url && launchUrl.url.includes('code=')) {
           handleAuthDeepLink(launchUrl.url);
         }
-
-        // 2. Runtime Deep Link Listener — native only
         CapacitorApp.addListener('appUrlOpen', async (data) => {
           if (data.url.includes('code=')) {
             handleAuthDeepLink(data.url);
@@ -140,55 +93,49 @@ const App: React.FC = () => {
         });
       }
 
-      // --- SESSION MANAGEMENT LOGIC ---
-      const savedProfile = localStorage.getItem('mastergrowbot_profile');
-      let profileData: UserProfile | null = savedProfile ? JSON.parse(savedProfile) : null;
-      let isSubscribed = false;
-
-      // 1. Check Subscription Status (Simulated check, replace with actual Entitlement logic in prod)
-      try {
-        if (Capacitor.getPlatform() !== 'web') {
-          const { Purchases } = await import('@revenuecat/purchases-capacitor');
-          const { customerInfo } = await Purchases.getCustomerInfo();
-          if (typeof customerInfo.entitlements.active['pro'] !== "undefined") {
-            isSubscribed = true;
-          }
-        } else {
-          // Web/Dev Logic: If they reached 'COMPLETED' or have profile, assume sub for now unless explicit logout
-          // For strict testing: assumes true if profile exists locally
-          if (profileData) isSubscribed = true;
-        }
-      } catch (e) {
-        console.warn("Purchases check failed (dev mode?)", e);
-        if (profileData) isSubscribed = true; // Fallback for dev
-      }
-
-      if (profileData && isSubscribed) {
-        // RETURNING USER -> SKIP EVERYTHING
-        console.log("Returning Subscriber Verified. Skipping Onboarding.");
-        setUserProfile(profileData);
-        setOnboardingStatus(OnboardingStep.COMPLETED);
-        loadUserData();
-      } else if (profileData && !isSubscribed) {
-        // EXPIRED/CANCELLED -> FORCE PAYWALL
-        console.log("Subscription Expired. Redirecting to Paywall.");
-        setUserProfile(profileData);
-        setOnboardingStatus(OnboardingStep.SUMMARY); // Effectively re-onboard/pay
-      } else {
-        // NEW USER -> STAY ON EXISTING STATE (Default is SPLASH)
-        // CRITICAL FIX: Do NOT force setOnboardingStatus(SPLASH) here.
-        // If the user has already clicked "Start" and moved to QUIZ before this finishes,
-        // resetting it to SPLASH causes the "Flash and Reset" bug.
-        console.log("New User Detected. Waiting for interaction.");
-      }
+      setIsAppReady(true);
+      console.log('[App] Boot complete. isReturningSubscriber:', init.isReturningSubscriber);
     };
-    initApp();
+
+    boot();
+
+    return () => {
+      // Cleanup capacitor listeners if needed
+    };
   }, []);
 
+  const handleAuthDeepLink = async (urlStr: string) => {
+    const { supabase } = await import('./services/supabaseClient');
+    if (isAuthProcessing.current) return;
+    const code = new URL(urlStr).searchParams.get('code');
+    if (!code) return;
+
+    try {
+      isAuthProcessing.current = true;
+      const exchangePromise = supabase.auth.exchangeCodeForSession(code);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Authentication timed out.')), 60000)
+      );
+      const { data: sessionData, error } = await Promise.race([exchangePromise, timeoutPromise]) as any;
+      if (error) throw error;
+      if (sessionData?.session) {
+        alert('Login Success!');
+        handleAuthSuccess();
+      }
+    } catch (err: any) {
+      console.error('Auth Exchange Failed:', err);
+      if (err.message !== 'Auth session missing!') {
+        alert(`Login Failed: ${err.message || 'Unknown error'}`);
+      }
+    } finally {
+      isAuthProcessing.current = false;
+    }
+  };
+
+  // --- User Data Loading ---
   const loadUserData = async () => {
     const mockStrain = STRAIN_DATABASE[0];
 
-    // --- Streak Logic ---
     const today = new Date().toISOString().split('T')[0];
     const lastVisit = localStorage.getItem('mastergrowbot_last_visit');
     let currentStreak = parseInt(localStorage.getItem('mastergrowbot_streak') || '0');
@@ -198,16 +145,13 @@ const App: React.FC = () => {
       if (lastVisit === yesterday) {
         currentStreak += 1;
       } else {
-        currentStreak = 1; // Reset if broken (or first time)
+        currentStreak = 1;
       }
       localStorage.setItem('mastergrowbot_last_visit', today);
       localStorage.setItem('mastergrowbot_streak', currentStreak.toString());
-
-      // Update profile state if it exists
       setUserProfile(prev => prev ? ({ ...prev, streak: currentStreak, lastVisit: today }) : null);
     }
 
-    // Default Plant Data
     setPlants([{
       id: '1',
       name: 'Project Alpha',
@@ -220,11 +164,10 @@ const App: React.FC = () => {
       totalDays: 24,
       journal: [],
       tasks: [],
-      streak: currentStreak, // Use calculated streak
+      streak: currentStreak,
       weeklySummaries: []
     }]);
 
-    // Fetch real tasks
     const pendingTasks = await getPendingTasksForToday();
     if (pendingTasks) setTasks(pendingTasks);
   };
@@ -233,12 +176,9 @@ const App: React.FC = () => {
     setShowAuth(false);
     setShowPaywall(false);
     setOnboardingStatus(OnboardingStep.COMPLETED);
-
-    // NEW USER CHECK: If they haven't seen tutorial, show it
     if (!userProfile?.hasSeenTutorial) {
       setShowTutorial(true);
     }
-
     loadUserData();
   };
 
@@ -246,11 +186,9 @@ const App: React.FC = () => {
     const newEntry = { ...entry, id: Date.now().toString(), date: new Date().toLocaleDateString() };
     setPlants(prev => {
       if (prev.length > 0) {
-        // Add to existing first plant
         const updatedFirst = { ...prev[0], journal: [newEntry, ...prev[0].journal] };
         return [updatedFirst, ...prev.slice(1)];
       } else {
-        // Create Default Plant to save entry
         const defaultPlant: Plant = {
           id: Date.now().toString(),
           name: 'My First Grow',
@@ -260,7 +198,7 @@ const App: React.FC = () => {
           daysInStage: 1,
           imageUri: entry.image || entry.imageUri || 'https://images.unsplash.com/photo-1603796846097-b36976ea2851',
           totalDays: 1,
-          journal: [newEntry], // Initialize with this entry
+          journal: [newEntry],
           tasks: [],
           streak: 0,
           weeklySummaries: []
@@ -282,10 +220,7 @@ const App: React.FC = () => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
     const newStatus = !task.isCompleted;
-
-    // Optimistic Update
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCompleted: newStatus, completed: newStatus } : t));
-
     await toggleTaskCompletion(taskId, newStatus);
   };
 
@@ -296,20 +231,19 @@ const App: React.FC = () => {
       title,
       dueDate: date,
       isCompleted: false,
-      completed: false, // Legacy
+      completed: false,
       source,
       recurrence: options?.recurrence,
       notes: options?.notes,
       createdAt: new Date().toISOString()
     };
-
     setTasks(prev => [...prev, optimisticTask]);
 
     const savedTask = await addNewTask({
       title,
       dueDate: date,
       source,
-      type: 'other', // Default
+      type: 'other',
       recurrence: options?.recurrence,
       notes: options?.notes
     });
@@ -320,56 +254,36 @@ const App: React.FC = () => {
   };
 
   const handleUpdateTask = async (taskId: string, title: string, notes?: string, recurrence?: 'daily' | 'weekly' | 'once' | string) => {
-    // 1. Optimistic UI update
     const updates: any = { title, notes, recurrence };
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
-
-    // 2. Also update in plant's internal task array if it exists
     setPlants(prev => prev.map(plant => ({
       ...plant,
       tasks: plant.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t)
     })));
-
-    // 3. Database operation
     await updateTaskProperties(taskId, updates);
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    // 1. Optimistic UI update
     setTasks(prev => prev.filter(t => t.id !== taskId));
-
-    // 2. Also remove from plant's internal task array if it exists there (syncing state)
     setPlants(prev => prev.map(plant => ({
       ...plant,
       tasks: plant.tasks.filter(t => t.id !== taskId)
     })));
-
-    // 3. Database operation
     await deleteTask(taskId);
   };
 
   const handleDeleteEntry = async (entryId: string, plantId: string) => {
-    // 1. Optimistic UI update for Journal
     setPlants(prev => prev.map(plant =>
       plant.id === plantId
         ? { ...plant, journal: plant.journal.filter((j: any) => j.id !== entryId) }
         : plant
     ));
-
-    // 2. Database operation
     await deleteJournalEntry(entryId);
   };
 
   const handleDeletePlant = async (plantId: string) => {
-    // 1. UI update
     setPlants(prev => prev.filter(p => p.id !== plantId));
-
-    // 2. Also clear global tasks associated with this plant
     setTasks(prev => prev.filter(t => t.plantId !== plantId && (t as any).plant_id !== plantId));
-
-    // 3. If no plants remain, optionally navigate home, but user is likely already there.
-
-    // 4. DB operation
     await deletePlant(plantId);
   };
 
@@ -382,7 +296,7 @@ const App: React.FC = () => {
       stage: 'Seedling',
       healthScore: 100,
       daysInStage: 1,
-      imageUri: strain.image || 'https://images.unsplash.com/photo-1603796846097-b36976ea2851', // Fallback or strain image
+      imageUri: strain.image || 'https://images.unsplash.com/photo-1603796846097-b36976ea2851',
       totalDays: 1,
       journal: [],
       tasks: [],
@@ -390,7 +304,6 @@ const App: React.FC = () => {
       weeklySummaries: []
     };
     setPlants(prev => [...prev, newPlant]);
-    // Optionally create a starter task?
     handleAddTask(`Start journal for ${strain.name}`, new Date().toISOString().split('T')[0], 'user');
   };
 
@@ -399,64 +312,87 @@ const App: React.FC = () => {
     handleUpdateProfile({ hasSeenTutorial: true });
   };
 
-  // New 12-screen onboarding flow for new users
+  // --- ONBOARDING FLOW HANDLERS ---
+
+  const handleGetStarted = () => {
+    setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE);
+  };
+
+  const handleOnboardingComplete = (profile: UserProfile) => {
+    setUserProfile(profile);
+    setOnboardingStatus(OnboardingStep.SUMMARY);
+  };
+
+  const handleSummaryContinue = () => {
+    setShowPaywall(true);
+  };
+
+  const handlePaywallPurchase = () => {
+    setShowPaywall(false);
+    setShowAuth(true);
+  };
+
+  // --- RENDER ---
+
+  // 1. LOADING STATE (before initializeApp completes)
+  if (!isAppReady) {
+    return (
+      <div className="h-screen w-screen bg-surface flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm font-bold text-text-sub">Loading MasterGrowbot...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. SPLASH (new user, not yet started onboarding)
   if (onboardingStatus === OnboardingStep.SPLASH) {
     return (
       <ErrorBoundary>
-      <OnboardingFlow
-        onComplete={(onboardingData) => {
-          // Map onboarding strings → UserProfile typed values
-          const expMap: Record<string, UserProfile['experience']> = {
-            first_grow: 'Novice', beginner: 'Novice', intermediate: 'Intermediate',
-            advanced: 'Expert', expert: 'Pro',
-          };
-          const envMap: Record<string, UserProfile['grow_mode']> = {
-            indoor_tent: 'Indoor', indoor_room: 'Indoor', outdoor: 'Outdoor',
-            greenhouse: 'Greenhouse',
-          };
-          const goalMap: Record<string, UserProfile['goal']> = {
-            max_yield: 'Maximize Yield', top_quality: 'Improve Quality', learn_skills: 'Learn Skills',
-            low_maintenance: 'Maximize Yield', stealth: 'Maximize Yield',
-          };
-          const spaceMap: Record<string, UserProfile['space']> = {
-            soil: 'Small', coco: 'Medium', hydro: 'Large', living_soil: 'Medium',
-          };
-
-          const newProfile: UserProfile = {
-            experience: expMap[onboardingData.experience] || 'Novice',
-            grow_mode: envMap[onboardingData.environment] || 'Indoor',
-            goal: goalMap[onboardingData.goal] || 'Maximize Yield',
-            space: spaceMap[onboardingData.medium] || 'Medium',
-            isOnboarded: true,
-            hasSeenTutorial: false,
-            streak: 0,
-            lastVisit: new Date().toISOString().split('T')[0],
-          };
-          setUserProfile(newProfile);
-          localStorage.setItem('mastergrowbot_profile', JSON.stringify(newProfile));
-          setOnboardingStatus(OnboardingStep.COMPLETED);
-          setShowTutorial(false);
-          loadUserData();
-        }}
-      />
+        <Splash onGetStarted={handleGetStarted} />
       </ErrorBoundary>
     );
   }
-  if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) return <Onboarding onComplete={(p) => { setUserProfile(p); setOnboardingStatus(OnboardingStep.SUMMARY); }} />;
-  // Legacy users (saved profile, no active subscription) land here. Skip OnboardingSummary and
-  // show the new light-mode OnboardingPaywall directly — converts returning non-subscribers.
-  if (onboardingStatus === OnboardingStep.SUMMARY) return (
-    <ErrorBoundary>
-      <OnboardingPaywall
-        onPurchase={() => {
-          setOnboardingStatus(OnboardingStep.COMPLETED);
-          setShowAuth(true);
-          loadUserData();
-        }}
-      />
-    </ErrorBoundary>
-  );
 
+  // 3. ONBOARDING QUIZ
+  if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) {
+    return <Onboarding onComplete={handleOnboardingComplete} />;
+  }
+
+  // 4. ONBOARDING SUMMARY → PAYWALL
+  if (onboardingStatus === OnboardingStep.SUMMARY) {
+    if (!userProfile) return null;
+    if (showPaywall) {
+      return (
+        <ErrorBoundary>
+          <Paywall
+            onClose={() => setShowPaywall(false)}
+            onPurchase={handlePaywallPurchase}
+            onSkip={() => {}}
+          />
+        </ErrorBoundary>
+      );
+    }
+    return (
+      <ErrorBoundary>
+        <OnboardingSummary profile={userProfile} onContinue={handleSummaryContinue} />
+      </ErrorBoundary>
+    );
+  }
+
+  // 5. AUTH (after purchase)
+  if (showAuth) {
+    return (
+      <PostPaymentAuth
+        onComplete={handleAuthSuccess}
+        onSkip={handleAuthSuccess}
+        userProfile={userProfile}
+      />
+    );
+  }
+
+  // 6. MAIN APP
   return (
     <div className="h-screen w-screen bg-surface overflow-hidden relative">
       <ErrorBoundary>
@@ -470,14 +406,10 @@ const App: React.FC = () => {
 
         {showTutorial && <GetStartedTutorial onComplete={completeTutorial} />}
 
-        {/* HARD PAYWALL: No onClose or onSkip provided to prevent bypass */}
-        {showPaywall && <Paywall onClose={() => { }} onPurchase={() => { setShowPaywall(false); setShowAuth(true); }} onSkip={() => { }} />}
-
-        {showAuth && <PostPaymentAuth onComplete={handleAuthSuccess} onSkip={handleAuthSuccess} userProfile={userProfile} />}
-
         <BottomNav currentScreen={currentTab} onNavigate={(tab) => setCurrentTab(tab)} />
       </ErrorBoundary>
     </div>
   );
 };
+
 export default App;
