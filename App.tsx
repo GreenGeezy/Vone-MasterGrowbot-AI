@@ -42,9 +42,6 @@ const App: React.FC = () => {
     const boot = async () => {
       console.log('[App] Boot sequence started');
 
-      // Wake backend early (fire-and-forget)
-      wakeUpBackend();
-
       // Hide native splash screen
       if (Capacitor.isNativePlatform()) {
         await SplashScreen.hide();
@@ -52,6 +49,11 @@ const App: React.FC = () => {
 
       // Run the centralized initializer (auth + profile + RevenueCat)
       const init = await initializeApp();
+
+      // Wake backend ONLY after auth is ready (guarantees JWT exists)
+      if (init.isReady && init.session?.access_token) {
+        wakeUpBackend();
+      }
 
       if (!init.isReady) {
         console.error('[App] Initialization failed');
@@ -330,6 +332,30 @@ const App: React.FC = () => {
   const handlePaywallPurchase = () => {
     setShowPaywall(false);
     setShowAuth(true);
+  };
+
+  // Auth retry helper (for child components)
+  const retryAuth = async () => {
+    const init = await initializeApp();
+    if (init.isReady) {
+      setIsReturningSubscriber(init.isReturningSubscriber);
+      if (init.isReturningSubscriber && init.profile) {
+        const profileData: UserProfile = {
+          ...init.profile,
+          experience: init.profile.experience || 'Novice',
+          grow_mode: init.profile.grow_mode || 'Indoor',
+          goal: init.profile.goal || 'Maximize Yield',
+          space: init.profile.space || 'Medium',
+          isOnboarded: true,
+          streak: init.profile.streak || 0,
+          lastVisit: new Date().toISOString().split('T')[0],
+        };
+        setUserProfile(profileData);
+        localStorage.setItem('mastergrowbot_profile', JSON.stringify(profileData));
+        setOnboardingStatus(OnboardingStep.COMPLETED);
+        loadUserData();
+      }
+    }
   };
 
   // --- RENDER ---
