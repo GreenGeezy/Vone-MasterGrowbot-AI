@@ -3,6 +3,14 @@ import { Award, Home, Zap, Ruler, Sparkles, Leaf } from 'lucide-react';
 import { UserProfile } from '../types';
 import WelcomeCarousel from '../components/WelcomeCarousel';
 import Growbot from '../components/Growbot';
+import TestimonialCard from '../components/TestimonialCard';
+
+const TESTIMONIALS = [
+  { name: 'Jake M.', text: 'Caught a magnesium deficiency before it wrecked my whole crop.', stars: 5 },
+  { name: 'Sarah K.', text: 'As a first-time grower I was totally lost. MasterGrowbot walked me through everything.', stars: 5 },
+  { name: 'Tom R.', text: 'My best harvests have been since using this app. The AI is spot-on.', stars: 5 },
+  { name: 'Alex D.', text: 'Helped me diagnose an issue in seconds that would have taken me days to figure out.', stars: 5 },
+];
 
 interface OnboardingProps {
   onComplete: (profile: UserProfile) => void;
@@ -184,6 +192,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               ))}
             </div>
           </div>
+
+          {/* TESTIMONIAL — rotates per step, stays compact */}
+          <TestimonialCard testimonial={TESTIMONIALS[currentStepIndex % TESTIMONIALS.length]} />
 
         </div>
       </div>
