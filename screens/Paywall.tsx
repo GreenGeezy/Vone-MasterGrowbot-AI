@@ -14,12 +14,6 @@ interface PaywallProps {
   onSkip: () => void;
 }
 
-const TESTIMONIALS = [
-  { name: 'Jake M.', text: 'Caught a magnesium deficiency before it wrecked my whole crop.', stars: 5 },
-  { name: 'Sarah K.', text: 'As a first-time grower I was totally lost. MasterGrowbot walked me through everything.', stars: 5 },
-  { name: 'Tom R.', text: 'My best harvests have been since using this app. The AI is spot-on.', stars: 5 },
-];
-
 const FEATURES = [
   { icon: LifeBuoy, title: 'Unlimited AI Diagnosis', desc: 'Identify pests, diseases, and deficiencies instantly to prevent crop loss.' },
   { icon: Zap, title: 'Personalized Grow Plan', desc: 'Tailored tasks to your setup — avoid mistakes and maximize harvest potential.' },
@@ -65,7 +59,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         const annual = pkgs.find((p: any) => p.packageType === 'ANNUAL');
         setSelectedPkgIdentifier(annual ? annual.identifier : pkgs[0].identifier);
 
-        // Check if user already used trial
         const { customerInfo } = await Purchases.getCustomerInfo();
         const hasEverTrialed = !!customerInfo?.originalPurchaseDate;
         setTrialUsed(hasEverTrialed);
@@ -140,7 +133,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
   const getButtonText = () => {
     if (!selectedPkg) return 'Select a Plan';
     const price = selectedPkg.product.priceString;
-    if (trialUsed) return `Subscribe — ${price}`;
+    if (trialUsed) return `Subscribe ${price}`;
     return 'Start Free Trial';
   };
 
@@ -224,21 +217,10 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
             {Array.from({ length: 5 }).map((_, i) => (
               <Star key={i} size={16} className="text-yellow-400 fill-yellow-400" />
             ))}
-            <span className="text-xs font-bold text-gray-600 ml-1">4.9 Rating</span>
           </div>
-          <div className="space-y-3">
-            {TESTIMONIALS.map((t, i) => (
-              <div key={i} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                <div className="flex items-center gap-1 mb-1">
-                  {Array.from({ length: t.stars }).map((_, j) => (
-                    <Star key={j} size={10} className="text-yellow-400 fill-yellow-400" />
-                  ))}
-                  <span className="text-[10px] font-bold text-gray-500 ml-1">{t.name}</span>
-                </div>
-                <p className="text-xs text-gray-700 leading-relaxed">&ldquo;{t.text}&rdquo;</p>
-              </div>
-            ))}
-          </div>
+          <p className="text-center text-xs font-bold text-gray-600">
+            ⭐⭐⭐⭐⭐ Rated 5 stars by early users
+          </p>
         </div>
 
         {/* PRICING */}
@@ -268,7 +250,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
                     <p className="text-xs text-gray-500 font-medium mb-0.5">
                       {pkg.packageType === 'WEEKLY' ? 'Weekly' : pkg.packageType === 'MONTHLY' ? 'Monthly' : 'Yearly'}
                     </p>
-                    <p className={`font-black text-2xl ${isSelected ? 'text-green-700' : 'text-gray-900'}`}>
+                    <p className={`font-black text-3xl ${isSelected ? 'text-green-700' : 'text-gray-900'}`}>
                       {displayPrice}
                     </p>
                     <p className="text-[10px] text-gray-400 font-medium">
