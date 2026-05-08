@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import {
-  Check, Shield, Star, ArrowRight, Lock, RotateCcw
+  Check, Star, ArrowRight, Lock, RotateCcw, Sparkles
 } from 'lucide-react';
 import type { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
@@ -26,16 +26,18 @@ const TESTIMONIALS = [
 ];
 
 const FEATURES = [
-  'Unlimited AI plant diagnosis',
-  'Personalized grow plan & tasks',
-  '100+ strain database & guides',
-  'Professional grow journal',
+  { icon: '🧬', title: 'AI Strain Intelligence', desc: 'Genetic-specific grow guides' },
+  { icon: '🌱', title: 'Personalized Grow Plans', desc: 'Tailored to your setup' },
+  { icon: '🔬', title: 'Nutrient Deficiency Detection', desc: 'Catch problems early' },
+  { icon: '📸', title: 'Unlimited AI Plant Scans', desc: 'Diagnose with photos' },
+  { icon: '🪴', title: 'Smart Grow Journal', desc: 'Track every grow cycle' },
+  { icon: '⏰', title: 'Daily Reminders & Tasks', desc: 'Never miss a feeding' },
 ];
 
 const TestimonialCard = memo(({ testimonial, index }: { testimonial: typeof TESTIMONIALS[0]; index: number }) => (
   <div
     key={index}
-    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex-shrink-0 w-[260px]"
+    className="bg-white/80 backdrop-blur-sm rounded-2xl p-5 shadow-sm border border-white/60 flex-shrink-0 w-[260px]"
   >
     <div className="flex gap-0.5 mb-3">
       {Array.from({ length: 5 }).map((_, i) => (
@@ -52,11 +54,6 @@ const TestimonialCard = memo(({ testimonial, index }: { testimonial: typeof TEST
 ));
 TestimonialCard.displayName = 'TestimonialCard';
 
-/**
- * Check if user has ANY active subscription or entitlement.
- * RevenueCat may report subscriptions via activeSubscriptions even if
- * entitlements haven't synced yet (especially in sandbox).
- */
 function hasAnyActiveSubscription(customerInfo: any): boolean {
   if (!customerInfo) return false;
   const hasEntitlements = Object.keys(customerInfo.entitlements?.active || {}).length > 0;
@@ -75,7 +72,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
   const [trialUsed, setTrialUsed] = useState(false);
   const [testimonialIndex, setTestimonialIndex] = useState(0);
 
-  // Auto-rotate testimonials every 4s
   useEffect(() => {
     const timer = setInterval(() => {
       setTestimonialIndex(prev => (prev + 1) % TESTIMONIALS.length);
@@ -100,9 +96,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       }
 
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
-
-      // Force refresh offerings to avoid stale cache
-      console.log('[Paywall] Forcing offerings refresh...');
       await Purchases.invalidateCustomerInfoCache();
 
       const timeoutPromise = new Promise((_, reject) =>
@@ -111,14 +104,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       const offeringsPromise = Purchases.getOfferings();
       const offerings = await Promise.race([offeringsPromise, timeoutPromise]) as any;
 
-      console.log('[Paywall] Offerings loaded:', offerings);
-      console.log('[Paywall] Current offering packages:', offerings.current?.availablePackages?.map((p: any) => ({
-        identifier: p.identifier,
-        packageType: p.packageType,
-        productId: p?.product?.identifier,
-        priceString: p?.product?.priceString,
-      })));
-
       if (offerings.current?.availablePackages?.length > 0) {
         const pkgs = offerings.current.availablePackages;
         setPackages(pkgs);
@@ -126,17 +111,8 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         setSelectedPkgIdentifier(annual ? annual.identifier : pkgs[0].identifier);
 
         const { customerInfo } = await Purchases.getCustomerInfo();
-        console.log('[Paywall] CustomerInfo on load:', JSON.stringify(customerInfo, null, 2));
-        console.log('[Paywall] Active entitlements keys:', Object.keys(customerInfo?.entitlements?.active || {}));
-        console.log('[Paywall] Active subscriptions:', customerInfo?.activeSubscriptions);
-        console.log('[Paywall] All purchased products:', customerInfo?.allPurchasedProductIdentifiers);
-        console.log('[Paywall] originalAppUserId:', customerInfo?.originalAppUserId);
-        console.log('[Paywall] originalPurchaseDate:', customerInfo?.originalPurchaseDate);
-
-        // Trial eligibility: if they've ever purchased (originalPurchaseDate exists), trial is used
         const hasEverTrialed = !!customerInfo?.originalPurchaseDate;
         setTrialUsed(hasEverTrialed);
-        console.log('[Paywall] Trial used:', hasEverTrialed);
       } else {
         setError('No subscription plans found at this time.');
       }
@@ -165,67 +141,36 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       const pkg = packages.find(p => p.identifier === selectedPkgIdentifier);
       if (!pkg) { setError('Selected plan unavailable'); return; }
 
-      console.log('[Paywall] Purchasing package:', pkg.identifier, 'product:', (pkg as any)?.product?.identifier);
-      console.log('[Paywall] Current appUserID before purchase:', await Purchases.getAppUserID());
-
       const purchaseResult = await Purchases.purchasePackage({ aPackage: pkg });
-      console.log('[Paywall] Purchase result customerInfo:', JSON.stringify(purchaseResult.customerInfo, null, 2));
-      console.log('[Paywall] Active entitlements after purchase:', Object.keys(purchaseResult.customerInfo?.entitlements?.active || {}));
-      console.log('[Paywall] Active subscriptions after purchase:', purchaseResult.customerInfo?.activeSubscriptions);
-      console.log('[Paywall] All purchased products after purchase:', purchaseResult.customerInfo?.allPurchasedProductIdentifiers);
 
-      // Immediately check if purchase succeeded
       if (hasAnyActiveSubscription(purchaseResult.customerInfo)) {
-        console.log('[Paywall] SUCCESS — subscription detected immediately after purchase');
         onPurchase();
         return;
       }
 
-      // Invalidate cache and sync to get fresh state
       await Purchases.invalidateCustomerInfoCache();
       await Purchases.syncPurchases();
 
-      // Fetch fresh customer info
       const { customerInfo: freshInfo } = await Purchases.getCustomerInfo();
-      console.log('[Paywall] Fresh customerInfo after sync:', JSON.stringify(freshInfo, null, 2));
-      console.log('[Paywall] Fresh active entitlements:', Object.keys(freshInfo?.entitlements?.active || {}));
-      console.log('[Paywall] Fresh active subscriptions:', freshInfo?.activeSubscriptions);
-
       if (hasAnyActiveSubscription(freshInfo)) {
-        console.log('[Paywall] SUCCESS — subscription detected after cache sync');
         onPurchase();
         return;
       }
-
-      // SANDBOX RETRY: TestFlight can delay entitlement propagation
-      // Retry up to 10 times with 2s delay (20 seconds total)
-      console.log('[Paywall] No active subscription immediately. Starting sandbox retry (10 attempts)...');
 
       for (let attempt = 1; attempt <= 10; attempt++) {
         setError(`Activating your subscription... (${attempt}/10)`);
         await new Promise(r => setTimeout(r, 2000));
-
         await Purchases.invalidateCustomerInfoCache();
         await Purchases.syncPurchases();
         const { customerInfo: retryInfo } = await Purchases.getCustomerInfo();
-
-        console.log(`[Paywall] Retry ${attempt} — customerInfo:`, JSON.stringify(retryInfo, null, 2));
-        console.log(`[Paywall] Retry ${attempt} — active entitlements:`, Object.keys(retryInfo?.entitlements?.active || {}));
-        console.log(`[Paywall] Retry ${attempt} — active subscriptions:`, retryInfo?.activeSubscriptions);
-        console.log(`[Paywall] Retry ${attempt} — purchased products:`, retryInfo?.allPurchasedProductIdentifiers);
-
         if (hasAnyActiveSubscription(retryInfo)) {
-          console.log('[Paywall] SUCCESS on retry', attempt);
           setError(null);
           onPurchase();
           return;
         }
       }
 
-      // All retries exhausted — show failure
-      console.error('[Paywall] All 10 retries exhausted. No active subscription found.');
       setError('Subscription activation is taking longer than expected. Please tap "Restore Purchases" or try again later.');
-
     } catch (e: any) {
       if (!e.userCancelled) {
         console.error('Purchase Error:', e);
@@ -242,19 +187,10 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     try {
       if (Capacitor.isNativePlatform()) {
         const { Purchases } = await import('@revenuecat/purchases-capacitor');
-        console.log('[Paywall] Starting restore purchases...');
-        console.log('[Paywall] Current appUserID:', await Purchases.getAppUserID());
-
         await Purchases.restorePurchases();
         await Purchases.invalidateCustomerInfoCache();
         await Purchases.syncPurchases();
-
         const { customerInfo } = await Purchases.getCustomerInfo();
-        console.log('[Paywall] Restore — customerInfo:', JSON.stringify(customerInfo, null, 2));
-        console.log('[Paywall] Restore — active entitlements:', Object.keys(customerInfo?.entitlements?.active || {}));
-        console.log('[Paywall] Restore — active subscriptions:', customerInfo?.activeSubscriptions);
-        console.log('[Paywall] Restore — purchased products:', customerInfo?.allPurchasedProductIdentifiers);
-
         if (hasAnyActiveSubscription(customerInfo)) {
           alert('Success! Your subscription has been restored.');
           onPurchase();
@@ -263,7 +199,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         }
       }
     } catch (e) {
-      console.error('[Paywall] Restore error:', e);
       alert('Failed to restore purchases. Please try again.');
     } finally {
       setIsPurchasing(false);
@@ -292,7 +227,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     if (pkg.packageType === 'ANNUAL') {
       return {
         badge: 'BEST VALUE',
-        badgeColor: 'bg-green-600',
+        badgeColor: 'bg-gradient-to-r from-green-600 to-emerald-500',
         subtext: 'Just $1.92/week • Save over 60%',
         emphasis: true,
       };
@@ -300,7 +235,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     if (pkg.packageType === 'MONTHLY') {
       return {
         badge: 'MOST POPULAR',
-        badgeColor: 'bg-amber-500',
+        badgeColor: 'bg-gradient-to-r from-amber-500 to-orange-400',
         subtext: 'Best balance of flexibility and savings',
         emphasis: false,
       };
@@ -341,44 +276,59 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     <div className="fixed inset-0 bg-white z-[60] flex flex-col overflow-hidden">
 
       {/* ===== HERO ===== */}
-      <div className="relative flex-shrink-0 bg-green-900 text-white overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1596791836043-982c75908b89?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80')] bg-cover bg-center opacity-25" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-green-900/85 to-green-900" />
+      <div className="relative flex-shrink-0 overflow-hidden">
+        {/* Gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-green-900 via-emerald-800 to-green-950" />
+        {/* Subtle glow orbs */}
+        <div className="absolute top-[-20%] right-[-10%] w-[300px] h-[300px] bg-emerald-400/20 rounded-full blur-[100px]" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[250px] h-[250px] bg-green-300/10 rounded-full blur-[80px]" />
+        {/* Grid pattern overlay */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+
         <div className="relative px-6 pt-10 pb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="bg-white/15 backdrop-blur text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full flex items-center gap-1.5">
-              <Shield size={10} className="text-green-300" /> Trusted by Elite Growers
+          <div className="flex items-center gap-2 mb-5">
+            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-full p-2">
+              <Sparkles size={18} className="text-emerald-300" />
+            </div>
+            <span className="bg-white/10 backdrop-blur-md border border-white/20 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full">
+              AI-Powered Grow Assistant
             </span>
           </div>
-          <h1 className="text-3xl sm:text-[2.5rem] font-black leading-[1.15] mb-3 tracking-tight">
-            Don't Lose Your Harvest
+          <h1 className="text-[2rem] sm:text-[2.5rem] font-black leading-[1.1] mb-3 tracking-tight text-white">
+            Grow Like a Pro.<br />
+            <span className="text-emerald-300">Starting Today.</span>
           </h1>
-          <p className="text-sm font-medium text-green-100/85 max-w-sm leading-relaxed">
-            AI detects cannabis plant problems before they damage your grow
+          <p className="text-sm font-medium text-green-100/80 max-w-sm leading-relaxed">
+            Unlimited AI plant scans, personalized grow plans, and expert cannabis guidance in your pocket.
           </p>
         </div>
       </div>
 
       {/* ===== SCROLLABLE CONTENT ===== */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-white">
 
-        {/* Features */}
-        <div className="px-6 pt-6 pb-2">
-          <div className="flex flex-wrap gap-2">
-            {FEATURES.map((f, i) => (
-              <span
-                key={i}
-                className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 text-[11px] font-bold px-3 py-1.5 rounded-full border border-green-100"
-              >
-                <Check size={12} className="text-green-500" strokeWidth={3} />
-                {f}
-              </span>
-            ))}
+        {/* Features Grid */}
+        <div className="px-5 pt-6 pb-2">
+          <div className="bg-white rounded-2xl p-5 shadow-[0_2px_20px_rgba(0,0,0,0.06)] border border-gray-100">
+            <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4 text-center">
+              Everything You Get
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {FEATURES.map((f, i) => (
+                <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-gray-50 transition-colors">
+                  <span className="text-lg leading-none mt-0.5">{f.icon}</span>
+                  <div>
+                    <p className="text-[11px] font-bold text-gray-800 leading-tight">{f.title}</p>
+                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">{f.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Testimonials */}
-        <div className="px-6 py-5">
+        <div className="px-5 py-5">
           <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3">
             What growers are saying
           </p>
@@ -390,14 +340,14 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
             {TESTIMONIALS.map((_, i) => (
               <div
                 key={i}
-                className={`w-1.5 h-1.5 rounded-full transition-all ${i === testimonialIndex ? 'bg-green-600 w-4' : 'bg-gray-300'}`}
+                className={`h-1.5 rounded-full transition-all ${i === testimonialIndex ? 'bg-green-600 w-4' : 'bg-gray-300 w-1.5'}`}
               />
             ))}
           </div>
         </div>
 
         {/* Pricing Cards */}
-        <div className="px-6 pb-4 space-y-3">
+        <div className="px-5 pb-4 space-y-3">
           <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1 text-center">
             Choose Your Plan
           </p>
@@ -413,9 +363,9 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
                 className={`relative rounded-2xl border-2 p-4 transition-all duration-200 cursor-pointer ${
                   isSelected
                     ? meta.emphasis
-                      ? 'border-green-600 bg-green-50/60 shadow-lg shadow-green-100'
-                      : 'border-green-500 bg-green-50/40 shadow-md'
-                    : 'border-gray-150 bg-white hover:border-gray-300'
+                      ? 'border-green-500 bg-gradient-to-br from-green-50 to-emerald-50/50 shadow-lg shadow-green-100/80'
+                      : 'border-green-400 bg-green-50/40 shadow-md'
+                    : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
                 }`}
               >
                 {meta.badge && (
@@ -425,11 +375,9 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
                 )}
                 <div className="flex justify-between items-center">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
-                        {pkg.packageType === 'WEEKLY' ? 'Weekly' : pkg.packageType === 'MONTHLY' ? 'Monthly' : 'Yearly'}
-                      </p>
-                    </div>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-0.5">
+                      {pkg.packageType === 'WEEKLY' ? 'Weekly' : pkg.packageType === 'MONTHLY' ? 'Monthly' : 'Yearly'}
+                    </p>
                     <p className={`font-black text-3xl tracking-tight ${isSelected ? 'text-green-700' : 'text-gray-900'}`}>
                       {displayPrice}
                     </p>
@@ -448,25 +396,28 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
           })}
         </div>
 
-        {/* Trust elements above CTA */}
-        <div className="px-6 pb-2 flex flex-col items-center gap-1.5">
-          <div className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium">
-            <Lock size={12} className="text-gray-400" />
-            Secure payment via Apple
+        {/* Trust elements */}
+        <div className="px-5 pb-2 flex flex-col items-center gap-2">
+          <div className="flex items-center gap-5 text-[11px] text-gray-500 font-medium">
+            <span className="flex items-center gap-1">
+              <Lock size={11} className="text-gray-400" /> Secure payment via Apple
+            </span>
+            <span className="flex items-center gap-1">
+              <RotateCcw size={11} className="text-gray-400" /> Cancel anytime
+            </span>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium">
-            <RotateCcw size={12} className="text-gray-400" />
-            Cancel anytime in App Store settings
+          <div className="flex items-center gap-1 text-[11px] text-gray-500 font-medium">
+            <Star size={11} className="text-amber-400 fill-amber-400" /> Premium AI grow guidance
           </div>
         </div>
       </div>
 
       {/* ===== STICKY BOTTOM CTA ===== */}
-      <div className="flex-shrink-0 bg-white border-t border-gray-100 p-5 pb-8 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
+      <div className="flex-shrink-0 bg-white/90 backdrop-blur-md border-t border-gray-100 p-5 pb-8 z-50">
         <button
           onClick={handleStartTrial}
           disabled={isPurchasing || !selectedPkgIdentifier}
-          className="w-full bg-green-600 text-white font-black text-[17px] py-4 rounded-2xl shadow-lg shadow-green-200/40 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-50 disabled:shadow-none"
+          className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white font-black text-[17px] py-4 rounded-2xl shadow-lg shadow-green-200/50 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-50 disabled:shadow-none"
         >
           {isPurchasing && error?.includes('Activating') ? (
             <span className="animate-pulse">{error}</span>
@@ -498,7 +449,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         </div>
       </div>
 
-      {/* Error toast — only non-retry errors */}
+      {/* Error toast */}
       {error && !error.includes('Activating') && (
         <div className="absolute top-4 left-4 right-4 bg-red-500 text-white p-3.5 rounded-xl text-center text-xs font-bold shadow-xl z-[70]">
           {error}
