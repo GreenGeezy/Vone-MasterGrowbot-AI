@@ -21,13 +21,19 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { wakeUpBackend } from './services/geminiService';
 import { initializeApp } from './services/appInitializer';
 
+// --- LocalStorage Keys for State Persistence ---
+const LS_ONBOARDING_STATUS = 'mg_onboarding_status';
+const LS_PROFILE = 'mastergrowbot_profile';
+const LS_LAST_VISIT = 'mastergrowbot_last_visit';
+const LS_STREAK = 'mastergrowbot_streak';
+
 const App: React.FC = () => {
   // --- Global App Gate ---
   const [isAppReady, setIsAppReady] = useState(false);
   const [isReturningSubscriber, setIsReturningSubscriber] = useState(false);
 
   // --- App State ---
-  const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
+  const [onboardingStatus, setOnboardingStatus] = useState(OnboardingStep.SPLASH);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [currentTab, setCurrentTab] = useState<AppScreen>(AppScreen.HOME);
   const [plants, setPlants] = useState<Plant[]>([]);
@@ -47,6 +53,21 @@ const App: React.FC = () => {
         await SplashScreen.hide();
       }
 
+      // Restore persisted onboarding state BEFORE initializing
+      const savedOnboardingStatus = localStorage.getItem(LS_ONBOARDING_STATUS);
+      const savedProfile = localStorage.getItem(LS_PROFILE);
+      console.log('[App] Persisted onboarding status:', savedOnboardingStatus);
+      console.log('[App] Persisted profile exists:', !!savedProfile);
+
+      if (savedOnboardingStatus) {
+        setOnboardingStatus(savedOnboardingStatus);
+      }
+      if (savedProfile) {
+        try {
+          setUserProfile(JSON.parse(savedProfile));
+        } catch { /* ignore parse error */ }
+      }
+
       // Run the centralized initializer (auth + profile + RevenueCat)
       const init = await initializeApp();
 
@@ -57,7 +78,6 @@ const App: React.FC = () => {
 
       if (!init.isReady) {
         console.error('[App] Initialization failed');
-        // Still show Splash to let user retry
         setIsAppReady(true);
         return;
       }
@@ -66,7 +86,7 @@ const App: React.FC = () => {
 
       if (init.isReturningSubscriber && init.profile) {
         // Returning subscriber: skip onboarding, go straight to app
-        const profileData: UserProfile = {
+        const profileData = {
           ...init.profile,
           experience: init.profile.experience || 'Novice',
           grow_mode: init.profile.grow_mode || 'Indoor',
@@ -77,8 +97,9 @@ const App: React.FC = () => {
           lastVisit: new Date().toISOString().split('T')[0],
         };
         setUserProfile(profileData);
-        localStorage.setItem('mastergrowbot_profile', JSON.stringify(profileData));
+        localStorage.setItem(LS_PROFILE, JSON.stringify(profileData));
         setOnboardingStatus(OnboardingStep.COMPLETED);
+        localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
         loadUserData();
       }
 
@@ -97,6 +118,7 @@ const App: React.FC = () => {
 
       setIsAppReady(true);
       console.log('[App] Boot complete. isReturningSubscriber:', init.isReturningSubscriber);
+      console.log('[App] Final onboarding status:', savedOnboardingStatus || OnboardingStep.SPLASH);
     };
 
     boot();
@@ -139,8 +161,8 @@ const App: React.FC = () => {
     const mockStrain = STRAIN_DATABASE[0];
 
     const today = new Date().toISOString().split('T')[0];
-    const lastVisit = localStorage.getItem('mastergrowbot_last_visit');
-    let currentStreak = parseInt(localStorage.getItem('mastergrowbot_streak') || '0');
+    const lastVisit = localStorage.getItem(LS_LAST_VISIT);
+    let currentStreak = parseInt(localStorage.getItem(LS_STREAK) || '0');
 
     if (lastVisit !== today) {
       const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
@@ -149,8 +171,8 @@ const App: React.FC = () => {
       } else {
         currentStreak = 1;
       }
-      localStorage.setItem('mastergrowbot_last_visit', today);
-      localStorage.setItem('mastergrowbot_streak', currentStreak.toString());
+      localStorage.setItem(LS_LAST_VISIT, today);
+      localStorage.setItem(LS_STREAK, currentStreak.toString());
       setUserProfile(prev => prev ? ({ ...prev, streak: currentStreak, lastVisit: today }) : null);
     }
 
@@ -174,13 +196,39 @@ const App: React.FC = () => {
     if (pendingTasks) setTasks(pendingTasks);
   };
 
+  // --- AUTH SUCCESS (after purchase) ---
+  // CRITICAL: This is the ONLY path from paywall → tutorial → main app
   const handleAuthSuccess = async () => {
+    console.log('[App] handleAuthSuccess called');
+    console.log('[App] Current onboardingStatus:', onboardingStatus);
+    console.log('[App] Current userProfile:', userProfile);
+
+    // 1. Close auth screen
     setShowAuth(false);
     setShowPaywall(false);
+
+    // 2. Mark onboarding as COMPLETED and persist
     setOnboardingStatus(OnboardingStep.COMPLETED);
-    if (!userProfile?.hasSeenTutorial) {
+    localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
+    console.log('[App] onboardingStatus set to COMPLETED and persisted');
+
+    // 3. Mark profile as onboarded and persist
+    if (userProfile) {
+      const updated = { ...userProfile, isOnboarded: true };
+      setUserProfile(updated);
+      localStorage.setItem(LS_PROFILE, JSON.stringify(updated));
+      console.log('[App] Profile updated with isOnboarded=true');
+    }
+
+    // 4. Show tutorial if not seen
+    const hasSeenTutorial = userProfile?.hasSeenTutorial;
+    console.log('[App] hasSeenTutorial:', hasSeenTutorial);
+    if (!hasSeenTutorial) {
+      console.log('[App] Launching tutorial...');
       setShowTutorial(true);
     }
+
+    // 5. Load user data
     loadUserData();
   };
 
@@ -215,7 +263,7 @@ const App: React.FC = () => {
     if (!userProfile) return;
     const updated = { ...userProfile, ...updates };
     setUserProfile(updated);
-    localStorage.setItem('mastergrowbot_profile', JSON.stringify(updated));
+    localStorage.setItem(LS_PROFILE, JSON.stringify(updated));
   };
 
   const handleToggleTask = async (taskId: string) => {
@@ -310,32 +358,44 @@ const App: React.FC = () => {
   };
 
   const completeTutorial = () => {
+    console.log('[App] Tutorial completed');
     setShowTutorial(false);
     handleUpdateProfile({ hasSeenTutorial: true });
+    console.log('[App] hasSeenTutorial persisted');
   };
 
   // --- ONBOARDING FLOW HANDLERS ---
 
   const handleGetStarted = () => {
+    console.log('[App] handleGetStarted: SPLASH → QUIZ_EXPERIENCE');
     setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE);
+    localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.QUIZ_EXPERIENCE);
   };
 
   const handleOnboardingComplete = (profile: UserProfile) => {
+    console.log('[App] handleOnboardingComplete: QUIZ_EXPERIENCE → SUMMARY');
     setUserProfile(profile);
+    localStorage.setItem(LS_PROFILE, JSON.stringify(profile));
     setOnboardingStatus(OnboardingStep.SUMMARY);
+    localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.SUMMARY);
   };
 
   const handleSummaryContinue = () => {
+    console.log('[App] handleSummaryContinue: SUMMARY → showPaywall=true');
     setShowPaywall(true);
   };
 
+  // CRITICAL FIX: After purchase, go directly to auth screen
+  // Do NOT go back to summary
   const handlePaywallPurchase = () => {
+    console.log('[App] handlePaywallPurchase: Purchase success, showing PostPaymentAuth');
     setShowPaywall(false);
     setShowAuth(true);
   };
 
   // Auth retry helper (for child components)
   const retryAuth = async () => {
+    console.log('[App] retryAuth called');
     const init = await initializeApp();
     if (init.isReady) {
       setIsReturningSubscriber(init.isReturningSubscriber);
@@ -351,14 +411,18 @@ const App: React.FC = () => {
           lastVisit: new Date().toISOString().split('T')[0],
         };
         setUserProfile(profileData);
-        localStorage.setItem('mastergrowbot_profile', JSON.stringify(profileData));
+        localStorage.setItem(LS_PROFILE, JSON.stringify(profileData));
         setOnboardingStatus(OnboardingStep.COMPLETED);
+        localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
         loadUserData();
       }
     }
   };
 
   // --- RENDER ---
+  // CRITICAL: Render order matters. Each condition is mutually exclusive.
+
+  console.log('[App] RENDER — isAppReady:', isAppReady, '| onboardingStatus:', onboardingStatus, '| showPaywall:', showPaywall, '| showAuth:', showAuth, '| showTutorial:', showTutorial);
 
   // 1. LOADING STATE (before initializeApp completes)
   if (!isAppReady) {
@@ -387,7 +451,8 @@ const App: React.FC = () => {
   }
 
   // 4. ONBOARDING SUMMARY → PAYWALL
-  if (onboardingStatus === OnboardingStep.SUMMARY) {
+  // CRITICAL: Only show summary/paywall if we're NOT in auth or tutorial
+  if (onboardingStatus === OnboardingStep.SUMMARY && !showAuth && !showTutorial) {
     if (!userProfile) return null;
     if (showPaywall) {
       return (
@@ -407,7 +472,8 @@ const App: React.FC = () => {
     );
   }
 
-  // 5. AUTH (after purchase)
+  // 5. POST-PAYMENT AUTH SCREEN (after purchase)
+  // This MUST come BEFORE the main app so it renders over everything
   if (showAuth) {
     return (
       <PostPaymentAuth
@@ -418,7 +484,15 @@ const App: React.FC = () => {
     );
   }
 
-  // 6. MAIN APP
+  // 6. TUTORIAL (shown after auth success, before main app)
+  // Only show tutorial if onboarding is completed but tutorial hasn't been seen
+  if (showTutorial && onboardingStatus === OnboardingStep.COMPLETED) {
+    return (
+      <GetStartedTutorial onComplete={completeTutorial} />
+    );
+  }
+
+  // 7. MAIN APP (onboarding completed, tutorial done or skipped)
   return (
     <div className="h-screen w-screen bg-surface overflow-hidden relative">
       <ErrorBoundary>
@@ -429,8 +503,6 @@ const App: React.FC = () => {
           {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onEditTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onDeleteEntry={handleDeleteEntry} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
           {currentTab === AppScreen.PROFILE && <Profile userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onViewTutorial={() => setShowTutorial(true)} onSignOut={() => { localStorage.clear(); window.location.reload(); }} />}
         </div>
-
-        {showTutorial && <GetStartedTutorial onComplete={completeTutorial} />}
 
         <BottomNav currentScreen={currentTab} onNavigate={(tab) => setCurrentTab(tab)} />
       </ErrorBoundary>
