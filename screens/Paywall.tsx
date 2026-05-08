@@ -52,6 +52,20 @@ const TestimonialCard = memo(({ testimonial, index }: { testimonial: typeof TEST
 ));
 TestimonialCard.displayName = 'TestimonialCard';
 
+/**
+ * Check if user has ANY active subscription or entitlement.
+ * RevenueCat may report subscriptions via activeSubscriptions even if
+ * entitlements haven't synced yet (especially in sandbox).
+ */
+function hasAnyActiveSubscription(customerInfo: any): boolean {
+  if (!customerInfo) return false;
+  const hasEntitlements = Object.keys(customerInfo.entitlements?.active || {}).length > 0;
+  const hasSubscriptions = (customerInfo.activeSubscriptions?.length || 0) > 0;
+  const hasProducts = (customerInfo.allPurchasedProductIdentifiers?.length || 0) > 0;
+  console.log('[Paywall] hasAnyActiveSubscription check:', { hasEntitlements, hasSubscriptions, hasProducts });
+  return hasEntitlements || hasSubscriptions || hasProducts;
+}
+
 const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
   const [selectedPkgIdentifier, setSelectedPkgIdentifier] = useState<string | null>(null);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
@@ -86,6 +100,11 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       }
 
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
+
+      // Force refresh offerings to avoid stale cache
+      console.log('[Paywall] Forcing offerings refresh...');
+      await Purchases.invalidateCustomerInfoCache();
+
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('App Store connection timed out')), 8000)
       );
@@ -97,6 +116,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         identifier: p.identifier,
         packageType: p.packageType,
         productId: p?.product?.identifier,
+        priceString: p?.product?.priceString,
       })));
 
       if (offerings.current?.availablePackages?.length > 0) {
@@ -106,12 +126,17 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         setSelectedPkgIdentifier(annual ? annual.identifier : pkgs[0].identifier);
 
         const { customerInfo } = await Purchases.getCustomerInfo();
-        console.log('[Paywall] CustomerInfo on load:', customerInfo);
+        console.log('[Paywall] CustomerInfo on load:', JSON.stringify(customerInfo, null, 2));
         console.log('[Paywall] Active entitlements keys:', Object.keys(customerInfo?.entitlements?.active || {}));
+        console.log('[Paywall] Active subscriptions:', customerInfo?.activeSubscriptions);
         console.log('[Paywall] All purchased products:', customerInfo?.allPurchasedProductIdentifiers);
+        console.log('[Paywall] originalAppUserId:', customerInfo?.originalAppUserId);
+        console.log('[Paywall] originalPurchaseDate:', customerInfo?.originalPurchaseDate);
 
+        // Trial eligibility: if they've ever purchased (originalPurchaseDate exists), trial is used
         const hasEverTrialed = !!customerInfo?.originalPurchaseDate;
         setTrialUsed(hasEverTrialed);
+        console.log('[Paywall] Trial used:', hasEverTrialed);
       } else {
         setError('No subscription plans found at this time.');
       }
@@ -141,49 +166,64 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       if (!pkg) { setError('Selected plan unavailable'); return; }
 
       console.log('[Paywall] Purchasing package:', pkg.identifier, 'product:', (pkg as any)?.product?.identifier);
+      console.log('[Paywall] Current appUserID before purchase:', await Purchases.getAppUserID());
 
       const purchaseResult = await Purchases.purchasePackage({ aPackage: pkg });
-      console.log('[Paywall] Purchase result customerInfo:', purchaseResult.customerInfo);
+      console.log('[Paywall] Purchase result customerInfo:', JSON.stringify(purchaseResult.customerInfo, null, 2));
       console.log('[Paywall] Active entitlements after purchase:', Object.keys(purchaseResult.customerInfo?.entitlements?.active || {}));
+      console.log('[Paywall] Active subscriptions after purchase:', purchaseResult.customerInfo?.activeSubscriptions);
       console.log('[Paywall] All purchased products after purchase:', purchaseResult.customerInfo?.allPurchasedProductIdentifiers);
 
-      await Purchases.invalidateCustomerInfoCache();
-      await Purchases.syncPurchases();
-
-      const { customerInfo: freshInfo } = await Purchases.getCustomerInfo();
-      console.log('[Paywall] Fresh customerInfo after sync:', freshInfo);
-      console.log('[Paywall] Fresh active entitlements:', Object.keys(freshInfo?.entitlements?.active || {}));
-
-      const activeKeys = Object.keys(freshInfo?.entitlements?.active || {});
-
-      if (activeKeys.length > 0) {
-        console.log('[Paywall] SUCCESS — active entitlements found:', activeKeys);
+      // Immediately check if purchase succeeded
+      if (hasAnyActiveSubscription(purchaseResult.customerInfo)) {
+        console.log('[Paywall] SUCCESS — subscription detected immediately after purchase');
         onPurchase();
         return;
       }
 
-      console.log('[Paywall] No active entitlements immediately. Starting sandbox retry...');
+      // Invalidate cache and sync to get fresh state
+      await Purchases.invalidateCustomerInfoCache();
+      await Purchases.syncPurchases();
 
-      for (let attempt = 1; attempt <= 5; attempt++) {
-        setError(`Activating your subscription... (${attempt}/5)`);
+      // Fetch fresh customer info
+      const { customerInfo: freshInfo } = await Purchases.getCustomerInfo();
+      console.log('[Paywall] Fresh customerInfo after sync:', JSON.stringify(freshInfo, null, 2));
+      console.log('[Paywall] Fresh active entitlements:', Object.keys(freshInfo?.entitlements?.active || {}));
+      console.log('[Paywall] Fresh active subscriptions:', freshInfo?.activeSubscriptions);
+
+      if (hasAnyActiveSubscription(freshInfo)) {
+        console.log('[Paywall] SUCCESS — subscription detected after cache sync');
+        onPurchase();
+        return;
+      }
+
+      // SANDBOX RETRY: TestFlight can delay entitlement propagation
+      // Retry up to 10 times with 2s delay (20 seconds total)
+      console.log('[Paywall] No active subscription immediately. Starting sandbox retry (10 attempts)...');
+
+      for (let attempt = 1; attempt <= 10; attempt++) {
+        setError(`Activating your subscription... (${attempt}/10)`);
         await new Promise(r => setTimeout(r, 2000));
 
         await Purchases.invalidateCustomerInfoCache();
         await Purchases.syncPurchases();
         const { customerInfo: retryInfo } = await Purchases.getCustomerInfo();
 
-        const retryKeys = Object.keys(retryInfo?.entitlements?.active || {});
-        console.log(`[Paywall] Retry ${attempt} — active entitlements:`, retryKeys);
+        console.log(`[Paywall] Retry ${attempt} — customerInfo:`, JSON.stringify(retryInfo, null, 2));
+        console.log(`[Paywall] Retry ${attempt} — active entitlements:`, Object.keys(retryInfo?.entitlements?.active || {}));
+        console.log(`[Paywall] Retry ${attempt} — active subscriptions:`, retryInfo?.activeSubscriptions);
+        console.log(`[Paywall] Retry ${attempt} — purchased products:`, retryInfo?.allPurchasedProductIdentifiers);
 
-        if (retryKeys.length > 0) {
-          console.log('[Paywall] SUCCESS on retry', attempt, '— entitlements:', retryKeys);
+        if (hasAnyActiveSubscription(retryInfo)) {
+          console.log('[Paywall] SUCCESS on retry', attempt);
           setError(null);
           onPurchase();
           return;
         }
       }
 
-      console.error('[Paywall] All retries exhausted. No active entitlements found.');
+      // All retries exhausted — show failure
+      console.error('[Paywall] All 10 retries exhausted. No active subscription found.');
       setError('Subscription activation is taking longer than expected. Please tap "Restore Purchases" or try again later.');
 
     } catch (e: any) {
@@ -203,18 +243,19 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       if (Capacitor.isNativePlatform()) {
         const { Purchases } = await import('@revenuecat/purchases-capacitor');
         console.log('[Paywall] Starting restore purchases...');
+        console.log('[Paywall] Current appUserID:', await Purchases.getAppUserID());
 
         await Purchases.restorePurchases();
         await Purchases.invalidateCustomerInfoCache();
         await Purchases.syncPurchases();
 
         const { customerInfo } = await Purchases.getCustomerInfo();
-        console.log('[Paywall] Restore — customerInfo:', customerInfo);
+        console.log('[Paywall] Restore — customerInfo:', JSON.stringify(customerInfo, null, 2));
         console.log('[Paywall] Restore — active entitlements:', Object.keys(customerInfo?.entitlements?.active || {}));
+        console.log('[Paywall] Restore — active subscriptions:', customerInfo?.activeSubscriptions);
         console.log('[Paywall] Restore — purchased products:', customerInfo?.allPurchasedProductIdentifiers);
 
-        const activeKeys = Object.keys(customerInfo?.entitlements?.active || {});
-        if (activeKeys.length > 0) {
+        if (hasAnyActiveSubscription(customerInfo)) {
           alert('Success! Your subscription has been restored.');
           onPurchase();
         } else {
