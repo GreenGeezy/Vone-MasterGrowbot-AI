@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { CONFIG } from './config';
 import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 
 // Re-create a dedicated client for initialization to avoid circular deps
 const supabaseInit = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
@@ -21,22 +22,24 @@ export interface AppInitState {
   isReturningSubscriber: boolean;
 }
 
+const STABLE_ID_KEY = 'mg_rc_stable_id';
+
 /**
  * Get or create a STABLE anonymous ID for RevenueCat.
  * This ID persists across app restarts and anonymous auth refreshes.
+ * Uses Capacitor Preferences for iOS-safe native storage.
  * CRITICAL: RevenueCat appUserID must NEVER change once set,
  * otherwise purchases become orphaned.
  */
-function getStableAnonymousId(): string {
-  const STORAGE_KEY = 'mg_rc_stable_id';
-  let stableId = localStorage.getItem(STORAGE_KEY);
-  if (!stableId) {
-    stableId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    localStorage.setItem(STORAGE_KEY, stableId);
-    console.log('[AppInitializer] Generated new stable anonymous ID:', stableId);
-  } else {
-    console.log('[AppInitializer] Using existing stable anonymous ID:', stableId);
+async function getStableAnonymousId(): Promise<string> {
+  const { value } = await Preferences.get({ key: STABLE_ID_KEY });
+  if (value) {
+    console.log('[AppInitializer] Using existing stable anonymous ID:', value);
+    return value;
   }
+  const stableId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  await Preferences.set({ key: STABLE_ID_KEY, value: stableId });
+  console.log('[AppInitializer] Generated new stable anonymous ID:', stableId);
   return stableId;
 }
 
@@ -47,7 +50,7 @@ function getStableAnonymousId(): string {
  * - NO API call may run before auth is complete
  * - NO database query may assume a row exists
  * - Waits for anonymous auth, ensures profile row, THEN initializes RevenueCat
- * - RevenueCat appUserID is STABLE and never changes (stored in localStorage)
+ * - RevenueCat appUserID is STABLE and never changes (stored in Capacitor Preferences)
  */
 export async function initializeApp(): Promise<AppInitState> {
   console.log('[AppInitializer] Starting initialization...');
@@ -132,7 +135,7 @@ export async function initializeApp(): Promise<AppInitState> {
 
       if (apiKey) {
         // Use STABLE ID — never changes, even if Supabase anonymous user changes
-        const stableAppUserId = getStableAnonymousId();
+        const stableAppUserId = await getStableAnonymousId();
 
         await Purchases.configure({ apiKey, appUserID: stableAppUserId });
         console.log('[AppInitializer] RevenueCat configured with STABLE appUserID:', stableAppUserId);
