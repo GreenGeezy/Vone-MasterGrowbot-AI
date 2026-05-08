@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import {
-  X, Check, Shield, Star, Zap, ArrowRight,
-  LifeBuoy, Headphones, Dna, Clock, BookOpen, Sparkles
+  Check, Shield, Star, ArrowRight, Lock, RotateCcw
 } from 'lucide-react';
 import type { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
@@ -19,13 +18,39 @@ interface PaywallProps {
 // - monthly_pro_v2
 // - weekly_pro_v2
 
-const FEATURES = [
-  { icon: LifeBuoy, title: 'Unlimited AI Diagnosis', desc: 'Identify pests, diseases, and deficiencies instantly to prevent crop loss.' },
-  { icon: Zap, title: 'Personalized Grow Plan', desc: 'Tailored tasks to your setup — avoid mistakes and maximize harvest potential.' },
-  { icon: Dna, title: 'Searchable Strain Database', desc: 'Over 100 profiles with genetic-specific grow guides.' },
-  { icon: Sparkles, title: 'AI Strain Intelligence', desc: 'Instant yield-maximizing secrets for 100+ cannabis strains.' },
-  { icon: BookOpen, title: 'Professional Grow Journal', desc: 'Track nutrients, environment, and visual history to replicate your best harvests.' },
+const TESTIMONIALS = [
+  { name: 'Jake M.', text: 'Caught a magnesium deficiency before it wrecked my whole crop.' },
+  { name: 'Sarah K.', text: 'As a first-time grower I was totally lost. MasterGrowbot walked me through everything.' },
+  { name: 'Tom R.', text: 'My best harvests have been since using this app. The AI is spot-on.' },
+  { name: 'Alex D.', text: 'I caught early nutrient burn before it spread through my tent. Saved me a ton of stress.' },
 ];
+
+const FEATURES = [
+  'Unlimited AI plant diagnosis',
+  'Personalized grow plan & tasks',
+  '100+ strain database & guides',
+  'Professional grow journal',
+];
+
+const TestimonialCard = memo(({ testimonial, index }: { testimonial: typeof TESTIMONIALS[0]; index: number }) => (
+  <div
+    key={index}
+    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex-shrink-0 w-[260px]"
+  >
+    <div className="flex gap-0.5 mb-3">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Star key={i} size={14} className="text-yellow-400 fill-yellow-400" />
+      ))}
+    </div>
+    <p className="text-sm text-gray-700 font-medium leading-relaxed mb-3">
+      &ldquo;{testimonial.text}&rdquo;
+    </p>
+    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+      {testimonial.name}
+    </p>
+  </div>
+));
+TestimonialCard.displayName = 'TestimonialCard';
 
 const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
   const [selectedPkgIdentifier, setSelectedPkgIdentifier] = useState<string | null>(null);
@@ -34,6 +59,15 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [trialUsed, setTrialUsed] = useState(false);
+  const [testimonialIndex, setTestimonialIndex] = useState(0);
+
+  // Auto-rotate testimonials every 4s
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTestimonialIndex(prev => (prev + 1) % TESTIMONIALS.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, []);
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
@@ -108,22 +142,18 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
 
       console.log('[Paywall] Purchasing package:', pkg.identifier, 'product:', (pkg as any)?.product?.identifier);
 
-      // Execute purchase
       const purchaseResult = await Purchases.purchasePackage({ aPackage: pkg });
       console.log('[Paywall] Purchase result customerInfo:', purchaseResult.customerInfo);
       console.log('[Paywall] Active entitlements after purchase:', Object.keys(purchaseResult.customerInfo?.entitlements?.active || {}));
       console.log('[Paywall] All purchased products after purchase:', purchaseResult.customerInfo?.allPurchasedProductIdentifiers);
 
-      // Invalidate cache and sync to get fresh state
       await Purchases.invalidateCustomerInfoCache();
       await Purchases.syncPurchases();
 
-      // Fetch fresh customer info
       const { customerInfo: freshInfo } = await Purchases.getCustomerInfo();
       console.log('[Paywall] Fresh customerInfo after sync:', freshInfo);
       console.log('[Paywall] Fresh active entitlements:', Object.keys(freshInfo?.entitlements?.active || {}));
 
-      // Check if any entitlement is active (log all keys for debugging)
       const activeKeys = Object.keys(freshInfo?.entitlements?.active || {});
 
       if (activeKeys.length > 0) {
@@ -132,8 +162,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         return;
       }
 
-      // SANDBOX RETRY: TestFlight can delay entitlement propagation
-      // Retry up to 5 times with 2s delay
       console.log('[Paywall] No active entitlements immediately. Starting sandbox retry...');
 
       for (let attempt = 1; attempt <= 5; attempt++) {
@@ -155,7 +183,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         }
       }
 
-      // All retries exhausted — show failure
       console.error('[Paywall] All retries exhausted. No active entitlements found.');
       setError('Subscription activation is taking longer than expected. Please tap "Restore Purchases" or try again later.');
 
@@ -208,13 +235,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
 
   const selectedPkg = packages.find(p => p.identifier === selectedPkgIdentifier);
 
-  const getButtonText = () => {
-    if (!selectedPkg) return 'Select a Plan';
-    if (isPurchasing) return 'Processing...';
-    if (trialUsed) return 'Subscribe Now';
-    return 'Start Free Trial';
-  };
-
   const getSubtext = () => {
     if (!selectedPkg) return '';
     const price = selectedPkg.product.priceString;
@@ -222,9 +242,34 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     if (selectedPkg.packageType === 'WEEKLY') period = 'week';
     if (selectedPkg.packageType === 'ANNUAL') period = 'year';
     if (trialUsed) {
-      return `Auto-renews at ${price}/${period}. Cancel anytime.`;
+      return `Auto-renews at ${price}/${period} unless canceled.`;
     }
-    return `3-day free trial, then ${price}/${period}. Cancel anytime.`;
+    return `3-day free trial, then ${price}/${period} unless canceled.`;
+  };
+
+  const getPlanMeta = (pkg: any) => {
+    if (pkg.packageType === 'ANNUAL') {
+      return {
+        badge: 'BEST VALUE',
+        badgeColor: 'bg-green-600',
+        subtext: 'Just $1.92/week • Save over 60%',
+        emphasis: true,
+      };
+    }
+    if (pkg.packageType === 'MONTHLY') {
+      return {
+        badge: 'MOST POPULAR',
+        badgeColor: 'bg-amber-500',
+        subtext: 'Best balance of flexibility and savings',
+        emphasis: false,
+      };
+    }
+    return {
+      badge: null,
+      badgeColor: '',
+      subtext: 'Perfect for urgent grow issues',
+      emphasis: false,
+    };
   };
 
   if (loading) {
@@ -253,138 +298,168 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
 
   return (
     <div className="fixed inset-0 bg-white z-[60] flex flex-col overflow-hidden">
-      {/* HERO */}
+
+      {/* ===== HERO ===== */}
       <div className="relative flex-shrink-0 bg-green-900 text-white overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1596791836043-982c75908b89?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80')] bg-cover bg-center opacity-30" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-green-900/80 to-green-900" />
-        <div className="relative px-6 pt-12 pb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="bg-white/20 backdrop-blur text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1">
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1596791836043-982c75908b89?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80')] bg-cover bg-center opacity-25" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-green-900/85 to-green-900" />
+        <div className="relative px-6 pt-10 pb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="bg-white/15 backdrop-blur text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full flex items-center gap-1.5">
               <Shield size={10} className="text-green-300" /> Trusted by Elite Growers
             </span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black leading-tight mb-2">
+          <h1 className="text-3xl sm:text-[2.5rem] font-black leading-[1.15] mb-3 tracking-tight">
             Don't Lose Your Harvest
           </h1>
-          <p className="text-sm font-medium text-green-100/90 max-w-sm">
-            AI detects plant problems before they cost you your grow
+          <p className="text-sm font-medium text-green-100/85 max-w-sm leading-relaxed">
+            AI detects cannabis plant problems before they damage your grow
           </p>
         </div>
       </div>
 
-      {/* SCROLLABLE CONTENT */}
-      <div className="flex-1 overflow-y-auto px-6 pb-[240px]">
-        {/* VALUE PROPS */}
-        <div className="space-y-4 my-6">
-          {FEATURES.map((f, i) => (
-            <div key={i} className="flex gap-4 items-start">
-              <div className="p-2.5 bg-green-50 text-green-600 rounded-xl flex-shrink-0">
-                <f.icon size={20} />
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-900 text-sm">{f.title}</h3>
-                <p className="text-xs text-gray-500 leading-relaxed mt-0.5">{f.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* ===== SCROLLABLE CONTENT ===== */}
+      <div className="flex-1 overflow-y-auto">
 
-        {/* SOCIAL PROOF */}
-        <div className="mb-6">
-          <div className="flex items-center justify-center gap-1 mb-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Star key={i} size={16} className="text-yellow-400 fill-yellow-400" />
+        {/* Features */}
+        <div className="px-6 pt-6 pb-2">
+          <div className="flex flex-wrap gap-2">
+            {FEATURES.map((f, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 text-[11px] font-bold px-3 py-1.5 rounded-full border border-green-100"
+              >
+                <Check size={12} className="text-green-500" strokeWidth={3} />
+                {f}
+              </span>
             ))}
           </div>
-          <p className="text-center text-xs font-bold text-gray-600">
-            ⭐⭐⭐⭐⭐ Rated 5 stars by early users
-          </p>
         </div>
 
-        {/* PRICING */}
-        <h2 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 text-center">
-          Choose Your Plan
-        </h2>
-        <div className="space-y-3">
+        {/* Testimonials */}
+        <div className="px-6 py-5">
+          <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3">
+            What growers are saying
+          </p>
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+            <TestimonialCard testimonial={TESTIMONIALS[testimonialIndex]} index={testimonialIndex} />
+            <TestimonialCard testimonial={TESTIMONIALS[(testimonialIndex + 1) % TESTIMONIALS.length]} index={(testimonialIndex + 1) % TESTIMONIALS.length} />
+          </div>
+          <div className="flex justify-center gap-1.5 mt-2">
+            {TESTIMONIALS.map((_, i) => (
+              <div
+                key={i}
+                className={`w-1.5 h-1.5 rounded-full transition-all ${i === testimonialIndex ? 'bg-green-600 w-4' : 'bg-gray-300'}`}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Pricing Cards */}
+        <div className="px-6 pb-4 space-y-3">
+          <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1 text-center">
+            Choose Your Plan
+          </p>
           {packages.map((pkg) => {
             const isSelected = selectedPkgIdentifier === pkg.identifier;
-            const isAnnual = pkg.packageType === 'ANNUAL';
+            const meta = getPlanMeta(pkg);
             const displayPrice = pkg.product.priceString;
+
             return (
               <div
                 key={pkg.identifier}
                 onClick={() => setSelectedPkgIdentifier(pkg.identifier)}
-                className={`relative rounded-2xl border-2 p-4 transition-all active:scale-[0.98] cursor-pointer ${
-                  isSelected ? 'border-green-600 bg-green-50/50' : 'border-gray-100 bg-white'
+                className={`relative rounded-2xl border-2 p-4 transition-all duration-200 cursor-pointer ${
+                  isSelected
+                    ? meta.emphasis
+                      ? 'border-green-600 bg-green-50/60 shadow-lg shadow-green-100'
+                      : 'border-green-500 bg-green-50/40 shadow-md'
+                    : 'border-gray-150 bg-white hover:border-gray-300'
                 }`}
               >
-                {isAnnual && (
-                  <div className="absolute -top-3 left-4 bg-green-600 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-md">
-                    Best Value
+                {meta.badge && (
+                  <div className={`absolute -top-3 left-5 ${meta.badgeColor} text-white text-[9px] font-black uppercase tracking-wider px-3 py-1 rounded-full shadow-md`}>
+                    {meta.badge}
                   </div>
                 )}
                 <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-xs text-gray-500 font-medium mb-0.5">
-                      {pkg.packageType === 'WEEKLY' ? 'Weekly' : pkg.packageType === 'MONTHLY' ? 'Monthly' : 'Yearly'}
-                    </p>
-                    <p className={`font-black text-3xl ${isSelected ? 'text-green-700' : 'text-gray-900'}`}>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                        {pkg.packageType === 'WEEKLY' ? 'Weekly' : pkg.packageType === 'MONTHLY' ? 'Monthly' : 'Yearly'}
+                      </p>
+                    </div>
+                    <p className={`font-black text-3xl tracking-tight ${isSelected ? 'text-green-700' : 'text-gray-900'}`}>
                       {displayPrice}
                     </p>
-                    <p className="text-[10px] text-gray-400 font-medium">
-                      {pkg.packageType === 'WEEKLY' ? 'Billed weekly' : pkg.packageType === 'MONTHLY' ? 'Billed monthly' : 'Billed annually — save vs monthly'}
+                    <p className="text-[11px] text-gray-500 font-semibold mt-0.5">
+                      {meta.subtext}
                     </p>
                   </div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                    isSelected ? 'border-green-600 bg-green-600' : 'border-gray-300'
+                  <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                    isSelected ? 'border-green-600 bg-green-600' : 'border-gray-250 bg-gray-50'
                   }`}>
-                    {isSelected && <Check size={14} className="text-white" />}
+                    {isSelected && <Check size={15} className="text-white" strokeWidth={3} />}
                   </div>
                 </div>
               </div>
             );
           })}
         </div>
+
+        {/* Trust elements above CTA */}
+        <div className="px-6 pb-2 flex flex-col items-center gap-1.5">
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium">
+            <Lock size={12} className="text-gray-400" />
+            Secure payment via Apple
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium">
+            <RotateCcw size={12} className="text-gray-400" />
+            Cancel anytime in App Store settings
+          </div>
+        </div>
       </div>
 
-      {/* STICKY BOTTOM CTA */}
-      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-6 pb-10 z-50 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.08)]">
+      {/* ===== STICKY BOTTOM CTA ===== */}
+      <div className="flex-shrink-0 bg-white border-t border-gray-100 p-5 pb-8 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
         <button
           onClick={handleStartTrial}
           disabled={isPurchasing || !selectedPkgIdentifier}
-          className="w-full bg-green-600 text-white font-black text-lg py-4 rounded-2xl shadow-xl shadow-green-200/50 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:shadow-none"
+          className="w-full bg-green-600 text-white font-black text-[17px] py-4 rounded-2xl shadow-lg shadow-green-200/40 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-50 disabled:shadow-none"
         >
           {isPurchasing && error?.includes('Activating') ? (
             <span className="animate-pulse">{error}</span>
           ) : isPurchasing ? (
             <span className="animate-pulse">Processing...</span>
+          ) : trialUsed ? (
+            <>Subscribe Now <ArrowRight strokeWidth={3} size={20} /></>
           ) : (
-            <>
-              {getButtonText()} <ArrowRight strokeWidth={3} size={20} />
-            </>
+            <>Start 3-Day Free Trial <ArrowRight strokeWidth={3} size={20} /></>
           )}
         </button>
-        <p className="text-center text-[11px] text-gray-500 font-medium mt-3 leading-snug">
+
+        <p className="text-center text-[12px] text-gray-600 font-semibold mt-3 leading-snug">
           {getSubtext()}
         </p>
-        <div className="flex justify-center gap-3 mt-4 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-          <button onClick={() => openLink('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')} className="hover:text-green-600 transition-colors">
+
+        <div className="flex justify-center items-center gap-2 mt-3 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+          <button onClick={() => openLink('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')} className="hover:text-green-600 transition-colors px-1 py-0.5">
             Terms
           </button>
           <span className="text-gray-300">•</span>
-          <button onClick={() => openLink('https://www.mastergrowbot.com/privacy-policy')} className="hover:text-green-600 transition-colors">
+          <button onClick={() => openLink('https://www.mastergrowbot.com/privacy-policy')} className="hover:text-green-600 transition-colors px-1 py-0.5">
             Privacy
           </button>
           <span className="text-gray-300">•</span>
-          <button onClick={handleRestore} className="hover:text-green-600 transition-colors">
+          <button onClick={handleRestore} className="hover:text-green-600 transition-colors px-1 py-0.5">
             Restore Purchases
           </button>
         </div>
       </div>
 
-      {/* Error toast — only show non-retry errors prominently */}
+      {/* Error toast — only non-retry errors */}
       {error && !error.includes('Activating') && (
-        <div className="absolute top-6 left-6 right-6 bg-red-500 text-white p-3 rounded-xl text-center text-xs font-bold shadow-2xl animate-in slide-in-from-top-2 z-[70]">
+        <div className="absolute top-4 left-4 right-4 bg-red-500 text-white p-3.5 rounded-xl text-center text-xs font-bold shadow-xl z-[70]">
           {error}
         </div>
       )}
