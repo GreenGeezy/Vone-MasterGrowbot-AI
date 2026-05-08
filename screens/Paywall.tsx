@@ -14,6 +14,11 @@ interface PaywallProps {
   onSkip: () => void;
 }
 
+// RevenueCat product IDs for reference (not entitlement checks):
+// - mastergrowbot_pro_yearly_v3
+// - monthly_pro_v2
+// - weekly_pro_v2
+
 const FEATURES = [
   { icon: LifeBuoy, title: 'Unlimited AI Diagnosis', desc: 'Identify pests, diseases, and deficiencies instantly to prevent crop loss.' },
   { icon: Zap, title: 'Personalized Grow Plan', desc: 'Tailored tasks to your setup — avoid mistakes and maximize harvest potential.' },
@@ -53,6 +58,13 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       const offeringsPromise = Purchases.getOfferings();
       const offerings = await Promise.race([offeringsPromise, timeoutPromise]) as any;
 
+      console.log('[Paywall] Offerings loaded:', offerings);
+      console.log('[Paywall] Current offering packages:', offerings.current?.availablePackages?.map((p: any) => ({
+        identifier: p.identifier,
+        packageType: p.packageType,
+        productId: p?.product?.identifier,
+      })));
+
       if (offerings.current?.availablePackages?.length > 0) {
         const pkgs = offerings.current.availablePackages;
         setPackages(pkgs);
@@ -60,6 +72,10 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         setSelectedPkgIdentifier(annual ? annual.identifier : pkgs[0].identifier);
 
         const { customerInfo } = await Purchases.getCustomerInfo();
+        console.log('[Paywall] CustomerInfo on load:', customerInfo);
+        console.log('[Paywall] Active entitlements keys:', Object.keys(customerInfo?.entitlements?.active || {}));
+        console.log('[Paywall] All purchased products:', customerInfo?.allPurchasedProductIdentifiers);
+
         const hasEverTrialed = !!customerInfo?.originalPurchaseDate;
         setTrialUsed(hasEverTrialed);
       } else {
@@ -85,15 +101,64 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         onPurchase();
         return;
       }
+
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
       const pkg = packages.find(p => p.identifier === selectedPkgIdentifier);
       if (!pkg) { setError('Selected plan unavailable'); return; }
-      const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkg });
-      if (customerInfo.entitlements.active['pro']) {
+
+      console.log('[Paywall] Purchasing package:', pkg.identifier, 'product:', (pkg as any)?.product?.identifier);
+
+      // Execute purchase
+      const purchaseResult = await Purchases.purchasePackage({ aPackage: pkg });
+      console.log('[Paywall] Purchase result customerInfo:', purchaseResult.customerInfo);
+      console.log('[Paywall] Active entitlements after purchase:', Object.keys(purchaseResult.customerInfo?.entitlements?.active || {}));
+      console.log('[Paywall] All purchased products after purchase:', purchaseResult.customerInfo?.allPurchasedProductIdentifiers);
+
+      // Invalidate cache and sync to get fresh state
+      await Purchases.invalidateCustomerInfoCache();
+      await Purchases.syncPurchases();
+
+      // Fetch fresh customer info
+      const { customerInfo: freshInfo } = await Purchases.getCustomerInfo();
+      console.log('[Paywall] Fresh customerInfo after sync:', freshInfo);
+      console.log('[Paywall] Fresh active entitlements:', Object.keys(freshInfo?.entitlements?.active || {}));
+
+      // Check if any entitlement is active (log all keys for debugging)
+      const activeKeys = Object.keys(freshInfo?.entitlements?.active || {});
+
+      if (activeKeys.length > 0) {
+        console.log('[Paywall] SUCCESS — active entitlements found:', activeKeys);
         onPurchase();
-      } else {
-        setError('Purchase completed but subscription not active. Please restore.');
+        return;
       }
+
+      // SANDBOX RETRY: TestFlight can delay entitlement propagation
+      // Retry up to 5 times with 2s delay
+      console.log('[Paywall] No active entitlements immediately. Starting sandbox retry...');
+
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        setError(`Activating your subscription... (${attempt}/5)`);
+        await new Promise(r => setTimeout(r, 2000));
+
+        await Purchases.invalidateCustomerInfoCache();
+        await Purchases.syncPurchases();
+        const { customerInfo: retryInfo } = await Purchases.getCustomerInfo();
+
+        const retryKeys = Object.keys(retryInfo?.entitlements?.active || {});
+        console.log(`[Paywall] Retry ${attempt} — active entitlements:`, retryKeys);
+
+        if (retryKeys.length > 0) {
+          console.log('[Paywall] SUCCESS on retry', attempt, '— entitlements:', retryKeys);
+          setError(null);
+          onPurchase();
+          return;
+        }
+      }
+
+      // All retries exhausted — show failure
+      console.error('[Paywall] All retries exhausted. No active entitlements found.');
+      setError('Subscription activation is taking longer than expected. Please tap "Restore Purchases" or try again later.');
+
     } catch (e: any) {
       if (!e.userCancelled) {
         console.error('Purchase Error:', e);
@@ -106,11 +171,23 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
 
   const handleRestore = async () => {
     setIsPurchasing(true);
+    setError(null);
     try {
       if (Capacitor.isNativePlatform()) {
         const { Purchases } = await import('@revenuecat/purchases-capacitor');
-        const { customerInfo } = await Purchases.restorePurchases();
-        if (customerInfo.entitlements.active['pro']) {
+        console.log('[Paywall] Starting restore purchases...');
+
+        await Purchases.restorePurchases();
+        await Purchases.invalidateCustomerInfoCache();
+        await Purchases.syncPurchases();
+
+        const { customerInfo } = await Purchases.getCustomerInfo();
+        console.log('[Paywall] Restore — customerInfo:', customerInfo);
+        console.log('[Paywall] Restore — active entitlements:', Object.keys(customerInfo?.entitlements?.active || {}));
+        console.log('[Paywall] Restore — purchased products:', customerInfo?.allPurchasedProductIdentifiers);
+
+        const activeKeys = Object.keys(customerInfo?.entitlements?.active || {});
+        if (activeKeys.length > 0) {
           alert('Success! Your subscription has been restored.');
           onPurchase();
         } else {
@@ -118,6 +195,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         }
       }
     } catch (e) {
+      console.error('[Paywall] Restore error:', e);
       alert('Failed to restore purchases. Please try again.');
     } finally {
       setIsPurchasing(false);
@@ -132,8 +210,8 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
 
   const getButtonText = () => {
     if (!selectedPkg) return 'Select a Plan';
-    const price = selectedPkg.product.priceString;
-    if (trialUsed) return `Subscribe ${price}`;
+    if (isPurchasing) return 'Processing...';
+    if (trialUsed) return 'Subscribe Now';
     return 'Start Free Trial';
   };
 
@@ -146,7 +224,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     if (trialUsed) {
       return `Auto-renews at ${price}/${period}. Cancel anytime.`;
     }
-    return `24-hour free trial, then ${price}/${period}. Cancel anytime.`;
+    return `3-day free trial, then ${price}/${period}. Cancel anytime.`;
   };
 
   if (loading) {
@@ -276,7 +354,9 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
           disabled={isPurchasing || !selectedPkgIdentifier}
           className="w-full bg-green-600 text-white font-black text-lg py-4 rounded-2xl shadow-xl shadow-green-200/50 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:shadow-none"
         >
-          {isPurchasing ? (
+          {isPurchasing && error?.includes('Activating') ? (
+            <span className="animate-pulse">{error}</span>
+          ) : isPurchasing ? (
             <span className="animate-pulse">Processing...</span>
           ) : (
             <>
@@ -302,7 +382,8 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         </div>
       </div>
 
-      {error && (
+      {/* Error toast — only show non-retry errors prominently */}
+      {error && !error.includes('Activating') && (
         <div className="absolute top-6 left-6 right-6 bg-red-500 text-white p-3 rounded-xl text-center text-xs font-bold shadow-2xl animate-in slide-in-from-top-2 z-[70]">
           {error}
         </div>

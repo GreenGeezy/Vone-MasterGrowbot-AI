@@ -104,25 +104,30 @@ export async function initializeApp(): Promise<AppInitState> {
   let isReturningSubscriber = false;
   if (Capacitor.isNativePlatform()) {
     try {
-      const { Purchases } = await import('@revenuecat/purchases-capacitor');
-      const platform = Capacitor.getPlatform();
-      const apiKey = platform === 'ios'
-        ? import.meta.env.VITE_REVENUECAT_IOS_KEY
-        : import.meta.env.VITE_REVENUECAT_ANDROID_KEY;
+    const { Purchases } = await import('@revenuecat/purchases-capacitor');
+    const platform = Capacitor.getPlatform();
+    const apiKey = platform === 'ios'
+      ? import.meta.env.VITE_REVENUECAT_IOS_KEY
+      : import.meta.env.VITE_REVENUECAT_ANDROID_KEY;
 
-      if (apiKey) {
-        await Purchases.configure({ apiKey, appUserID: user.id });
-        console.log('[AppInitializer] RevenueCat configured with appUserID:', user.id);
+    if (apiKey) {
+      await Purchases.configure({ apiKey, appUserID: user.id });
+      console.log('[AppInitializer] RevenueCat configured with appUserID:', user.id);
 
-        // Check subscription status
-        const { customerInfo } = await Purchases.getCustomerInfo();
-        if (typeof customerInfo.entitlements.active['pro'] !== 'undefined') {
-          isReturningSubscriber = true;
-          console.log('[AppInitializer] Returning subscriber detected');
-        }
-      } else {
-        console.warn('[AppInitializer] RevenueCat API key missing for platform:', platform);
+      // Check subscription status — check for ANY active entitlement
+      const { customerInfo } = await Purchases.getCustomerInfo();
+      console.log('[AppInitializer] RC customerInfo:', customerInfo);
+      console.log('[AppInitializer] RC active entitlements keys:', Object.keys(customerInfo?.entitlements?.active || {}));
+      console.log('[AppInitializer] RC all purchased products:', customerInfo?.allPurchasedProductIdentifiers);
+
+      const activeKeys = Object.keys(customerInfo?.entitlements?.active || {});
+      if (activeKeys.length > 0) {
+        isReturningSubscriber = true;
+        console.log('[AppInitializer] Returning subscriber detected. Active:', activeKeys);
       }
+    } else {
+      console.warn('[AppInitializer] RevenueCat API key missing for platform:', platform);
+    }
     } catch (e) {
       console.warn('[AppInitializer] RevenueCat initialization failed:', e);
     }
