@@ -1,6 +1,7 @@
 
 import { supabase } from './supabaseClient';
-import { GrowTask } from '../types';
+import { GrowTask, Plant } from '../types';
+import { STRAIN_DATABASE } from '../data/strains';
 
 // --- Local Storage Helpers ---
 
@@ -11,7 +12,8 @@ const STORAGE_KEYS = {
   JOURNAL: 'mg_local_journal',
   TICKETS: 'mg_local_tickets',
   FEEDBACK: 'mg_local_feedback',
-  CUSTOM_STRAINS: 'mg_custom_strains'
+  CUSTOM_STRAINS: 'mg_custom_strains',
+  PLANTS: 'mg_local_plants'
 };
 
 const getLocal = (key: string) => {
@@ -68,6 +70,185 @@ export const uploadImage = async (base64: string, path: string): Promise<string 
   }
 };
 
+const defaultPlantImage = 'https://images.unsplash.com/photo-1603796846097-b36976ea2851';
+
+const normalizeEntryType = (type?: string) => {
+  if (type === 'Health Check' || type === 'diagnosis') return 'diagnosis';
+  if (type === 'chat') return 'chat';
+  return 'note';
+};
+
+const mapJournalRow = (row: any) => ({
+  id: row.id,
+  date: row.created_at ? new Date(row.created_at).toLocaleDateString() : new Date().toLocaleDateString(),
+  type: row.entry_type === 'diagnosis' ? 'Health Check' : row.entry_type || 'note',
+  title: row.entry_type === 'diagnosis' ? 'Health Check' : 'Note',
+  notes: row.content,
+  imageUri: row.media_url,
+  image: row.media_url,
+  tags: row.tags || [],
+  aiAnalysis: row.ai_analysis?.summary ? row.ai_analysis : (row.ai_analysis ? { summary: String(row.ai_analysis) } : undefined),
+  diagnosisData: row.ai_analysis?.diagnosisData,
+});
+
+const mapTaskRow = (row: any): GrowTask => ({
+  id: String(row.id),
+  plantId: row.plant_id || undefined,
+  title: row.title,
+  isCompleted: Boolean(row.is_completed),
+  completed: Boolean(row.is_completed),
+  dueDate: row.due_date,
+  source: row.source || 'user',
+  createdAt: row.created_at,
+  type: row.type || 'other',
+  recurrence: row.recurrence || undefined,
+  notes: row.notes || undefined,
+});
+
+const mapPlantRow = (row: any, journal: any[], tasks: GrowTask[], streak: number): Plant => {
+  const strainDetails = row.strain_details || STRAIN_DATABASE.find(s => s.name === row.strain);
+  return {
+    id: row.id,
+    name: row.name || `My ${row.strain || 'Plant'}`,
+    strain: row.strain || 'Generic',
+    strainDetails,
+    stage: row.stage || 'Seedling',
+    healthScore: row.health_score ?? 100,
+    daysInStage: row.days_in_stage ?? 1,
+    imageUri: row.image_url || defaultPlantImage,
+    totalDays: row.total_days ?? 1,
+    journal,
+    tasks,
+    streak,
+    weeklySummaries: [],
+  };
+};
+
+export const ensureDefaultGrow = async (): Promise<string | null> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) return null;
+
+  const { data: existing, error: existingError } = await supabase
+    .from('grows')
+    .select('id')
+    .eq('user_id', session.user.id)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) console.warn('ensureDefaultGrow lookup failed:', existingError);
+  if (existing?.id) return existing.id;
+
+  const { data, error } = await supabase
+    .from('grows')
+    .insert({ user_id: session.user.id, name: 'My Grow', status: 'active' })
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    console.warn('ensureDefaultGrow insert failed:', error);
+    return null;
+  }
+  return data?.id || null;
+};
+
+export const createPlantRecord = async (strain: any): Promise<Plant | null> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const localPlant: Plant = {
+    id: `local_plant_${Date.now()}`,
+    name: `My ${strain.name || 'Plant'}`,
+    strain: strain.name || 'Generic',
+    strainDetails: strain,
+    stage: 'Seedling',
+    healthScore: 100,
+    daysInStage: 1,
+    imageUri: strain.image || strain.imageUri || defaultPlantImage,
+    totalDays: 1,
+    journal: [],
+    tasks: [],
+    streak: 0,
+    weeklySummaries: [],
+  };
+
+  if (!session?.user?.id) {
+    const plants = getLocal(STORAGE_KEYS.PLANTS);
+    plants.push(localPlant);
+    setLocal(STORAGE_KEYS.PLANTS, plants);
+    return localPlant;
+  }
+
+  const growId = await ensureDefaultGrow();
+  const { data, error } = await supabase
+    .from('plants')
+    .insert({
+      user_id: session.user.id,
+      grow_id: growId,
+      name: localPlant.name,
+      strain: localPlant.strain,
+      strain_details: strain,
+      stage: localPlant.stage,
+      image_url: localPlant.imageUri,
+      health_score: localPlant.healthScore,
+      days_in_stage: localPlant.daysInStage,
+      total_days: localPlant.totalDays,
+    })
+    .select()
+    .maybeSingle();
+
+  if (error || !data) {
+    console.warn('createPlantRecord failed, keeping local plant:', error);
+    return localPlant;
+  }
+
+  return mapPlantRow(data, [], [], 0);
+};
+
+export const loadGrowData = async (streak: number): Promise<Plant[]> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    const localPlants = getLocal(STORAGE_KEYS.PLANTS);
+    return localPlants.length ? localPlants : [];
+  }
+
+  let { data: plantRows, error: plantError } = await supabase
+    .from('plants')
+    .select('*')
+    .eq('user_id', session.user.id)
+    .order('created_at', { ascending: true });
+
+  if (plantError) {
+    console.warn('loadGrowData plants failed:', plantError);
+    return [];
+  }
+
+  if (!plantRows || plantRows.length === 0) {
+    const created = await createPlantRecord(STRAIN_DATABASE[0]);
+    plantRows = created && !created.id.startsWith('local_') ? [{
+      id: created.id,
+      name: created.name,
+      strain: created.strain,
+      strain_details: created.strainDetails,
+      stage: created.stage,
+      image_url: created.imageUri,
+      health_score: created.healthScore,
+      days_in_stage: created.daysInStage,
+      total_days: created.totalDays,
+    }] : [];
+    if (created?.id.startsWith('local_')) return [created];
+  }
+
+  const [{ data: journalRows }, { data: taskRows }] = await Promise.all([
+    supabase.from('journal_logs').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
+    supabase.from('tasks').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
+  ]);
+
+  return (plantRows || []).map((plant: any) => {
+    const plantJournal = (journalRows || []).filter((row: any) => row.plant_id === plant.id).map(mapJournalRow);
+    const plantTasks = (taskRows || []).filter((row: any) => row.plant_id === plant.id).map(mapTaskRow);
+    return mapPlantRow(plant, plantJournal, plantTasks, streak);
+  });
+};
+
 /**
  * Saves a new entry to the journal_logs table (or Local Storage).
  */
@@ -77,27 +258,83 @@ export const saveJournalEntry = async (entry: {
   content: string;
   media_url?: string;
   tags: string[];
+  ai_analysis?: any;
 }) => {
   const { data: { session } } = await supabase.auth.getSession();
 
   const newEntry = {
-    user_id: session?.user.id,
-    plant_id: entry.plant_id,
+    id: `local_${Date.now()}`,
+    user_id: session?.user.id || 'anon',
+    plant_id: entry.plant_id?.startsWith('local_') ? null : entry.plant_id,
     entry_type: entry.entry_type,
     content: entry.content,
     media_url: entry.media_url,
     tags: entry.tags,
+    ai_analysis: entry.ai_analysis,
     created_at: new Date().toISOString()
   };
 
+  if (!session) {
+    const entries = getLocal(STORAGE_KEYS.JOURNAL);
+    entries.push(newEntry);
+    setLocal(STORAGE_KEYS.JOURNAL, entries);
+    return newEntry;
+  }
+
   const { data, error } = await supabase
     .from('journal_logs')
-    .insert(newEntry)
+    .insert({ ...newEntry, id: undefined })
     .select()
     .maybeSingle();
 
   if (error) throw error;
   return data;
+};
+
+export const saveAppJournalEntry = async (plantId: string | undefined, entry: any) => {
+  const imageData = entry.image || entry.imageUri;
+  let mediaUrl = imageData;
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (session?.user?.id && imageData?.startsWith?.('data:image')) {
+    const path = `${session.user.id}/journal/${Date.now()}.jpg`;
+    mediaUrl = await uploadImage(imageData, path) || imageData;
+  }
+
+  const saved = await saveJournalEntry({
+    plant_id: plantId || entry.plant_id || entry.plantId || '',
+    entry_type: normalizeEntryType(entry.type) as any,
+    content: entry.notes || entry.content || '',
+    media_url: mediaUrl || undefined,
+    tags: entry.tags || [],
+    ai_analysis: entry.aiAnalysis || (entry.diagnosisData ? { diagnosisData: entry.diagnosisData } : undefined),
+  });
+
+  return mapJournalRow(saved || {
+    id: `local_${Date.now()}`,
+    created_at: new Date().toISOString(),
+    entry_type: normalizeEntryType(entry.type),
+    content: entry.notes || entry.content || '',
+    media_url: mediaUrl,
+    tags: entry.tags || [],
+    ai_analysis: entry.aiAnalysis,
+  });
+};
+
+export const saveDiagnosisReport = async (plantId: string | undefined, entry: any) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id || !entry?.diagnosisData) return null;
+
+  const { error } = await supabase.from('diagnosis_reports').insert({
+    user_id: session.user.id,
+    plant_id: plantId && !plantId.startsWith('local_') ? plantId : null,
+    image_url: entry.imageUri || entry.image || null,
+    diagnosis_json: entry.diagnosisData,
+    confidence_score: entry.diagnosisData.confidence ?? null,
+  });
+
+  if (error) console.warn('saveDiagnosisReport failed:', error);
+  return !error;
 };
 
 // --- Task Management System ---

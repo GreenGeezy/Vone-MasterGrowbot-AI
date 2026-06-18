@@ -15,8 +15,7 @@ import BottomNav from './components/BottomNav';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
-import { getPendingTasksForToday, toggleTaskCompletion, addNewTask, updateTaskProperties, deleteTask, deleteJournalEntry, deletePlant } from './services/dbService';
-import { STRAIN_DATABASE } from './data/strains';
+import { getPendingTasksForToday, toggleTaskCompletion, addNewTask, updateTaskProperties, deleteTask, deleteJournalEntry, deletePlant, loadGrowData, createPlantRecord, saveAppJournalEntry, saveDiagnosisReport } from './services/dbService';
 import ErrorBoundary from './components/ErrorBoundary';
 import { wakeUpBackend } from './services/geminiService';
 import { initializeApp } from './services/appInitializer';
@@ -158,8 +157,6 @@ const App: React.FC = () => {
 
   // --- User Data Loading ---
   const loadUserData = async () => {
-    const mockStrain = STRAIN_DATABASE[0];
-
     const today = new Date().toISOString().split('T')[0];
     const lastVisit = localStorage.getItem(LS_LAST_VISIT);
     let currentStreak = parseInt(localStorage.getItem(LS_STREAK) || '0');
@@ -176,21 +173,8 @@ const App: React.FC = () => {
       setUserProfile(prev => prev ? ({ ...prev, streak: currentStreak, lastVisit: today }) : null);
     }
 
-    setPlants([{
-      id: '1',
-      name: 'Project Alpha',
-      strain: mockStrain.name,
-      strainDetails: mockStrain,
-      stage: 'Veg',
-      healthScore: 92,
-      daysInStage: 24,
-      imageUri: 'https://images.unsplash.com/photo-1603796846097-b36976ea2851',
-      totalDays: 24,
-      journal: [],
-      tasks: [],
-      streak: currentStreak,
-      weeklySummaries: []
-    }]);
+    const loadedPlants = await loadGrowData(currentStreak);
+    setPlants(loadedPlants);
 
     const pendingTasks = await getPendingTasksForToday();
     if (pendingTasks) setTasks(pendingTasks);
@@ -232,31 +216,28 @@ const App: React.FC = () => {
     loadUserData();
   };
 
-  const handleAddJournalEntry = (entry: any) => {
-    const newEntry = { ...entry, id: Date.now().toString(), date: new Date().toLocaleDateString() };
+  const handleAddJournalEntry = async (entry: any, plantIdOverride?: string) => {
+    const targetPlantId = plantIdOverride || entry.plantId || plants[0]?.id;
+    const newEntry = { ...entry, id: `local_${Date.now()}`, date: new Date().toLocaleDateString(), plantId: targetPlantId };
     setPlants(prev => {
-      if (prev.length > 0) {
-        const updatedFirst = { ...prev[0], journal: [newEntry, ...prev[0].journal] };
-        return [updatedFirst, ...prev.slice(1)];
-      } else {
-        const defaultPlant: Plant = {
-          id: Date.now().toString(),
-          name: 'My First Grow',
-          strain: 'Generic',
-          stage: 'Seedling',
-          healthScore: 100,
-          daysInStage: 1,
-          imageUri: entry.image || entry.imageUri || 'https://images.unsplash.com/photo-1603796846097-b36976ea2851',
-          totalDays: 1,
-          journal: [newEntry],
-          tasks: [],
-          streak: 0,
-          weeklySummaries: []
-        };
-        return [defaultPlant];
-      }
+      if (prev.length === 0) return prev;
+      return prev.map(plant => plant.id === targetPlantId
+        ? { ...plant, journal: [newEntry, ...plant.journal] }
+        : plant
+      );
     });
     setCurrentTab(AppScreen.JOURNAL);
+
+    try {
+      const savedEntry = await saveAppJournalEntry(targetPlantId, newEntry);
+      await saveDiagnosisReport(targetPlantId, newEntry);
+      setPlants(prev => prev.map(plant => plant.id === targetPlantId
+        ? { ...plant, journal: plant.journal.map((j: any) => j.id === newEntry.id ? savedEntry : j) }
+        : plant
+      ));
+    } catch (error) {
+      console.warn('Journal save failed; optimistic entry kept locally:', error);
+    }
   };
 
   const handleUpdateProfile = (updates: Partial<UserProfile>) => {
@@ -280,6 +261,7 @@ const App: React.FC = () => {
       id: tempId,
       title,
       dueDate: date,
+      plantId: plants[0]?.id,
       isCompleted: false,
       completed: false,
       source,
@@ -292,6 +274,7 @@ const App: React.FC = () => {
     const savedTask = await addNewTask({
       title,
       dueDate: date,
+      plantId: plants[0]?.id,
       source,
       type: 'other',
       recurrence: options?.recurrence,
@@ -337,22 +320,9 @@ const App: React.FC = () => {
     await deletePlant(plantId);
   };
 
-  const handleAddPlant = (strain: any) => {
-    const newPlant: Plant = {
-      id: Date.now().toString(),
-      name: `My ${strain.name}`,
-      strain: strain.name,
-      strainDetails: strain,
-      stage: 'Seedling',
-      healthScore: 100,
-      daysInStage: 1,
-      imageUri: strain.image || 'https://images.unsplash.com/photo-1603796846097-b36976ea2851',
-      totalDays: 1,
-      journal: [],
-      tasks: [],
-      streak: 0,
-      weeklySummaries: []
-    };
+  const handleAddPlant = async (strain: any) => {
+    const newPlant = await createPlantRecord(strain);
+    if (!newPlant) return;
     setPlants(prev => [...prev, newPlant]);
     handleAddTask(`Start journal for ${strain.name}`, new Date().toISOString().split('T')[0], 'user');
   };
