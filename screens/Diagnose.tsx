@@ -206,6 +206,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
         type: 'Health Check',
         notes: formatDiagnosisReport(result),
         image: image,
+        diagnosisData: result,
       });
 
       // Auto-Task Logic for Low Health

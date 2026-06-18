@@ -194,7 +194,7 @@ export async function sendMessage(
     attempt++;
     console.log(`[Gemini] Sending message (Attempt ${attempt}/${MAX_RETRIES})...`);
 
-    const { data, error } = await supabase.functions.invoke('gemini-gateway', { body });
+    const { data, error } = await supabase.functions.invoke('gemini-v3', { body });
 
     if (!error) {
       return data?.result || "I didn't catch that.";
@@ -301,9 +301,13 @@ export async function getDailyInsight(userProfile?: UserProfile): Promise<string
   const prompt = `Generate a single, short (under 15 words), motivating cannabis cultivation tip for a ${experience} grower. No hashtags.`;
 
   try {
-    const response = await sendMessage(prompt);
-    return response.replace(/"/g, ''); // Remove quotes if AI adds them
+    const response = await supabase.functions.invoke('gemini-v3', {
+      body: { model: CONFIG.MODELS.INSIGHTS, mode: 'insight', prompt }
+    });
+    if (response.error) throw response.error;
+    return (response.data?.result || '').replace(/"/g, '').trim() || "Check your pH and temperature daily for best results!";
   } catch (e) {
+    console.warn('[DailyInsight] v3 call failed, using fallback:', e);
     return "Check your pH and temperature daily for best results!";
   }
 }
@@ -314,7 +318,16 @@ export async function getDailyInsight(userProfile?: UserProfile): Promise<string
  */
 export async function analyzeGrowLog(notes: string, tags: string[] = []): Promise<string> {
   const prompt = `Analyze this grow journal note: "${notes}". Tags: ${tags.join(', ')}. Provide a 1-sentence observation on plant health.`;
-  return await sendMessage(prompt);
+  try {
+    const response = await supabase.functions.invoke('gemini-v3', {
+      body: { model: CONFIG.MODELS.INSIGHTS, mode: 'insight', prompt }
+    });
+    if (response.error) throw response.error;
+    return (response.data?.result || '').trim() || 'Log saved. No specific observations detected.';
+  } catch (e) {
+    console.warn('[GrowLog] v3 call failed, using fallback:', e);
+    return 'Log saved. No specific observations detected.';
+  }
 }
 
 /**
@@ -369,7 +382,7 @@ export async function wakeUpBackend() {
   console.log("[Gemini] Waking up backend...");
   try {
     // Send a dummy request with 'wakeup' mode to avoid expensive API calls
-    await supabase.functions.invoke('gemini-gateway', { body: { mode: 'wakeup' } });
+    await supabase.functions.invoke('gemini-v3', { body: { mode: 'wakeup' } });
   } catch (e) {
     console.log("[Gemini] Wake-up ping sent.");
   }

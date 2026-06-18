@@ -28,7 +28,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
           const mockPackages = [
             { identifier: 'mg_weekly', packageType: PACKAGE_TYPE.WEEKLY, product: { priceString: '$7.99', title: 'Weekly Access', description: 'Short term help' } } as any,
             { identifier: 'mg_monthly', packageType: PACKAGE_TYPE.MONTHLY, product: { priceString: '$29.99', title: 'Monthly Pro', description: 'Ongoing optimization' } } as any,
-            { identifier: 'mg_annual', packageType: PACKAGE_TYPE.ANNUAL, product: { priceString: '$199.99', title: 'Annual Saver', description: 'Best value year round' } } as any,
+            { identifier: 'mg_annual', packageType: PACKAGE_TYPE.ANNUAL, product: { priceString: '$99.00', title: 'Annual Saver', description: 'Best value year round' } } as any,
           ];
           setPackages(mockPackages);
           setSelectedPkgIdentifier('mg_monthly');
@@ -119,6 +119,20 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
   };
 
   const selectedPkg = packages.find(p => p.identifier === selectedPkgIdentifier);
+  const monthlyPkg = packages.find(p => p.packageType === PACKAGE_TYPE.MONTHLY);
+
+  const parsePrice = (priceString?: string) => {
+    if (!priceString) return null;
+    const parsed = Number(priceString.replace(/[^0-9.]/g, ''));
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const getAnnualDiscount = (annualPkg: PurchasesPackage) => {
+    const monthly = parsePrice(monthlyPkg?.product.priceString);
+    const annual = parsePrice(annualPkg.product.priceString);
+    if (!monthly || !annual) return null;
+    return Math.max(0, Math.round((1 - annual / (monthly * 12)) * 100));
+  };
 
   const getTrialText = () => {
     if (!selectedPkg) return "Select a plan";
@@ -217,14 +231,15 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onSkip }) => {
             const isSelected = selectedPkgIdentifier === pkg.identifier;
             const isMonthly = pkg.packageType === PACKAGE_TYPE.MONTHLY;
             const isAnnual = pkg.packageType === PACKAGE_TYPE.ANNUAL;
+            const annualDiscount = isAnnual ? getAnnualDiscount(pkg) : null;
             return (
               <div key={pkg.identifier} onClick={() => setSelectedPkgIdentifier(pkg.identifier)} className={`relative rounded-2xl border-2 p-4 transition-all active:scale-[0.98] ${isSelected ? 'border-green-500 bg-green-50/50' : 'border-gray-100 bg-white'}`}>
                 {isMonthly && <div className="absolute -top-3 left-4 bg-green-500 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full flex items-center gap-1 shadow-md"><Star size={10} fill="currentColor" /> Most Popular</div>}
-                {isAnnual && <div className="absolute -top-3 left-4 bg-black text-white text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-md">Best Value</div>}
+                {isAnnual && <div className="absolute -top-3 left-4 bg-black text-white text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-md">{annualDiscount ? `Save ${annualDiscount}%` : 'Best Value'}</div>}
                 <div className="flex justify-between items-center">
                   <div>
                     <h3 className={`font-black text-base ${isSelected ? 'text-green-800' : 'text-gray-800'}`}>{pkg.product.title}</h3>
-                    <p className="text-xs text-gray-500 font-medium mt-1">{isMonthly ? "Flexible. Cancel anytime." : isAnnual ? "Save 45% vs Monthly" : "Short-term access"}</p>
+                    <p className="text-xs text-gray-500 font-medium mt-1">{isMonthly ? "Flexible. Cancel anytime." : isAnnual ? `${annualDiscount ? `${annualDiscount}% less` : 'Best value'} than paying monthly` : "Short-term access"}</p>
                   </div>
                   <div className="text-right">
                     <span className={`block font-black text-xl ${isSelected ? 'text-green-700' : 'text-gray-900'}`}>{pkg.product.priceString}</span>

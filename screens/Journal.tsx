@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Calendar, Plus, X, CheckCircle2 } from 'lucide-react';
 import NoteCreator from '../components/NoteCreator';
 import StrainCard from '../components/StrainCard';
@@ -20,7 +20,15 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
   const [selectedEntry, setSelectedEntry] = useState<any | null>(null);
 
   const [selectedStrain, setSelectedStrain] = useState<any | null>(null); // New State for Preview Modal
-  const plant = plants[0];
+  const [selectedPlantId, setSelectedPlantId] = useState<string | null>(plants?.[0]?.id || null);
+  const plant = plants.find((p: any) => p.id === selectedPlantId) || plants[0];
+
+  useEffect(() => {
+    if (!selectedPlantId && plants?.[0]?.id) setSelectedPlantId(plants[0].id);
+    if (selectedPlantId && plants.length && !plants.some((p: any) => p.id === selectedPlantId)) {
+      setSelectedPlantId(plants[0].id);
+    }
+  }, [plants, selectedPlantId]);
 
   const handleSaveWrapper = async (entry: any) => {
     // Ensure image property is correctly passed from NoteCreator
@@ -29,7 +37,7 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
       imageUri: entry.image || entry.imageUri // Handle potential property name mismatch
     };
     const aiData = await analyzeGrowLog(entry.notes);
-    onAddEntry({ ...finalEntry, aiAnalysis: { summary: aiData } });
+    onAddEntry({ ...finalEntry, plantId: plant?.id, aiAnalysis: { summary: aiData } }, plant?.id);
     setShowCreator(false);
   };
 
@@ -54,6 +62,22 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onU
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-text-main">Journal</h1>
       </div>
+
+      {plants.length > 1 && (
+        <div className="mb-4 overflow-x-auto -mx-1 px-1">
+          <div className="flex gap-2 min-w-max">
+            {plants.map((p: any) => (
+              <button
+                key={p.id}
+                onClick={() => setSelectedPlantId(p.id)}
+                className={`px-4 py-2 rounded-xl text-xs font-black border transition-colors ${plant?.id === p.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-100'}`}
+              >
+                {p.name || p.strain || 'Plant'}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mb-6">
         {plant?.strainDetails ? (

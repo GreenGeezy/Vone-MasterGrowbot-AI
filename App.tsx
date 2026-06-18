@@ -17,11 +17,12 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { supabase } from './services/supabaseClient';
-import { getPendingTasksForToday, toggleTaskCompletion, addNewTask } from './services/dbService';
+import { getPendingTasksForToday, toggleTaskCompletion, addNewTask, loadGrowData, createPlantRecord, saveAppJournalEntry, saveDiagnosisReport } from './services/dbService';
 import { STRAIN_DATABASE } from './data/strains';
 import ErrorBoundary from './components/ErrorBoundary';
 
 import { getDailyInsight, wakeUpBackend } from './services/geminiService';
+import { initializeApp } from './services/appInitializer';
 
 const App: React.FC = () => {
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
@@ -36,27 +37,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initApp = async () => {
-      // 0. Wake up Backend (Fixes Chat Cold Start)
-      wakeUpBackend();
-
-      await SplashScreen.hide();
-
-      // Ensure we have a session (or create an anonymous one) before configuring RevenueCat
-      let { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        const { data, error } = await supabase.auth.signInAnonymously();
-        if (!error && data?.session) {
-          session = data.session;
-        }
-      }
-
-      if (Capacitor.getPlatform() === 'android') {
-        if (session && session.user) {
-          await Purchases.configure({ apiKey: 'goog_kqOynvNRCABzUPrpfyFvlMvHUna', appUserID: session.user.id });
-        } else {
-          await Purchases.configure({ apiKey: 'goog_kqOynvNRCABzUPrpfyFvlMvHUna' });
-        }
-      }
+      if (Capacitor.isNativePlatform()) await SplashScreen.hide();
+      const init = await initializeApp();
+      if (init.isReady && init.session?.access_token) wakeUpBackend();
 
       // --- AUTH DEEP LINK HANDLING ---
       // Helper function with Timeout & Error Handling
@@ -113,33 +96,14 @@ const App: React.FC = () => {
       // --- SESSION MANAGEMENT LOGIC ---
       const savedProfile = localStorage.getItem('mastergrowbot_profile');
       let profileData: UserProfile | null = savedProfile ? JSON.parse(savedProfile) : null;
-      let isSubscribed = false;
 
-      // 1. Check Subscription Status (Simulated check, replace with actual Entitlement logic in prod)
-      try {
-        if (Capacitor.getPlatform() !== 'web') {
-          const { customerInfo } = await Purchases.getCustomerInfo();
-          // Check for active entitlement "pro" or similar. Mocking true for local dev context if profile exists
-          if (typeof customerInfo.entitlements.active['pro'] !== "undefined") {
-            isSubscribed = true;
-          }
-        } else {
-          // Web/Dev Logic: If they reached 'COMPLETED' or have profile, assume sub for now unless explicit logout
-          // For strict testing: assumes true if profile exists locally
-          if (profileData) isSubscribed = true;
-        }
-      } catch (e) {
-        console.warn("Purchases check failed (dev mode?)", e);
-        if (profileData) isSubscribed = true; // Fallback for dev
-      }
-
-      if (profileData && isSubscribed) {
+      if (profileData && init.isReturningSubscriber) {
         // RETURNING USER -> SKIP EVERYTHING
         console.log("Returning Subscriber Verified. Skipping Onboarding.");
         setUserProfile(profileData);
         setOnboardingStatus(OnboardingStep.COMPLETED);
         loadUserData();
-      } else if (profileData && !isSubscribed) {
+      } else if (profileData && !init.isReturningSubscriber) {
         // EXPIRED/CANCELLED -> FORCE PAYWALL
         console.log("Subscription Expired. Redirecting to Paywall.");
         setUserProfile(profileData);
@@ -156,8 +120,6 @@ const App: React.FC = () => {
   }, []);
 
   const loadUserData = async () => {
-    const mockStrain = STRAIN_DATABASE[0];
-
     // --- Streak Logic ---
     const today = new Date().toISOString().split('T')[0];
     const lastVisit = localStorage.getItem('mastergrowbot_last_visit');
@@ -177,20 +139,20 @@ const App: React.FC = () => {
       setUserProfile(prev => prev ? ({ ...prev, streak: currentStreak, lastVisit: today }) : null);
     }
 
-    // Default Plant Data
-    setPlants([{
-      id: '1',
-      name: 'Project Alpha',
-      strain: mockStrain.name,
-      strainDetails: mockStrain,
-      stage: 'Veg',
-      healthScore: 92,
-      daysInStage: 24,
+    const savedPlants = await loadGrowData(currentStreak);
+    setPlants(savedPlants.length ? savedPlants : [{
+      id: 'local_default',
+      name: 'My First Grow',
+      strain: STRAIN_DATABASE[0].name,
+      strainDetails: STRAIN_DATABASE[0],
+      stage: 'Seedling',
+      healthScore: 100,
+      daysInStage: 1,
       imageUri: 'https://images.unsplash.com/photo-1603796846097-b36976ea2851',
-      totalDays: 24,
+      totalDays: 1,
       journal: [],
       tasks: [],
-      streak: currentStreak, // Use calculated streak
+      streak: currentStreak,
       weeklySummaries: []
     }]);
 
@@ -212,13 +174,16 @@ const App: React.FC = () => {
     loadUserData();
   };
 
-  const handleAddJournalEntry = (entry: any) => {
+  const handleAddJournalEntry = async (entry: any, plantIdOverride?: string) => {
     const newEntry = { ...entry, id: Date.now().toString(), date: new Date().toLocaleDateString() };
+    const targetPlantId = plantIdOverride || entry.plantId || entry.plant_id || plants[0]?.id;
     setPlants(prev => {
       if (prev.length > 0) {
-        // Add to existing first plant
-        const updatedFirst = { ...prev[0], journal: [newEntry, ...prev[0].journal] };
-        return [updatedFirst, ...prev.slice(1)];
+        return prev.map((plant, index) =>
+          plant.id === targetPlantId || (!targetPlantId && index === 0)
+            ? { ...plant, journal: [newEntry, ...plant.journal] }
+            : plant
+        );
       } else {
         // Create Default Plant to save entry
         const defaultPlant: Plant = {
@@ -239,6 +204,18 @@ const App: React.FC = () => {
       }
     });
     setCurrentTab(AppScreen.JOURNAL);
+
+    try {
+      const savedEntry = await saveAppJournalEntry(targetPlantId, entry);
+      await saveDiagnosisReport(targetPlantId, { ...entry, imageUri: savedEntry.imageUri || entry.imageUri || entry.image });
+      setPlants(prev => prev.map(plant =>
+        plant.id === targetPlantId
+          ? { ...plant, journal: plant.journal.map(j => j.id === newEntry.id ? savedEntry : j) }
+          : plant
+      ));
+    } catch (error) {
+      console.warn('Journal save failed; optimistic local entry remains:', error);
+    }
   };
 
   const handleUpdateProfile = (updates: Partial<UserProfile>) => {
@@ -276,6 +253,7 @@ const App: React.FC = () => {
     setTasks(prev => [...prev, optimisticTask]);
 
     const savedTask = await addNewTask({
+      plantId: plants[0]?.id,
       title,
       dueDate: date,
       source,
@@ -289,22 +267,9 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddPlant = (strain: any) => {
-    const newPlant: Plant = {
-      id: Date.now().toString(),
-      name: `My ${strain.name}`,
-      strain: strain.name,
-      strainDetails: strain,
-      stage: 'Seedling',
-      healthScore: 100,
-      daysInStage: 1,
-      imageUri: strain.image || 'https://images.unsplash.com/photo-1603796846097-b36976ea2851', // Fallback or strain image
-      totalDays: 1,
-      journal: [],
-      tasks: [],
-      streak: 0,
-      weeklySummaries: []
-    };
+  const handleAddPlant = async (strain: any) => {
+    const newPlant = await createPlantRecord(strain);
+    if (!newPlant) return;
     setPlants(prev => [...prev, newPlant]);
     // Optionally create a starter task?
     handleAddTask(`Start journal for ${strain.name}`, new Date().toISOString().split('T')[0], 'user');
