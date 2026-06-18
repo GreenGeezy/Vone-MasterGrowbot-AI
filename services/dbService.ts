@@ -265,7 +265,7 @@ export const saveJournalEntry = async (entry: {
   const newEntry = {
     id: `local_${Date.now()}`,
     user_id: session?.user.id || 'anon',
-    plant_id: entry.plant_id?.startsWith('local_') ? null : entry.plant_id,
+    plant_id: entry.plant_id && !entry.plant_id.startsWith('local_') ? entry.plant_id : null,
     entry_type: entry.entry_type,
     content: entry.content,
     media_url: entry.media_url,
