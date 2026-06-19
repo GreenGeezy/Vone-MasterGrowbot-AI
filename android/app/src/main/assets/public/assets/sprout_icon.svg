@@ -1,0 +1,27 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Platform -->
+  <ellipse cx="100" cy="160" rx="60" ry="15" fill="#F3F4F6"/>
+  <ellipse cx="100" cy="155" rx="60" ry="15" fill="#FFFFFF"/>
+  
+  <!-- Stem -->
+  <path d="M100 155 C 100 155, 100 130, 95 110 C 90 90, 80 80, 80 80" stroke="#86EFAC" stroke-width="8" stroke-linecap="round"/>
+  <path d="M100 155 C 100 155, 105 120, 120 100" stroke="#4ADE80" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Leaf Left -->
+  <path d="M95 115 C 70 115, 50 100, 50 80 C 50 60, 70 50, 95 70 C 95 70, 80 90, 95 115" fill="url(#gradLeft)"/>
+  
+  <!-- Leaf Right -->
+  <path d="M105 110 C 130 110, 160 90, 160 60 C 160 30, 130 30, 105 50 C 105 50, 120 80, 105 110" fill="url(#gradRight)"/>
+
+  <!-- Definitions -->
+  <defs>
+    <linearGradient id="gradLeft" x1="50" y1="50" x2="95" y2="115" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A3E635"/>
+      <stop offset="1" stop-color="#4D7C0F"/>
+    </linearGradient>
+    <linearGradient id="gradRight" x1="160" y1="30" x2="105" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#BEF264"/>
+      <stop offset="1" stop-color="#65A30D"/>
+    </linearGradient>
+  </defs>
+</svg>

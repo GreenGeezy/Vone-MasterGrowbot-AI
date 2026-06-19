@@ -1,68 +1,12 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import Growbot from '../components/Growbot';
 import { ArrowRight, ShieldCheck, TrendingUp } from 'lucide-react';
-import { supabase, getUserProfile } from '../services/supabaseClient';
 
 interface SplashProps {
   onGetStarted: () => void;
-  onSessionActive?: () => void;
 }
 
-const Splash: React.FC<SplashProps> = ({ onGetStarted, onSessionActive }) => {
-
-  useEffect(() => {
-    const checkUserStatus = async () => {
-      if (!supabase) {
-        console.warn("Supabase not initialized.");
-        return;
-      }
-
-      try {
-        // 1. Check for an active session
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (session) {
-          console.log("Active session found. Checking profile...");
-          // 2. Check Profile Data
-          const { data: profile, error } = await getUserProfile();
-
-          if (error || !profile) {
-            // Session valid but profile missing -> Wait for user to start
-            console.log("Profile missing. Staying on Splash.");
-            return;
-          }
-
-          // 3. Verify Onboarding Fields
-          const isProfileComplete =
-            profile.experience &&
-            profile.environment &&
-            profile.goal;
-
-          if (isProfileComplete) {
-            console.log("Profile complete. Redirecting to Home.");
-            if (onSessionActive) onSessionActive();
-          } else {
-            console.log("Profile incomplete. Wait for user.");
-            // Do not auto-redirect; let them click "Start" to fix profile
-          }
-        } else {
-          // No active session -> New User
-          console.log("No session. Creating anonymous session...");
-          const { error } = await supabase.auth.signInAnonymously();
-          if (error) {
-            console.error("Failed to create anonymous session:", error);
-          } else {
-            console.log("Anonymous session created successfully.");
-          }
-        }
-      } catch (error) {
-        console.error("User status check failed.", error);
-      }
-    };
-
-    checkUserStatus();
-  }, [onGetStarted, onSessionActive]);
-
+const Splash: React.FC<SplashProps> = ({ onGetStarted }) => {
   return (
     <div className="h-screen bg-surface text-text-main relative overflow-hidden flex flex-col">
       {/* Light Mode Gradients */}

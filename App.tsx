@@ -7,16 +7,14 @@ import Home from './screens/Home';
 import Diagnose from './screens/Diagnose';
 import StrainSearch from './screens/StrainSearch';
 import Journal from './screens/Journal';
-import Profile from './screens/Profile'; // Import Profile
+import Profile from './screens/Profile';
 import Paywall from './screens/Paywall';
 import PostPaymentAuth from './screens/PostPaymentAuth';
 import GetStartedTutorial from './screens/GetStartedTutorial';
 import BottomNav from './components/BottomNav';
-import { Purchases } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
-import { supabase } from './services/supabaseClient';
 import { getPendingTasksForToday, toggleTaskCompletion, addNewTask, loadGrowData, createPlantRecord, saveAppJournalEntry, saveDiagnosisReport } from './services/dbService';
 import { STRAIN_DATABASE } from './data/strains';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -24,7 +22,13 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { getDailyInsight, wakeUpBackend } from './services/geminiService';
 import { initializeApp } from './services/appInitializer';
 
+const LS_ONBOARDING_STATUS = 'mg_onboarding_status';
+const LS_PROFILE = 'mastergrowbot_profile';
+const LS_LAST_VISIT = 'mastergrowbot_last_visit';
+const LS_STREAK = 'mastergrowbot_streak';
+
 const App: React.FC = () => {
+  const [isAppReady, setIsAppReady] = useState(false);
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [currentTab, setCurrentTab] = useState<AppScreen>(AppScreen.HOME);
@@ -32,98 +36,118 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(false); // New Tutorial State
+  const [showTutorial, setShowTutorial] = useState(false);
   const isAuthProcessing = useRef(false);
 
   useEffect(() => {
-    const initApp = async () => {
-      if (Capacitor.isNativePlatform()) await SplashScreen.hide();
+    const boot = async () => {
+      if (Capacitor.isNativePlatform()) {
+        await SplashScreen.hide();
+      }
+
+      const savedOnboardingStatus = localStorage.getItem(LS_ONBOARDING_STATUS);
+      const savedProfile = localStorage.getItem(LS_PROFILE);
+
+      if (savedOnboardingStatus) {
+        setOnboardingStatus(savedOnboardingStatus as OnboardingStep);
+      }
+
+      if (savedProfile) {
+        try {
+          setUserProfile(JSON.parse(savedProfile));
+        } catch (error) {
+          console.warn('[App] Saved profile could not be parsed:', error);
+        }
+      }
+
       const init = await initializeApp();
       if (init.isReady && init.session?.access_token) wakeUpBackend();
 
-      // --- AUTH DEEP LINK HANDLING ---
-      // Helper function with Timeout & Error Handling
-      const handleAuthDeepLink = async (urlStr: string) => {
-        if (isAuthProcessing.current) {
-          console.log("Auth already in progress, skipping duplicate link.");
-          return;
-        }
-
-        const code = new URL(urlStr).searchParams.get('code');
-        if (!code) return;
-
-        try {
-          isAuthProcessing.current = true;
-          // 60s Timeout to guarantee sufficient time for network operations (especially on mobile)
-          const exchangePromise = supabase.auth.exchangeCodeForSession(code);
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Authentication timed out. Check connection.")), 60000)
-          );
-
-          // Race the exchange against the timeout
-          const { data: sessionData, error } = await Promise.race([exchangePromise, timeoutPromise]) as any;
-
-          if (error) throw error;
-
-          if (sessionData?.session) {
-            alert("Login Success!"); // User requested visible confirmation
-            handleAuthSuccess();
-          }
-        } catch (err: any) {
-          console.error("Auth Exchange Failed:", err);
-          // Only alert meaningful errors
-          if (err.message !== 'Auth session missing!') {
-            alert(`Login Failed: ${err.message || 'Unknown error'}`);
-          }
-        } finally {
-          isAuthProcessing.current = false;
-        }
-      };
-
-      // 1. Check for Cold Start Deep Link (Crucial for Android)
-      const launchUrl = await CapacitorApp.getLaunchUrl();
-      if (launchUrl?.url && launchUrl.url.includes('code=')) {
-        handleAuthDeepLink(launchUrl.url);
+      if (!init.isReady) {
+        console.error('[App] Initialization failed');
+        setIsAppReady(true);
+        return;
       }
 
-      // 2. Runtime Deep Link Listener
-      CapacitorApp.addListener('appUrlOpen', async (data) => {
-        if (data.url.includes('code=')) {
-          handleAuthDeepLink(data.url);
-        }
-      });
-
-      // --- SESSION MANAGEMENT LOGIC ---
-      const savedProfile = localStorage.getItem('mastergrowbot_profile');
-      let profileData: UserProfile | null = savedProfile ? JSON.parse(savedProfile) : null;
-
-      if (profileData && init.isReturningSubscriber) {
-        // RETURNING USER -> SKIP EVERYTHING
-        console.log("Returning Subscriber Verified. Skipping Onboarding.");
+      if (init.isReturningSubscriber && (init.profile || savedProfile)) {
+        const profileSource = init.profile || JSON.parse(savedProfile || '{}');
+        const profileData: UserProfile = {
+          ...profileSource,
+          experience: profileSource.experience || 'Novice',
+          grow_mode: profileSource.grow_mode || 'Indoor',
+          goal: profileSource.goal || 'Maximize Yield',
+          space: profileSource.space || 'Medium',
+          isOnboarded: true,
+          streak: profileSource.streak || 0,
+          lastVisit: new Date().toISOString().split('T')[0],
+        };
         setUserProfile(profileData);
+        localStorage.setItem(LS_PROFILE, JSON.stringify(profileData));
         setOnboardingStatus(OnboardingStep.COMPLETED);
+        localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
         loadUserData();
-      } else if (profileData && !init.isReturningSubscriber) {
-        // EXPIRED/CANCELLED -> FORCE PAYWALL
-        console.log("Subscription Expired. Redirecting to Paywall.");
-        setUserProfile(profileData);
-        setOnboardingStatus(OnboardingStep.SUMMARY); // Effectively re-onboard/pay
-      } else {
-        // NEW USER -> STAY ON EXISTING STATE (Default is SPLASH)
-        // CRITICAL FIX: Do NOT force setOnboardingStatus(SPLASH) here.
-        // If the user has already clicked "Start" and moved to QUIZ before this finishes,
-        // resetting it to SPLASH causes the "Flash and Reset" bug.
-        console.log("New User Detected. Waiting for interaction.");
+      } else if (savedProfile && savedOnboardingStatus === OnboardingStep.COMPLETED) {
+        setOnboardingStatus(OnboardingStep.SUMMARY);
+        localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.SUMMARY);
       }
+
+      if (Capacitor.isNativePlatform()) {
+        const launchUrl = await CapacitorApp.getLaunchUrl();
+        if (launchUrl?.url && launchUrl.url.includes('code=')) {
+          handleAuthDeepLink(launchUrl.url);
+        }
+
+        CapacitorApp.addListener('appUrlOpen', async (data) => {
+          if (data.url.includes('code=')) {
+            handleAuthDeepLink(data.url);
+          }
+        });
+      }
+
+      setIsAppReady(true);
     };
-    initApp();
+    boot();
   }, []);
+
+  const handleAuthDeepLink = async (urlStr: string) => {
+    const { supabase } = await import('./services/supabaseClient');
+    if (isAuthProcessing.current) {
+      console.log("Auth already in progress, skipping duplicate link.");
+      return;
+    }
+
+    const code = new URL(urlStr).searchParams.get('code');
+    if (!code) return;
+
+    try {
+      isAuthProcessing.current = true;
+      const exchangePromise = supabase.auth.exchangeCodeForSession(code);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Authentication timed out. Check connection.")), 60000)
+      );
+
+      const { data: sessionData, error } = await Promise.race([exchangePromise, timeoutPromise]) as any;
+      if (error) throw error;
+
+      if (sessionData?.session) {
+        alert("Login Success!");
+        handleAuthSuccess();
+      }
+    } catch (err: any) {
+      console.error("Auth Exchange Failed:", err);
+      if (err.message !== 'Auth session missing!') {
+        alert(`Login Failed: ${err.message || 'Unknown error'}`);
+      }
+    } finally {
+      isAuthProcessing.current = false;
+    }
+  };
 
   const loadUserData = async () => {
     // --- Streak Logic ---
     const today = new Date().toISOString().split('T')[0];
-    const lastVisit = localStorage.getItem('mastergrowbot_last_visit');
-    let currentStreak = parseInt(localStorage.getItem('mastergrowbot_streak') || '0');
+    const lastVisit = localStorage.getItem(LS_LAST_VISIT);
+    let currentStreak = parseInt(localStorage.getItem(LS_STREAK) || '0');
 
     if (lastVisit !== today) {
       const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
@@ -132,8 +156,8 @@ const App: React.FC = () => {
       } else {
         currentStreak = 1; // Reset if broken (or first time)
       }
-      localStorage.setItem('mastergrowbot_last_visit', today);
-      localStorage.setItem('mastergrowbot_streak', currentStreak.toString());
+      localStorage.setItem(LS_LAST_VISIT, today);
+      localStorage.setItem(LS_STREAK, currentStreak.toString());
 
       // Update profile state if it exists
       setUserProfile(prev => prev ? ({ ...prev, streak: currentStreak, lastVisit: today }) : null);
@@ -165,8 +189,14 @@ const App: React.FC = () => {
     setShowAuth(false);
     setShowPaywall(false);
     setOnboardingStatus(OnboardingStep.COMPLETED);
+    localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
 
-    // NEW USER CHECK: If they haven't seen tutorial, show it
+    if (userProfile) {
+      const updated = { ...userProfile, isOnboarded: true };
+      setUserProfile(updated);
+      localStorage.setItem(LS_PROFILE, JSON.stringify(updated));
+    }
+
     if (!userProfile?.hasSeenTutorial) {
       setShowTutorial(true);
     }
@@ -222,7 +252,7 @@ const App: React.FC = () => {
     if (!userProfile) return;
     const updated = { ...userProfile, ...updates };
     setUserProfile(updated);
-    localStorage.setItem('mastergrowbot_profile', JSON.stringify(updated));
+    localStorage.setItem(LS_PROFILE, JSON.stringify(updated));
   };
 
   const handleToggleTask = async (taskId: string) => {
@@ -280,9 +310,65 @@ const App: React.FC = () => {
     handleUpdateProfile({ hasSeenTutorial: true });
   };
 
-  if (onboardingStatus === OnboardingStep.SPLASH) return <Splash onGetStarted={() => setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE)} />;
-  if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) return <Onboarding onComplete={(p) => { setUserProfile(p); setOnboardingStatus(OnboardingStep.SUMMARY); }} />;
-  if (onboardingStatus === OnboardingStep.SUMMARY) return <OnboardingSummary profile={userProfile!} onContinue={() => { setOnboardingStatus(OnboardingStep.COMPLETED); setShowPaywall(true); }} />;
+  const handleGetStarted = () => {
+    setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE);
+    localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.QUIZ_EXPERIENCE);
+  };
+
+  const handleOnboardingComplete = (profile: UserProfile) => {
+    setUserProfile(profile);
+    localStorage.setItem(LS_PROFILE, JSON.stringify(profile));
+    setOnboardingStatus(OnboardingStep.SUMMARY);
+    localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.SUMMARY);
+  };
+
+  const handleSummaryContinue = () => {
+    setShowPaywall(true);
+  };
+
+  const handlePaywallPurchase = () => {
+    setShowPaywall(false);
+    setShowAuth(true);
+  };
+
+  if (!isAppReady) {
+    return (
+      <div className="h-screen w-screen bg-surface flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm font-bold text-text-sub">Loading MasterGrowbot...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (onboardingStatus === OnboardingStep.SPLASH) {
+    return <Splash onGetStarted={handleGetStarted} />;
+  }
+
+  if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) {
+    return <Onboarding onComplete={handleOnboardingComplete} />;
+  }
+
+  if (onboardingStatus === OnboardingStep.SUMMARY && !showAuth && !showTutorial) {
+    if (!userProfile) return null;
+    if (showPaywall) {
+      return (
+        <ErrorBoundary>
+          <Paywall onClose={() => { }} onPurchase={handlePaywallPurchase} onSkip={() => { }} />
+        </ErrorBoundary>
+      );
+    }
+    return <OnboardingSummary profile={userProfile} onContinue={handleSummaryContinue} />;
+  }
+
+  if (showAuth) {
+    return <PostPaymentAuth onComplete={handleAuthSuccess} onSkip={handleAuthSuccess} userProfile={userProfile} />;
+  }
+
+  if (showTutorial && onboardingStatus === OnboardingStep.COMPLETED) {
+    return <GetStartedTutorial onComplete={completeTutorial} />;
+  }
 
   return (
     <div className="h-screen w-screen bg-surface overflow-hidden relative">
@@ -293,9 +379,6 @@ const App: React.FC = () => {
           {currentTab === AppScreen.STRAINS && <StrainSearch onAddPlant={handleAddPlant} />}
           {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
           {currentTab === AppScreen.PROFILE && <Profile userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onViewTutorial={() => setShowTutorial(true)} onSignOut={async () => {
-            if (Capacitor.getPlatform() !== 'web') {
-              try { await Purchases.logOut(); } catch (e) { console.error("Error logging out of RevenueCat:", e); }
-            }
             localStorage.clear();
             window.location.reload();
           }} />}
@@ -303,11 +386,6 @@ const App: React.FC = () => {
       </ErrorBoundary>
 
       {showTutorial && <GetStartedTutorial onComplete={completeTutorial} />}
-
-      {/* HARD PAYWALL: No onClose or onSkip provided to prevent bypass */}
-      {showPaywall && <Paywall onClose={() => { }} onPurchase={() => { setShowPaywall(false); setShowAuth(true); }} onSkip={() => { }} />}
-
-      {showAuth && <PostPaymentAuth onComplete={handleAuthSuccess} onSkip={handleAuthSuccess} userProfile={userProfile} />}
 
       <BottomNav currentScreen={currentTab} onNavigate={(tab) => setCurrentTab(tab)} />
     </div>

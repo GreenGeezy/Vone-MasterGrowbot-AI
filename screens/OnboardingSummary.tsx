@@ -1,12 +1,39 @@
 import React from 'react';
 import { UserProfile } from '../types';
 import Growbot from '../components/Growbot';
-import { CheckCircle2, ArrowRight, Target, Sprout, Zap, ShieldCheck, BrainCircuit, Sparkles, ListChecks } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Target, Sprout, Zap, ShieldCheck, BrainCircuit, Sparkles, ListChecks, Star } from 'lucide-react';
 
 interface SummaryProps {
    profile: UserProfile;
    onContinue: () => void;
 }
+
+const TESTIMONIALS = [
+   {
+      name: 'Jake M.',
+      location: 'Colorado',
+      stars: 5,
+      text: 'Caught a magnesium deficiency before it wrecked my whole crop. The AI diagnosis was spot-on.',
+      yield: 'Biggest harvest yet',
+      grow: '6 grows',
+   },
+   {
+      name: 'Sarah K.',
+      location: 'California',
+      stars: 5,
+      text: 'As a first-time grower I was totally lost. MasterGrowbot walked me through everything step by step.',
+      yield: 'First harvest ever',
+      grow: '2 grows',
+   },
+   {
+      name: 'Tom R.',
+      location: 'Oregon',
+      stars: 5,
+      text: 'The daily reminders and grow journal keep me on track. My best harvests have been since using this app.',
+      yield: 'Best buds yet',
+      grow: '12+ grows',
+   },
+];
 
 const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
 
@@ -58,7 +85,7 @@ const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
             </span>
          </div>
 
-         <div className="flex-1 flex flex-col px-6 pt-2 overflow-y-auto no-scrollbar z-10 pb-32">
+         <div className="flex-1 flex flex-col px-6 pt-2 overflow-y-auto no-scrollbar z-10 pb-40">
 
             {/* Hero Area */}
             <div className="flex flex-col items-center justify-center mb-6 flex-shrink-0 animate-in fade-in duration-700">
@@ -137,7 +164,7 @@ const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
                      <div className="pt-0.5">
                         <h4 className="font-black text-text-main text-base tracking-tight">Space: {profile.space}</h4>
                         <p className="text-xs text-text-sub mt-1.5 font-medium leading-relaxed opacity-90">
-                           Monitoring calibrated for a {profile.space.toLowerCase()} scale operation.
+                           Monitoring calibrated for a {profile.space?.toLowerCase()} scale operation.
                         </p>
                      </div>
                   </div>
@@ -153,6 +180,49 @@ const OnboardingSummary: React.FC<SummaryProps> = ({ profile, onContinue }) => {
                         </p>
                      </div>
                   </div>
+               </div>
+            </div>
+
+            <div className="mb-4">
+               <div className="text-center mb-4">
+                  <div className="flex items-center justify-center gap-1 mb-2">
+                     {Array.from({ length: 5 }).map((_, i) => (
+                        <Star key={i} size={16} className="text-yellow-400 fill-yellow-400" />
+                     ))}
+                  </div>
+                  <h3 className="text-sm font-black text-text-main">
+                     Trusted by Elite Growers
+                  </h3>
+                  <p className="text-[10px] text-text-sub font-medium mt-1">
+                     Real results from real growers
+                  </p>
+               </div>
+
+               <div className="space-y-3">
+                  {TESTIMONIALS.map((t, i) => (
+                     <div
+                        key={i}
+                        className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 animate-in fade-in slide-in-from-bottom-4 duration-500"
+                        style={{ animationDelay: `${i * 100}ms` }}
+                     >
+                        <div className="flex items-start justify-between mb-2">
+                           <div>
+                              <div className="text-text-main font-black text-sm">{t.name}</div>
+                              <div className="text-text-sub text-xs">{t.location}</div>
+                           </div>
+                           <div className="flex gap-0.5">
+                              {Array.from({ length: t.stars }).map((_, j) => (
+                                 <Star key={j} size={12} className="text-yellow-400 fill-yellow-400" />
+                              ))}
+                           </div>
+                        </div>
+                        <p className="text-text-main text-sm leading-relaxed mb-3">"{t.text}"</p>
+                        <div className="flex gap-2">
+                           <span className="bg-[#ECFDF5] text-[#059669] text-[10px] font-black px-2 py-1 rounded-full uppercase border border-[#059669]/20">{t.yield}</span>
+                           <span className="bg-gray-100 text-text-sub text-[10px] font-bold px-2 py-1 rounded-full">{t.grow}</span>
+                        </div>
+                     </div>
+                  ))}
                </div>
             </div>
          </div>

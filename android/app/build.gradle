@@ -13,8 +13,8 @@ android {
         minSdk 23
         targetSdk 35
         // Increment for each Google Play release.
-        versionCode 145
-        versionName "1.0.145"
+        versionCode 146
+        versionName "1.0.146"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -50,6 +50,7 @@ dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     
     // STANDARD DEPENDENCIES
+    implementation "androidx.activity:activity:$androidxActivityVersion"
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-ktx:$androidxCoreVersion"

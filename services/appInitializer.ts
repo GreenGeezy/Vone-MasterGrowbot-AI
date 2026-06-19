@@ -91,9 +91,8 @@ export async function initializeApp(): Promise<AppInitState> {
       const { customerInfo } = await Purchases.getCustomerInfo();
 
       isReturningSubscriber =
-        Object.keys(customerInfo?.entitlements?.active || {}).length > 0 ||
-        (customerInfo?.activeSubscriptions?.length || 0) > 0 ||
-        (customerInfo?.allPurchasedProductIdentifiers?.length || 0) > 0;
+        !!customerInfo?.entitlements?.active?.pro ||
+        (customerInfo?.activeSubscriptions?.length || 0) > 0;
     } catch (error) {
       console.warn('[AppInitializer] RevenueCat check failed:', error);
     }
