@@ -312,8 +312,7 @@ function sanitizeHistory(history: { role: string; content: string }[]): { role: 
 
 /**
  * Internal helper — invokes gemini-v3 with 'insight' mode.
- * Replaces the legacy gemini-gateway path to consolidate invocations on a
- * single edge function (reduces Supabase invocation count / cost).
+ * Uses the consolidated gemini-v3 edge function for insight requests.
  */
 async function invokeInsightV3(prompt: string, timeoutMs = 30000): Promise<string> {
   const invokePromise = supabase.functions.invoke('gemini-v3', {
@@ -332,7 +331,7 @@ async function invokeInsightV3(prompt: string, timeoutMs = 30000): Promise<strin
 }
 
 /**
- * Daily Insight (Home Screen) — migrated to gemini-v3 (was gemini-gateway)
+ * Daily Insight (Home Screen) — uses gemini-v3
  */
 export async function getDailyInsight(userProfile?: UserProfile): Promise<string> {
   const experience = userProfile?.experience || 'General';
@@ -348,7 +347,7 @@ export async function getDailyInsight(userProfile?: UserProfile): Promise<string
 }
 
 /**
- * Grow Log Analysis (Journal) — migrated to gemini-v3 (was gemini-gateway)
+ * Grow Log Analysis (Journal) — uses gemini-v3
  */
 export async function analyzeGrowLog(notes: string, tags: string[] = []): Promise<string> {
   const prompt = `Analyze this grow journal note: "${notes}". Tags: ${tags.join(', ')}. Provide a 1-sentence observation on plant health.`;
@@ -408,8 +407,7 @@ export async function getStrainInsights(strainName: string, description?: string
 /**
  * Wake Up Backend (Cold Start Fix)
  * Pings gemini-v3 (the only function the app uses) to pre-warm the instance.
- * Previously pinged gemini-gateway — migrated to consolidate on a single
- * edge function and reduce Supabase invocation count.
+ * Uses gemini-v3 to consolidate app AI traffic on a single edge function.
  */
 export async function wakeUpBackend() {
   console.log('[Gemini] Waking up backend (v3)...');

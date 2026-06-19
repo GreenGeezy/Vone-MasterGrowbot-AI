@@ -54,13 +54,21 @@ const TestimonialCard = memo(({ testimonial, index }: { testimonial: typeof TEST
 ));
 TestimonialCard.displayName = 'TestimonialCard';
 
-function hasAnyActiveSubscription(customerInfo: any): boolean {
+function hasActivePaidAccess(customerInfo: any): boolean {
   if (!customerInfo) return false;
-  const hasEntitlements = Object.keys(customerInfo.entitlements?.active || {}).length > 0;
+  const hasProEntitlement = Boolean(customerInfo.entitlements?.active?.pro);
   const hasSubscriptions = (customerInfo.activeSubscriptions?.length || 0) > 0;
-  const hasProducts = (customerInfo.allPurchasedProductIdentifiers?.length || 0) > 0;
-  console.log('[Paywall] hasAnyActiveSubscription check:', { hasEntitlements, hasSubscriptions, hasProducts });
-  return hasEntitlements || hasSubscriptions || hasProducts;
+  return hasProEntitlement || hasSubscriptions;
+}
+
+function parsePackagePrice(pkg?: PurchasesPackage): number | null {
+  if (!pkg) return null;
+  const product = pkg.product as any;
+  if (typeof product.price === 'number' && Number.isFinite(product.price)) {
+    return product.price;
+  }
+  const parsed = Number(String(product.priceString || '').replace(/[^0-9.]/g, ''));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
@@ -143,7 +151,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
 
       const purchaseResult = await Purchases.purchasePackage({ aPackage: pkg });
 
-      if (hasAnyActiveSubscription(purchaseResult.customerInfo)) {
+      if (hasActivePaidAccess(purchaseResult.customerInfo)) {
         onPurchase();
         return;
       }
@@ -152,7 +160,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       await Purchases.syncPurchases();
 
       const { customerInfo: freshInfo } = await Purchases.getCustomerInfo();
-      if (hasAnyActiveSubscription(freshInfo)) {
+      if (hasActivePaidAccess(freshInfo)) {
         onPurchase();
         return;
       }
@@ -163,7 +171,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         await Purchases.invalidateCustomerInfoCache();
         await Purchases.syncPurchases();
         const { customerInfo: retryInfo } = await Purchases.getCustomerInfo();
-        if (hasAnyActiveSubscription(retryInfo)) {
+        if (hasActivePaidAccess(retryInfo)) {
           setError(null);
           onPurchase();
           return;
@@ -191,7 +199,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         await Purchases.invalidateCustomerInfoCache();
         await Purchases.syncPurchases();
         const { customerInfo } = await Purchases.getCustomerInfo();
-        if (hasAnyActiveSubscription(customerInfo)) {
+        if (hasActivePaidAccess(customerInfo)) {
           alert('Success! Your subscription has been restored.');
           onPurchase();
         } else {
@@ -210,6 +218,29 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
   };
 
   const selectedPkg = packages.find(p => p.identifier === selectedPkgIdentifier);
+  const annualPkg = packages.find((p: any) => p.packageType === 'ANNUAL');
+  const monthlyPkg = packages.find((p: any) => p.packageType === 'MONTHLY');
+
+  const getAnnualValueText = () => {
+    const annualPrice = parsePackagePrice(annualPkg);
+    const monthlyPrice = parsePackagePrice(monthlyPkg);
+
+    if (annualPrice && monthlyPrice) {
+      const savings = Math.round((1 - annualPrice / (monthlyPrice * 12)) * 100);
+      const weeklyEquivalent = annualPrice / 52;
+      if (Number.isFinite(savings) && savings > 0 && Number.isFinite(weeklyEquivalent)) {
+        return {
+          badge: `Save ${savings}% vs monthly`,
+          subtext: `Equivalent to $${weeklyEquivalent.toFixed(2)}/week, billed yearly`,
+        };
+      }
+    }
+
+    return {
+      badge: 'Save 72% vs monthly',
+      subtext: 'Equivalent to $1.92/week, billed yearly',
+    };
+  };
 
   const getSubtext = () => {
     if (!selectedPkg) return '';
@@ -225,10 +256,11 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
 
   const getPlanMeta = (pkg: any) => {
     if (pkg.packageType === 'ANNUAL') {
+      const annualValue = getAnnualValueText();
       return {
-        badge: 'BEST VALUE',
+        badge: annualValue.badge,
         badgeColor: 'bg-gradient-to-r from-green-600 to-emerald-500',
-        subtext: 'Just $1.92/week • Save over 60%',
+        subtext: annualValue.subtext,
         emphasis: true,
       };
     }

@@ -34,12 +34,10 @@ const STABLE_ID_KEY = 'mg_rc_stable_id';
 async function getStableAnonymousId(): Promise<string> {
   const { value } = await Preferences.get({ key: STABLE_ID_KEY });
   if (value) {
-    console.log('[AppInitializer] Using existing stable anonymous ID:', value);
     return value;
   }
   const stableId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   await Preferences.set({ key: STABLE_ID_KEY, value: stableId });
-  console.log('[AppInitializer] Generated new stable anonymous ID:', stableId);
   return stableId;
 }
 
@@ -53,15 +51,12 @@ async function getStableAnonymousId(): Promise<string> {
  * - RevenueCat appUserID is STABLE and never changes (stored in Capacitor Preferences)
  */
 export async function initializeApp(): Promise<AppInitState> {
-  console.log('[AppInitializer] Starting initialization...');
-
   // 1. Await existing session
   let session = (await supabaseInit.auth.getSession()).data?.session;
   let user = session?.user || null;
 
   // 2. If no session, sign in anonymously
   if (!session || !user) {
-    console.log('[AppInitializer] No session found. Signing in anonymously...');
     try {
       const { data: authData, error: authError } = await supabaseInit.auth.signInAnonymously();
       if (authError) {
@@ -82,8 +77,6 @@ export async function initializeApp(): Promise<AppInitState> {
     return { user: null, session: null, profile: null, isReady: false, isReturningSubscriber: false };
   }
 
-  console.log('[AppInitializer] Supabase user authenticated:', user.id);
-
   // 4. Fetch or create profile using maybeSingle()
   let profile = null;
   try {
@@ -101,7 +94,6 @@ export async function initializeApp(): Promise<AppInitState> {
 
     // 5. If profile is null, INSERT a new row
     if (!profile) {
-      console.log('[AppInitializer] Profile missing. Creating row...');
       const newProfile = {
         id: user.id,
         created_at: new Date().toISOString(),
@@ -116,7 +108,6 @@ export async function initializeApp(): Promise<AppInitState> {
         console.warn('[AppInitializer] Profile insert error:', insertError);
       } else {
         profile = inserted;
-        console.log('[AppInitializer] Profile created successfully');
       }
     }
   } catch (e) {
@@ -138,26 +129,14 @@ export async function initializeApp(): Promise<AppInitState> {
         const stableAppUserId = await getStableAnonymousId();
 
         await Purchases.configure({ apiKey, appUserID: stableAppUserId });
-        console.log('[AppInitializer] RevenueCat configured with STABLE appUserID:', stableAppUserId);
-        console.log('[AppInitializer] Supabase user.id (for DB only):', user.id);
 
-        // Check subscription status — check for ANY active entitlement OR subscription
+        // Check active access only; expired purchase history must not unlock the app.
         const { customerInfo } = await Purchases.getCustomerInfo();
-        console.log('[AppInitializer] RC customerInfo:', JSON.stringify(customerInfo, null, 2));
-        console.log('[AppInitializer] RC active entitlements keys:', Object.keys(customerInfo?.entitlements?.active || {}));
-        console.log('[AppInitializer] RC active subscriptions:', customerInfo?.activeSubscriptions);
-        console.log('[AppInitializer] RC all purchased products:', customerInfo?.allPurchasedProductIdentifiers);
-        console.log('[AppInitializer] RC originalAppUserId:', customerInfo?.originalAppUserId);
-        console.log('[AppInitializer] RC firstSeen:', customerInfo?.firstSeen);
-        console.log('[AppInitializer] RC originalPurchaseDate:', customerInfo?.originalPurchaseDate);
-
-        const hasActiveEntitlements = Object.keys(customerInfo?.entitlements?.active || {}).length > 0;
+        const hasActiveProEntitlement = Boolean(customerInfo?.entitlements?.active?.pro);
         const hasActiveSubscriptions = (customerInfo?.activeSubscriptions?.length || 0) > 0;
-        const hasPurchasedProducts = (customerInfo?.allPurchasedProductIdentifiers?.length || 0) > 0;
 
-        if (hasActiveEntitlements || hasActiveSubscriptions || hasPurchasedProducts) {
+        if (hasActiveProEntitlement || hasActiveSubscriptions) {
           isReturningSubscriber = true;
-          console.log('[AppInitializer] Returning subscriber detected. Entitlements:', hasActiveEntitlements, 'Subscriptions:', hasActiveSubscriptions, 'Products:', hasPurchasedProducts);
         }
       } else {
         console.warn('[AppInitializer] RevenueCat API key missing for platform:', platform);
@@ -172,8 +151,6 @@ export async function initializeApp(): Promise<AppInitState> {
       isReturningSubscriber = true;
     }
   }
-
-  console.log('[AppInitializer] Initialization complete. isReturningSubscriber:', isReturningSubscriber);
 
   return {
     user,

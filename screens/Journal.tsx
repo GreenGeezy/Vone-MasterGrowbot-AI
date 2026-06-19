@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, Plus, X, CheckCircle2, Trash2 } from 'lucide-react';
+import { Calendar, Plus, X, CheckCircle2, Trash2, Sparkles } from 'lucide-react';
 import NoteCreator from '../components/NoteCreator';
 import StrainCard from '../components/StrainCard';
 import { analyzeGrowLog } from '../services/geminiService';
@@ -24,6 +24,7 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onE
   const [selectedStrain, setSelectedStrain] = useState<any | null>(null); // New State for Preview Modal
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(plants?.[0]?.id || null);
   const plant = plants.find((p: any) => p.id === selectedPlantId) || plants[0];
+  const hasSelectedPlant = Boolean(plant?.id);
 
   useEffect(() => {
     if (!plants?.length) {
@@ -36,13 +37,23 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onE
   }, [plants, selectedPlantId]);
 
   const handleSaveWrapper = async (entry: any) => {
+    if (!plant?.id) return;
+
     // Ensure image property is correctly passed from NoteCreator
     const finalEntry = {
       ...entry,
       imageUri: entry.image || entry.imageUri // Handle potential property name mismatch
     };
-    const aiData = await analyzeGrowLog(entry.notes);
-    onAddEntry({ ...finalEntry, plantId: plant?.id, aiAnalysis: { summary: aiData } }, plant?.id);
+    let aiAnalysis;
+    try {
+      if (entry.notes?.trim()) {
+        const aiData = await analyzeGrowLog(entry.notes);
+        if (aiData) aiAnalysis = { summary: aiData };
+      }
+    } catch (error) {
+      console.warn('Grow log analysis failed; saving note without AI analysis.');
+    }
+    onAddEntry({ ...finalEntry, plantId: plant.id, ...(aiAnalysis ? { aiAnalysis } : {}) }, plant.id);
     setShowCreator(false);
   };
 
@@ -108,6 +119,16 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onE
         )}
       </div>
 
+      {hasSelectedPlant ? (
+        <div className="mb-4 rounded-2xl border border-green-100 bg-white px-4 py-3 text-xs font-bold text-gray-600 shadow-sm">
+          Saving to: <span className="text-green-700">{plant.name || plant.strain || 'Selected plant'}</span>
+        </div>
+      ) : (
+        <div className="mb-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4 text-sm font-semibold text-amber-800">
+          Add or select a plant before saving notes.
+        </div>
+      )}
+
       <div className="space-y-4">
         {feedItems.map((item: any) => {
           if (item.feedType === 'task') {
@@ -158,8 +179,8 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onE
 
         {feedItems.length === 0 && (
           <div className="text-center py-10 text-gray-400 text-sm">
-            <p>No entries yet.</p>
-            <p className="text-xs mt-1">Tap the + button to start log.</p>
+            <p>{hasSelectedPlant ? 'No entries yet.' : 'No plant selected.'}</p>
+            <p className="text-xs mt-1">{hasSelectedPlant ? 'Tap the + button to start log.' : 'Add or select a plant before saving notes.'}</p>
           </div>
         )}
       </div>
@@ -171,8 +192,16 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onE
             <button onClick={() => { setShowFabMenu(false); setShowTaskCreator(true); }} className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-full font-bold shadow-lg animate-in slide-in-from-bottom-2">
               <span className="text-xs">Add Task</span> <CheckCircle2 size={18} />
             </button>
-            <button onClick={() => { setShowFabMenu(false); setShowCreator(true); }} className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-full font-bold shadow-lg animate-in slide-in-from-bottom-2 delay-75">
-              <span className="text-xs">Add Note</span> <Calendar size={18} />
+            <button
+              onClick={() => {
+                if (!hasSelectedPlant) return;
+                setShowFabMenu(false);
+                setShowCreator(true);
+              }}
+              disabled={!hasSelectedPlant}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold shadow-lg animate-in slide-in-from-bottom-2 delay-75 ${hasSelectedPlant ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400 shadow-none'}`}
+            >
+              <span className="text-xs">{hasSelectedPlant ? 'Add Note' : 'Select Plant First'}</span> <Calendar size={18} />
             </button>
           </>
         )}
@@ -311,8 +340,5 @@ const Journal: React.FC<any> = ({ plants, tasks = [], onAddEntry, onAddTask, onE
     </div>
   );
 };
-
-// Simple Icon component helper if Sparkles isn't imported (it wasn't in original file, adding logic to import it)
-import { Sparkles } from 'lucide-react';
 
 export default Journal;

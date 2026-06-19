@@ -705,25 +705,32 @@ export const deleteUserData = async (): Promise<boolean> => {
   // 2. Delete from Supabase (if authenticated)
   if (session?.user?.id) {
     const uid = session.user.id;
-    try {
-      // Execute deletions in parallel for speed, handle potential errors gracefully
-      await Promise.all([
-        supabase.from('profiles').delete().eq('id', uid),
-        supabase.from('grow_logs').delete().eq('user_id', uid), // Assuming this is the table name from user request
-        supabase.from('journal_logs').delete().eq('user_id', uid),
-        supabase.from('tasks').delete().eq('user_id', uid),
-        supabase.from('chat_sessions').delete().eq('user_id', uid),
-        supabase.from('chat_messages').delete().eq('user_id', uid), // Dependent on session usually, but for completeness
-        supabase.from('user_feedback').delete().eq('user_id', uid),
-        supabase.from('support_tickets').delete().eq('user_id', uid),
-        supabase.auth.signOut()
-      ]);
-      return true;
-    } catch (e) {
-      console.error("Error deleting user data from Supabase:", e);
-      // Even if DB fails (e.g. network), we treated local clear as success for the user's perception on this device
-      return false;
-    }
+    const cleanupSteps: Array<[string, () => Promise<any>]> = [
+      ['profiles', () => supabase.from('profiles').delete().eq('id', uid)],
+      ['grow_logs', () => supabase.from('grow_logs').delete().eq('user_id', uid)],
+      ['journal_logs', () => supabase.from('journal_logs').delete().eq('user_id', uid)],
+      ['tasks', () => supabase.from('tasks').delete().eq('user_id', uid)],
+      ['chat_sessions', () => supabase.from('chat_sessions').delete().eq('user_id', uid)],
+      ['chat_messages', () => supabase.from('chat_messages').delete().eq('user_id', uid)],
+      ['user_feedback', () => supabase.from('user_feedback').delete().eq('user_id', uid)],
+      ['support_tickets', () => supabase.from('support_tickets').delete().eq('user_id', uid)],
+      ['auth_session', () => supabase.auth.signOut()],
+    ];
+
+    const results = await Promise.allSettled(
+      cleanupSteps.map(async ([, action]) => {
+        const result = await action();
+        if (result?.error) throw result.error;
+      })
+    );
+
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.warn(`Account cleanup step failed or was skipped: ${cleanupSteps[index][0]}`);
+      }
+    });
+
+    return true;
   }
 
   return true; // Local only account deleted

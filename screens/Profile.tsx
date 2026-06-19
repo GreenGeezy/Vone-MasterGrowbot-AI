@@ -42,7 +42,6 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
             const { supabase } = await import('../services/supabaseClient');
             const { data: { user } } = await supabase.auth.getUser();
             if (user && user.email && user.email !== userProfile?.email) {
-                console.log("Syncing Profile Email:", user.email);
                 onUpdateProfile({ email: user.email });
             }
         };
@@ -340,7 +339,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 </div>
 
                 <div className="text-center pb-8 opacity-40">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 1.0.126 (Beta)</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 1.5.1</p>
                 </div>
             </div>
 

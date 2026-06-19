@@ -45,8 +45,6 @@ const App: React.FC = () => {
   // --- Initialization: Hard App Gate ---
   useEffect(() => {
     const boot = async () => {
-      console.log('[App] Boot sequence started');
-
       // Hide native splash screen
       if (Capacitor.isNativePlatform()) {
         await SplashScreen.hide();
@@ -55,15 +53,15 @@ const App: React.FC = () => {
       // Restore persisted onboarding state BEFORE initializing
       const savedOnboardingStatus = localStorage.getItem(LS_ONBOARDING_STATUS);
       const savedProfile = localStorage.getItem(LS_PROFILE);
-      console.log('[App] Persisted onboarding status:', savedOnboardingStatus);
-      console.log('[App] Persisted profile exists:', !!savedProfile);
+      let savedProfileData: any = null;
 
       if (savedOnboardingStatus) {
         setOnboardingStatus(savedOnboardingStatus);
       }
       if (savedProfile) {
         try {
-          setUserProfile(JSON.parse(savedProfile));
+          savedProfileData = JSON.parse(savedProfile);
+          setUserProfile(savedProfileData);
         } catch { /* ignore parse error */ }
       }
 
@@ -83,16 +81,17 @@ const App: React.FC = () => {
 
       setIsReturningSubscriber(init.isReturningSubscriber);
 
-      if (init.isReturningSubscriber && init.profile) {
+      if (init.isReturningSubscriber) {
         // Returning subscriber: skip onboarding, go straight to app
+        const profileSource = init.profile || savedProfileData || {};
         const profileData = {
-          ...init.profile,
-          experience: init.profile.experience || 'Novice',
-          grow_mode: init.profile.grow_mode || 'Indoor',
-          goal: init.profile.goal || 'Maximize Yield',
-          space: init.profile.space || 'Medium',
+          ...profileSource,
+          experience: profileSource.experience || 'Novice',
+          grow_mode: profileSource.grow_mode || 'Indoor',
+          goal: profileSource.goal || 'Maximize Yield',
+          space: profileSource.space || 'Medium',
           isOnboarded: true,
-          streak: init.profile.streak || 0,
+          streak: profileSource.streak || 0,
           lastVisit: new Date().toISOString().split('T')[0],
         };
         setUserProfile(profileData);
@@ -116,8 +115,6 @@ const App: React.FC = () => {
       }
 
       setIsAppReady(true);
-      console.log('[App] Boot complete. isReturningSubscriber:', init.isReturningSubscriber);
-      console.log('[App] Final onboarding status:', savedOnboardingStatus || OnboardingStep.SPLASH);
     };
 
     boot();
@@ -183,10 +180,6 @@ const App: React.FC = () => {
   // --- AUTH SUCCESS (after purchase) ---
   // CRITICAL: This is the ONLY path from paywall → tutorial → main app
   const handleAuthSuccess = async () => {
-    console.log('[App] handleAuthSuccess called');
-    console.log('[App] Current onboardingStatus:', onboardingStatus);
-    console.log('[App] Current userProfile:', userProfile);
-
     // 1. Close auth screen
     setShowAuth(false);
     setShowPaywall(false);
@@ -194,21 +187,17 @@ const App: React.FC = () => {
     // 2. Mark onboarding as COMPLETED and persist
     setOnboardingStatus(OnboardingStep.COMPLETED);
     localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
-    console.log('[App] onboardingStatus set to COMPLETED and persisted');
 
     // 3. Mark profile as onboarded and persist
     if (userProfile) {
       const updated = { ...userProfile, isOnboarded: true };
       setUserProfile(updated);
       localStorage.setItem(LS_PROFILE, JSON.stringify(updated));
-      console.log('[App] Profile updated with isOnboarded=true');
     }
 
     // 4. Show tutorial if not seen
     const hasSeenTutorial = userProfile?.hasSeenTutorial;
-    console.log('[App] hasSeenTutorial:', hasSeenTutorial);
     if (!hasSeenTutorial) {
-      console.log('[App] Launching tutorial...');
       setShowTutorial(true);
     }
 
@@ -328,22 +317,18 @@ const App: React.FC = () => {
   };
 
   const completeTutorial = () => {
-    console.log('[App] Tutorial completed');
     setShowTutorial(false);
     handleUpdateProfile({ hasSeenTutorial: true });
-    console.log('[App] hasSeenTutorial persisted');
   };
 
   // --- ONBOARDING FLOW HANDLERS ---
 
   const handleGetStarted = () => {
-    console.log('[App] handleGetStarted: SPLASH → QUIZ_EXPERIENCE');
     setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE);
     localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.QUIZ_EXPERIENCE);
   };
 
   const handleOnboardingComplete = (profile: UserProfile) => {
-    console.log('[App] handleOnboardingComplete: QUIZ_EXPERIENCE → SUMMARY');
     setUserProfile(profile);
     localStorage.setItem(LS_PROFILE, JSON.stringify(profile));
     setOnboardingStatus(OnboardingStep.SUMMARY);
@@ -351,33 +336,31 @@ const App: React.FC = () => {
   };
 
   const handleSummaryContinue = () => {
-    console.log('[App] handleSummaryContinue: SUMMARY → showPaywall=true');
     setShowPaywall(true);
   };
 
   // CRITICAL FIX: After purchase, go directly to auth screen
   // Do NOT go back to summary
   const handlePaywallPurchase = () => {
-    console.log('[App] handlePaywallPurchase: Purchase success, showing PostPaymentAuth');
     setShowPaywall(false);
     setShowAuth(true);
   };
 
   // Auth retry helper (for child components)
   const retryAuth = async () => {
-    console.log('[App] retryAuth called');
     const init = await initializeApp();
     if (init.isReady) {
       setIsReturningSubscriber(init.isReturningSubscriber);
-      if (init.isReturningSubscriber && init.profile) {
+      if (init.isReturningSubscriber) {
+        const profileSource: any = init.profile || userProfile || {};
         const profileData: UserProfile = {
-          ...init.profile,
-          experience: init.profile.experience || 'Novice',
-          grow_mode: init.profile.grow_mode || 'Indoor',
-          goal: init.profile.goal || 'Maximize Yield',
-          space: init.profile.space || 'Medium',
+          ...profileSource,
+          experience: profileSource.experience || 'Novice',
+          grow_mode: profileSource.grow_mode || 'Indoor',
+          goal: profileSource.goal || 'Maximize Yield',
+          space: profileSource.space || 'Medium',
           isOnboarded: true,
-          streak: init.profile.streak || 0,
+          streak: profileSource.streak || 0,
           lastVisit: new Date().toISOString().split('T')[0],
         };
         setUserProfile(profileData);
@@ -391,8 +374,6 @@ const App: React.FC = () => {
 
   // --- RENDER ---
   // CRITICAL: Render order matters. Each condition is mutually exclusive.
-
-  console.log('[App] RENDER — isAppReady:', isAppReady, '| onboardingStatus:', onboardingStatus, '| showPaywall:', showPaywall, '| showAuth:', showAuth, '| showTutorial:', showTutorial);
 
   // 1. LOADING STATE (before initializeApp completes)
   if (!isAppReady) {
