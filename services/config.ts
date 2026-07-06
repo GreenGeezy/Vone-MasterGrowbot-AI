@@ -8,6 +8,6 @@ export const CONFIG = {
     },
 
     // 2. SUPABASE CONFIGURATION
-    SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
+    SUPABASE_URL: 'https://vofwdhlwsahwxecewyek.supabase.co',
     SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY,
 };
