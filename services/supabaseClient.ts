@@ -25,7 +25,7 @@ export const signInWithGoogle = async () => {
     ? 'com.mastergrowbot.app://login-callback'
     : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
       ? `${window.location.origin}` // URL Configuration in Supabase must allow this exact Origin
-      : 'https://auth.mastergrowbotai.com/auth/v1/callback';
+      : 'https://vofwdhlwsahwxecewyek.supabase.co/auth/v1/callback';
 
   console.log(`[Auth] Starting Google Sign-In. Redirecting to: ${redirectUrl}`);
 

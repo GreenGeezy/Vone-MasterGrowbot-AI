@@ -6,6 +6,6 @@
         
         <domain includeSubdomains="true">api.revenuecat.com</domain>
         
-        <domain includeSubdomains="true">auth.mastergrowbotai.com</domain>
+        <domain includeSubdomains="true">vofwdhlwsahwxecewyek.supabase.co</domain>
     </domain-config>
 </network-security-config>
