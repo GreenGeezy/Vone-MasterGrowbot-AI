@@ -24,6 +24,25 @@ export interface AppInitState {
 const STABLE_ID_KEY = 'mg_rc_stable_id';
 const ANDROID_REVENUECAT_KEY = 'goog_kqOynvNRCABzUPrpfyFvlMvHUna';
 
+export async function withTimeout<T>(
+  promise: PromiseLike<T>,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 async function getStableAnonymousId(): Promise<string> {
   if (Capacitor.isNativePlatform()) {
     const { value } = await Preferences.get({ key: STABLE_ID_KEY });
@@ -41,17 +60,35 @@ async function getStableAnonymousId(): Promise<string> {
 }
 
 export async function initializeApp(): Promise<AppInitState> {
-  let session = (await supabaseInit.auth.getSession()).data?.session;
+  let session = null;
+  try {
+    session = (await withTimeout(
+      supabaseInit.auth.getSession(),
+      3000,
+      '[AppInitializer] getSession'
+    )).data?.session;
+  } catch (error) {
+    console.warn('[AppInitializer] getSession did not finish before startup timeout:', error);
+  }
   let user = session?.user || null;
 
   if (!session || !user) {
-    const { data, error } = await supabaseInit.auth.signInAnonymously();
-    if (error || !data?.session?.user) {
-      console.error('[AppInitializer] Anonymous sign-in failed:', error);
+    try {
+      const { data, error } = await withTimeout(
+        supabaseInit.auth.signInAnonymously(),
+        5000,
+        '[AppInitializer] anonymous sign-in'
+      );
+      if (error || !data?.session?.user) {
+        console.error('[AppInitializer] Anonymous sign-in failed:', error);
+        return { user: null, session: null, profile: null, isReady: false, isReturningSubscriber: false };
+      }
+      session = data.session;
+      user = data.user;
+    } catch (error) {
+      console.warn('[AppInitializer] Anonymous sign-in did not finish before startup timeout:', error);
       return { user: null, session: null, profile: null, isReady: false, isReturningSubscriber: false };
     }
-    session = data.session;
-    user = data.user;
   }
 
   if (!user?.id) {
@@ -60,20 +97,30 @@ export async function initializeApp(): Promise<AppInitState> {
 
   let profile = null;
   try {
-    const { data: profileData } = await supabaseInit
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle();
+    const { data: profileData, error: profileError } = await withTimeout<any>(
+      supabaseInit
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle(),
+      4000,
+      '[AppInitializer] profile fetch'
+    );
+
+    if (profileError) console.warn('[AppInitializer] Profile fetch failed:', profileError);
 
     profile = profileData;
 
     if (!profile) {
-      const { data: inserted, error: insertError } = await supabaseInit
-        .from('profiles')
-        .upsert({ id: user.id, updated_at: new Date().toISOString() }, { onConflict: 'id' })
-        .select()
-        .maybeSingle();
+      const { data: inserted, error: insertError } = await withTimeout<any>(
+        supabaseInit
+          .from('profiles')
+          .upsert({ id: user.id, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+          .select()
+          .maybeSingle(),
+        4000,
+        '[AppInitializer] profile upsert'
+      );
 
       if (insertError) console.warn('[AppInitializer] Profile upsert failed:', insertError);
       profile = inserted;
@@ -87,8 +134,16 @@ export async function initializeApp(): Promise<AppInitState> {
     try {
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
       const stableAppUserID = await getStableAnonymousId();
-      await Purchases.configure({ apiKey: ANDROID_REVENUECAT_KEY, appUserID: stableAppUserID });
-      const { customerInfo } = await Purchases.getCustomerInfo();
+      await withTimeout(
+        Purchases.configure({ apiKey: ANDROID_REVENUECAT_KEY, appUserID: stableAppUserID }),
+        5000,
+        '[AppInitializer] RevenueCat configure'
+      );
+      const { customerInfo } = await withTimeout(
+        Purchases.getCustomerInfo(),
+        5000,
+        '[AppInitializer] RevenueCat customer info'
+      );
 
       isReturningSubscriber =
         !!customerInfo?.entitlements?.active?.pro ||

@@ -20,7 +20,7 @@ import { STRAIN_DATABASE } from './data/strains';
 import ErrorBoundary from './components/ErrorBoundary';
 
 import { getDailyInsight, wakeUpBackend } from './services/geminiService';
-import { initializeApp } from './services/appInitializer';
+import { initializeApp, withTimeout } from './services/appInitializer';
 
 const LS_ONBOARDING_STATUS = 'mg_onboarding_status';
 const LS_PROFILE = 'mastergrowbot_profile';
@@ -29,6 +29,7 @@ const LS_STREAK = 'mastergrowbot_streak';
 
 const App: React.FC = () => {
   const [isAppReady, setIsAppReady] = useState(false);
+  const [hasVerifiedPaidAccess, setHasVerifiedPaidAccess] = useState(!Capacitor.isNativePlatform());
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStep>(OnboardingStep.SPLASH);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [currentTab, setCurrentTab] = useState<AppScreen>(AppScreen.HOME);
@@ -38,75 +39,119 @@ const App: React.FC = () => {
   const [showAuth, setShowAuth] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const isAuthProcessing = useRef(false);
+  const hasLoadedUserData = useRef(false);
 
   useEffect(() => {
-    const boot = async () => {
-      if (Capacitor.isNativePlatform()) {
-        await SplashScreen.hide();
-      }
+    let isMounted = true;
+    let appUrlOpenHandle: any;
 
-      const savedOnboardingStatus = localStorage.getItem(LS_ONBOARDING_STATUS);
+    const restoreLocalState = () => {
+      const savedOnboardingStatus = localStorage.getItem(LS_ONBOARDING_STATUS) as OnboardingStep | null;
       const savedProfile = localStorage.getItem(LS_PROFILE);
+      let savedProfileData: UserProfile | null = null;
 
       if (savedOnboardingStatus) {
-        setOnboardingStatus(savedOnboardingStatus as OnboardingStep);
+        setOnboardingStatus(savedOnboardingStatus);
       }
 
       if (savedProfile) {
         try {
-          setUserProfile(JSON.parse(savedProfile));
+          savedProfileData = JSON.parse(savedProfile);
+          setUserProfile(savedProfileData);
         } catch (error) {
           console.warn('[App] Saved profile could not be parsed:', error);
         }
       }
 
-      const init = await initializeApp();
-      if (init.isReady && init.session?.access_token) wakeUpBackend();
-
-      if (!init.isReady) {
-        console.error('[App] Initialization failed');
-        setIsAppReady(true);
-        return;
-      }
-
-      if (init.isReturningSubscriber && (init.profile || savedProfile)) {
-        const profileSource = init.profile || JSON.parse(savedProfile || '{}');
-        const profileData: UserProfile = {
-          ...profileSource,
-          experience: profileSource.experience || 'Novice',
-          grow_mode: profileSource.grow_mode || 'Indoor',
-          goal: profileSource.goal || 'Maximize Yield',
-          space: profileSource.space || 'Medium',
-          isOnboarded: true,
-          streak: profileSource.streak || 0,
-          lastVisit: new Date().toISOString().split('T')[0],
-        };
-        setUserProfile(profileData);
-        localStorage.setItem(LS_PROFILE, JSON.stringify(profileData));
-        setOnboardingStatus(OnboardingStep.COMPLETED);
-        localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
-        loadUserData();
-      } else if (savedProfile && savedOnboardingStatus === OnboardingStep.COMPLETED) {
-        setOnboardingStatus(OnboardingStep.SUMMARY);
-        localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.SUMMARY);
-      }
-
-      if (Capacitor.isNativePlatform()) {
-        const launchUrl = await CapacitorApp.getLaunchUrl();
-        if (launchUrl?.url && launchUrl.url.includes('code=')) {
-          handleAuthDeepLink(launchUrl.url);
-        }
-
-        CapacitorApp.addListener('appUrlOpen', async (data) => {
-          if (data.url.includes('code=')) {
-            handleAuthDeepLink(data.url);
-          }
-        });
-      }
-
-      setIsAppReady(true);
+      return { savedOnboardingStatus, savedProfileData };
     };
+
+    const setupDeepLinks = () => {
+      if (!Capacitor.isNativePlatform()) return;
+
+      void withTimeout(
+        CapacitorApp.getLaunchUrl(),
+        2000,
+        '[App] launch URL check'
+      )
+        .then((launchUrl) => {
+          if (launchUrl?.url && launchUrl.url.includes('code=')) {
+            handleAuthDeepLink(launchUrl.url);
+          }
+        })
+        .catch((error) => console.warn('[App] Launch URL check skipped:', error));
+
+      void CapacitorApp.addListener('appUrlOpen', async (data) => {
+        if (data.url.includes('code=')) {
+          handleAuthDeepLink(data.url);
+        }
+      })
+        .then((handle) => {
+          appUrlOpenHandle = handle;
+        })
+        .catch((error) => console.warn('[App] Deep link listener setup failed:', error));
+    };
+
+    const boot = () => {
+      if (Capacitor.isNativePlatform()) {
+        void SplashScreen.hide().catch((error) => console.warn('[App] Native splash hide failed:', error));
+      }
+
+      const { savedOnboardingStatus, savedProfileData } = restoreLocalState();
+      setIsAppReady(true);
+      setupDeepLinks();
+
+      if (!Capacitor.isNativePlatform() && savedOnboardingStatus === OnboardingStep.COMPLETED) {
+        runLoadUserDataInBackground();
+      }
+
+      void initializeApp()
+        .then((init) => {
+          if (!isMounted) return;
+
+          if (!init.isReady) {
+            console.warn('[App] Background initialization did not complete; safe UI remains available');
+            return;
+          }
+
+          if (init.session?.access_token) {
+            void wakeUpBackend();
+          }
+
+          if (init.isReturningSubscriber) {
+            setHasVerifiedPaidAccess(true);
+
+            const profileSource: any = init.profile || savedProfileData || {};
+            const profileData: UserProfile = {
+              ...profileSource,
+              experience: profileSource.experience || 'Novice',
+              grow_mode: profileSource.grow_mode || 'Indoor',
+              goal: profileSource.goal || 'Maximize Yield',
+              space: profileSource.space || 'Medium',
+              isOnboarded: true,
+              streak: profileSource.streak || 0,
+              lastVisit: new Date().toISOString().split('T')[0],
+            };
+            setUserProfile(profileData);
+            localStorage.setItem(LS_PROFILE, JSON.stringify(profileData));
+            setOnboardingStatus(OnboardingStep.COMPLETED);
+            localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
+            runLoadUserDataInBackground();
+          }
+        })
+        .catch((error) => {
+          console.warn('[App] Background initialization failed; continuing with local state:', error);
+        });
+    };
+
     boot();
+
+    return () => {
+      isMounted = false;
+      if (appUrlOpenHandle) {
+        void appUrlOpenHandle.remove();
+      }
+    };
   }, []);
 
   const handleAuthDeepLink = async (urlStr: string) => {
@@ -185,6 +230,15 @@ const App: React.FC = () => {
     if (pendingTasks) setTasks(pendingTasks);
   };
 
+  const runLoadUserDataInBackground = () => {
+    if (hasLoadedUserData.current) return;
+    hasLoadedUserData.current = true;
+    void loadUserData().catch((error) => {
+      console.warn('[App] Background user data hydration failed:', error);
+      hasLoadedUserData.current = false;
+    });
+  };
+
   const handleAuthSuccess = async () => {
     setShowAuth(false);
     setShowPaywall(false);
@@ -201,7 +255,7 @@ const App: React.FC = () => {
       setShowTutorial(true);
     }
 
-    loadUserData();
+    runLoadUserDataInBackground();
   };
 
   const handleAddJournalEntry = async (entry: any, plantIdOverride?: string) => {
@@ -327,6 +381,7 @@ const App: React.FC = () => {
   };
 
   const handlePaywallPurchase = () => {
+    setHasVerifiedPaidAccess(true);
     setShowPaywall(false);
     setShowAuth(true);
   };
@@ -368,6 +423,14 @@ const App: React.FC = () => {
 
   if (showTutorial && onboardingStatus === OnboardingStep.COMPLETED) {
     return <GetStartedTutorial onComplete={completeTutorial} />;
+  }
+
+  if (onboardingStatus === OnboardingStep.COMPLETED && Capacitor.isNativePlatform() && !hasVerifiedPaidAccess) {
+    return (
+      <ErrorBoundary>
+        <Paywall onClose={() => { }} onPurchase={handlePaywallPurchase} onSkip={() => { }} />
+      </ErrorBoundary>
+    );
   }
 
   return (

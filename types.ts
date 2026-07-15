@@ -35,6 +35,7 @@ export interface Strain {
   name: string;
   type: 'Indica' | 'Sativa' | 'Hybrid';
   thc_level: string;
+  cbd_level?: string;
   most_common_terpene: string;
   description: string;
   imageUri?: string;     // URL or Base64 for custom strains
