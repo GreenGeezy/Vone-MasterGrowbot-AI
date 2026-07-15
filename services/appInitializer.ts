@@ -24,6 +24,25 @@ export interface AppInitState {
 
 const STABLE_ID_KEY = 'mg_rc_stable_id';
 
+export async function withTimeout<T>(
+  promise: PromiseLike<T>,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 /**
  * Get or create a STABLE anonymous ID for RevenueCat.
  * This ID persists across app restarts and anonymous auth refreshes.
@@ -52,13 +71,26 @@ async function getStableAnonymousId(): Promise<string> {
  */
 export async function initializeApp(): Promise<AppInitState> {
   // 1. Await existing session
-  let session = (await supabaseInit.auth.getSession()).data?.session;
+  let session = null;
+  try {
+    session = (await withTimeout(
+      supabaseInit.auth.getSession(),
+      3000,
+      '[AppInitializer] getSession'
+    )).data?.session;
+  } catch (e) {
+    console.warn('[AppInitializer] getSession did not finish before startup timeout:', e);
+  }
   let user = session?.user || null;
 
   // 2. If no session, sign in anonymously
   if (!session || !user) {
     try {
-      const { data: authData, error: authError } = await supabaseInit.auth.signInAnonymously();
+      const { data: authData, error: authError } = await withTimeout(
+        supabaseInit.auth.signInAnonymously(),
+        5000,
+        '[AppInitializer] anonymous sign-in'
+      );
       if (authError) {
         console.error('[AppInitializer] Anonymous sign-in failed:', authError);
         return { user: null, session: null, profile: null, isReady: false, isReturningSubscriber: false };
@@ -80,11 +112,15 @@ export async function initializeApp(): Promise<AppInitState> {
   // 4. Fetch or create profile using maybeSingle()
   let profile = null;
   try {
-    const { data: profileData, error: profileError } = await supabaseInit
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle();
+    const { data: profileData, error: profileError } = await withTimeout<any>(
+      supabaseInit
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle(),
+      4000,
+      '[AppInitializer] profile fetch'
+    );
 
     if (profileError) {
       console.warn('[AppInitializer] Profile fetch error:', profileError);
@@ -98,11 +134,15 @@ export async function initializeApp(): Promise<AppInitState> {
         id: user.id,
         created_at: new Date().toISOString(),
       };
-      const { data: inserted, error: insertError } = await supabaseInit
-        .from('profiles')
-        .insert(newProfile)
-        .select()
-        .maybeSingle();
+      const { data: inserted, error: insertError } = await withTimeout<any>(
+        supabaseInit
+          .from('profiles')
+          .insert(newProfile)
+          .select()
+          .maybeSingle(),
+        4000,
+        '[AppInitializer] profile create'
+      );
 
       if (insertError) {
         console.warn('[AppInitializer] Profile insert error:', insertError);
@@ -128,10 +168,18 @@ export async function initializeApp(): Promise<AppInitState> {
         // Use STABLE ID — never changes, even if Supabase anonymous user changes
         const stableAppUserId = await getStableAnonymousId();
 
-        await Purchases.configure({ apiKey, appUserID: stableAppUserId });
+        await withTimeout(
+          Purchases.configure({ apiKey, appUserID: stableAppUserId }),
+          5000,
+          '[AppInitializer] RevenueCat configure'
+        );
 
         // Check active access only; expired purchase history must not unlock the app.
-        const { customerInfo } = await Purchases.getCustomerInfo();
+        const { customerInfo } = await withTimeout(
+          Purchases.getCustomerInfo(),
+          5000,
+          '[AppInitializer] RevenueCat customer info'
+        );
         const hasActiveProEntitlement = Boolean(customerInfo?.entitlements?.active?.pro);
         const hasActiveSubscriptions = (customerInfo?.activeSubscriptions?.length || 0) > 0;
 

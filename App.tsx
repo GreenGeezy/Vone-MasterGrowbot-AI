@@ -18,7 +18,7 @@ import { SplashScreen } from '@capacitor/splash-screen';
 import { getPendingTasksForToday, toggleTaskCompletion, addNewTask, updateTaskProperties, deleteTask, deleteJournalEntry, deletePlant, loadGrowData, createPlantRecord, saveAppJournalEntry, saveDiagnosisReport } from './services/dbService';
 import ErrorBoundary from './components/ErrorBoundary';
 import { wakeUpBackend } from './services/geminiService';
-import { initializeApp } from './services/appInitializer';
+import { initializeApp, withTimeout } from './services/appInitializer';
 
 // --- LocalStorage Keys for State Persistence ---
 const LS_ONBOARDING_STATUS = 'mg_onboarding_status';
@@ -30,6 +30,7 @@ const App: React.FC = () => {
   // --- Global App Gate ---
   const [isAppReady, setIsAppReady] = useState(false);
   const [isReturningSubscriber, setIsReturningSubscriber] = useState(false);
+  const [hasVerifiedPaidAccess, setHasVerifiedPaidAccess] = useState(!Capacitor.isNativePlatform());
 
   // --- App State ---
   const [onboardingStatus, setOnboardingStatus] = useState(OnboardingStep.SPLASH);
@@ -41,17 +42,15 @@ const App: React.FC = () => {
   const [showAuth, setShowAuth] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const isAuthProcessing = useRef(false);
+  const hasLoadedUserData = useRef(false);
 
-  // --- Initialization: Hard App Gate ---
+  // --- Initialization: Local-first startup, backend/subscription verification second ---
   useEffect(() => {
-    const boot = async () => {
-      // Hide native splash screen
-      if (Capacitor.isNativePlatform()) {
-        await SplashScreen.hide();
-      }
+    let isMounted = true;
+    let appUrlOpenHandle: any;
 
-      // Restore persisted onboarding state BEFORE initializing
-      const savedOnboardingStatus = localStorage.getItem(LS_ONBOARDING_STATUS);
+    const restoreLocalState = () => {
+      const savedOnboardingStatus = localStorage.getItem(LS_ONBOARDING_STATUS) as OnboardingStep | null;
       const savedProfile = localStorage.getItem(LS_PROFILE);
       let savedProfileData: any = null;
 
@@ -62,65 +61,102 @@ const App: React.FC = () => {
         try {
           savedProfileData = JSON.parse(savedProfile);
           setUserProfile(savedProfileData);
-        } catch { /* ignore parse error */ }
-      }
-
-      // Run the centralized initializer (auth + profile + RevenueCat)
-      const init = await initializeApp();
-
-      // Wake backend ONLY after auth is ready (guarantees JWT exists)
-      if (init.isReady && init.session?.access_token) {
-        wakeUpBackend();
-      }
-
-      if (!init.isReady) {
-        console.error('[App] Initialization failed');
-        setIsAppReady(true);
-        return;
-      }
-
-      setIsReturningSubscriber(init.isReturningSubscriber);
-
-      if (init.isReturningSubscriber) {
-        // Returning subscriber: skip onboarding, go straight to app
-        const profileSource = init.profile || savedProfileData || {};
-        const profileData = {
-          ...profileSource,
-          experience: profileSource.experience || 'Novice',
-          grow_mode: profileSource.grow_mode || 'Indoor',
-          goal: profileSource.goal || 'Maximize Yield',
-          space: profileSource.space || 'Medium',
-          isOnboarded: true,
-          streak: profileSource.streak || 0,
-          lastVisit: new Date().toISOString().split('T')[0],
-        };
-        setUserProfile(profileData);
-        localStorage.setItem(LS_PROFILE, JSON.stringify(profileData));
-        setOnboardingStatus(OnboardingStep.COMPLETED);
-        localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
-        loadUserData();
-      }
-
-      // Deep link handling (native only)
-      if (Capacitor.isNativePlatform()) {
-        const launchUrl = await CapacitorApp.getLaunchUrl();
-        if (launchUrl?.url && launchUrl.url.includes('code=')) {
-          handleAuthDeepLink(launchUrl.url);
+        } catch {
+          console.warn('[App] Ignoring unreadable cached profile');
         }
-        CapacitorApp.addListener('appUrlOpen', async (data) => {
-          if (data.url.includes('code=')) {
-            handleAuthDeepLink(data.url);
-          }
-        });
       }
 
+      return { savedOnboardingStatus, savedProfileData };
+    };
+
+    const setupDeepLinks = () => {
+      if (!Capacitor.isNativePlatform()) return;
+
+      void withTimeout(
+        CapacitorApp.getLaunchUrl(),
+        2000,
+        '[App] launch URL check'
+      )
+        .then((launchUrl) => {
+          if (launchUrl?.url && launchUrl.url.includes('code=')) {
+            handleAuthDeepLink(launchUrl.url);
+          }
+        })
+        .catch((e) => console.warn('[App] Launch URL check skipped:', e));
+
+      void CapacitorApp.addListener('appUrlOpen', async (data) => {
+        if (data.url.includes('code=')) {
+          handleAuthDeepLink(data.url);
+        }
+      })
+        .then((handle) => {
+          appUrlOpenHandle = handle;
+        })
+        .catch((e) => console.warn('[App] Deep link listener setup failed:', e));
+    };
+
+    const boot = () => {
+      // Hide native splash screen immediately; do not hold UI on the native bridge.
+      if (Capacitor.isNativePlatform()) {
+        void SplashScreen.hide().catch((e) => console.warn('[App] Native splash hide failed:', e));
+      }
+
+      const { savedOnboardingStatus, savedProfileData } = restoreLocalState();
       setIsAppReady(true);
+      setupDeepLinks();
+
+      if (!Capacitor.isNativePlatform() && savedOnboardingStatus === OnboardingStep.COMPLETED) {
+        runLoadUserDataInBackground();
+      }
+
+      void initializeApp()
+        .then((init) => {
+          if (!isMounted) return;
+
+          if (!init.isReady) {
+            console.warn('[App] Background initialization did not complete; safe UI remains available');
+            return;
+          }
+
+          if (init.session?.access_token) {
+            void wakeUpBackend();
+          }
+
+          setIsReturningSubscriber(init.isReturningSubscriber);
+
+          if (init.isReturningSubscriber) {
+            setHasVerifiedPaidAccess(true);
+
+            const profileSource = init.profile || savedProfileData || {};
+            const profileData = {
+              ...profileSource,
+              experience: profileSource.experience || 'Novice',
+              grow_mode: profileSource.grow_mode || 'Indoor',
+              goal: profileSource.goal || 'Maximize Yield',
+              space: profileSource.space || 'Medium',
+              isOnboarded: true,
+              streak: profileSource.streak || 0,
+              lastVisit: new Date().toISOString().split('T')[0],
+            };
+            setUserProfile(profileData);
+            localStorage.setItem(LS_PROFILE, JSON.stringify(profileData));
+            setOnboardingStatus(OnboardingStep.COMPLETED);
+            localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
+            runLoadUserDataInBackground();
+          }
+        })
+        .catch((e) => {
+          console.warn('[App] Background initialization failed; continuing with local state:', e);
+        });
     };
 
     boot();
 
     return () => {
-      // Cleanup capacitor listeners if needed
+      isMounted = false;
+      if (appUrlOpenHandle) {
+        void appUrlOpenHandle.remove();
+      }
     };
   }, []);
 
@@ -177,6 +213,15 @@ const App: React.FC = () => {
     if (pendingTasks) setTasks(pendingTasks);
   };
 
+  const runLoadUserDataInBackground = () => {
+    if (hasLoadedUserData.current) return;
+    hasLoadedUserData.current = true;
+    void loadUserData().catch((e) => {
+      console.warn('[App] Background user data hydration failed:', e);
+      hasLoadedUserData.current = false;
+    });
+  };
+
   // --- AUTH SUCCESS (after purchase) ---
   // CRITICAL: This is the ONLY path from paywall → tutorial → main app
   const handleAuthSuccess = async () => {
@@ -202,7 +247,7 @@ const App: React.FC = () => {
     }
 
     // 5. Load user data
-    loadUserData();
+    runLoadUserDataInBackground();
   };
 
   const handleAddJournalEntry = async (entry: any, plantIdOverride?: string) => {
@@ -342,6 +387,7 @@ const App: React.FC = () => {
   // CRITICAL FIX: After purchase, go directly to auth screen
   // Do NOT go back to summary
   const handlePaywallPurchase = () => {
+    setHasVerifiedPaidAccess(true);
     setShowPaywall(false);
     setShowAuth(true);
   };
@@ -352,6 +398,7 @@ const App: React.FC = () => {
     if (init.isReady) {
       setIsReturningSubscriber(init.isReturningSubscriber);
       if (init.isReturningSubscriber) {
+        setHasVerifiedPaidAccess(true);
         const profileSource: any = init.profile || userProfile || {};
         const profileData: UserProfile = {
           ...profileSource,
@@ -367,7 +414,7 @@ const App: React.FC = () => {
         localStorage.setItem(LS_PROFILE, JSON.stringify(profileData));
         setOnboardingStatus(OnboardingStep.COMPLETED);
         localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
-        loadUserData();
+        runLoadUserDataInBackground();
       }
     }
   };
@@ -440,6 +487,20 @@ const App: React.FC = () => {
   if (showTutorial && onboardingStatus === OnboardingStep.COMPLETED) {
     return (
       <GetStartedTutorial onComplete={completeTutorial} />
+    );
+  }
+
+  // Native paid access is never trusted from local cache. If RevenueCat has not
+  // confirmed active access yet, keep the user on a safe paywall/restore path.
+  if (onboardingStatus === OnboardingStep.COMPLETED && Capacitor.isNativePlatform() && !hasVerifiedPaidAccess) {
+    return (
+      <ErrorBoundary>
+        <Paywall
+          onClose={() => {}}
+          onPurchase={handlePaywallPurchase}
+          onSkip={() => {}}
+        />
+      </ErrorBoundary>
     );
   }
 
