@@ -50,10 +50,6 @@ const App: React.FC = () => {
       const savedProfile = localStorage.getItem(LS_PROFILE);
       let savedProfileData: UserProfile | null = null;
 
-      if (savedOnboardingStatus) {
-        setOnboardingStatus(savedOnboardingStatus);
-      }
-
       if (savedProfile) {
         try {
           savedProfileData = JSON.parse(savedProfile);
@@ -61,6 +57,17 @@ const App: React.FC = () => {
         } catch (error) {
           console.warn('[App] Saved profile could not be parsed:', error);
         }
+      }
+
+      if (savedOnboardingStatus === OnboardingStep.SUMMARY && !savedProfileData) {
+        console.warn('[App] Cached onboarding summary is missing its profile; restarting onboarding safely');
+        localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.SPLASH);
+        setOnboardingStatus(OnboardingStep.SPLASH);
+        return { savedOnboardingStatus: OnboardingStep.SPLASH, savedProfileData };
+      }
+
+      if (savedOnboardingStatus) {
+        setOnboardingStatus(savedOnboardingStatus);
       }
 
       return { savedOnboardingStatus, savedProfileData };

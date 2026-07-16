@@ -13,8 +13,8 @@ android {
         minSdk 23
         targetSdk 35
         // Increment for each Google Play release.
-        versionCode 147
-        versionName "1.0.147"
+        versionCode 148
+        versionName "1.0.148"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
