@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, X, Camera, Image as ImageIcon, Sparkles, Sprout, ChevronRight } from 'lucide-react';
+import { Search, Plus, X, Camera, Sparkles, Sprout, ChevronRight, Leaf } from 'lucide-react';
 import { STRAIN_DATABASE } from '../data/strains';
 import { getCustomStrains, saveCustomStrain, uploadImage } from '../services/dbService';
 import { getStrainInsights } from '../services/geminiService';
@@ -7,6 +7,7 @@ import { Strain } from '../types';
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
 import sproutIcon from '../src/assets/images/sprout-icon.png';
 import purpleGrowRoom from '../src/assets/images/purple-grow-room.jpg';
+import { formatStrainValue, matchesStrainSearch } from '../utils/strainSearch';
 
 interface StrainSearchProps {
     onAddPlant: (strain: Strain) => void; // Callback to add to Garden
@@ -38,7 +39,7 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
     const filteredStrains = [
         ...(activeTab === 'All' ? STRAIN_DATABASE : []),
         ...customStrains
-    ].filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    ].filter(s => matchesStrainSearch(s, searchQuery));
 
     // --- ACTIONS ---
 
@@ -59,8 +60,9 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
         const strainToSave = {
             ...newStrain,
             imageUri: newStrainImage, // Save the base64 string directly for offline support
-            thc_level: 'Unknown',
-            most_common_terpene: 'Unknown'
+            thc_level: 'Not established',
+            cbd_level: 'Not established',
+            most_common_terpene: 'Not established'
         };
 
         saveCustomStrain(strainToSave);
@@ -86,8 +88,8 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
         const [imgSrc, setImgSrc] = useState(strain.imageUri || sproutIcon);
 
         return (
-            <div onClick={onClick} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-4 active:scale-[0.98] transition-all cursor-pointer">
-                <div className="w-16 h-16 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 relative">
+            <button type="button" onClick={onClick} className="w-full bg-white rounded-lg p-3 shadow-sm border border-gray-100 grid grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-3 active:scale-[0.99] transition-transform text-left">
+                <div className="w-14 h-14 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 relative">
                     <img
                         src={imgSrc}
                         onError={() => setImgSrc(sproutIcon)} // Fallback to icon
@@ -98,15 +100,16 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
                         <div className="absolute top-0 right-0 bg-blue-500 w-3 h-3 rounded-bl-lg"></div>
                     )}
                 </div>
-                <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                        <img src="/assets/sprout_icon.svg" className="w-6 h-6 object-contain" alt="Sprout Icon" />
-                        <h3 className="font-black text-gray-900 leading-tight">{strain.name}</h3>
+                <div className="min-w-0">
+                    <h3 className="font-black text-gray-900 leading-tight break-words">{strain.name}</h3>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">{strain.type}</p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-[11px] font-bold text-gray-700">
+                        <span><span className="text-gray-400">Est. THC</span> {formatStrainValue(strain.thc_level)}</span>
+                        <span><span className="text-gray-400">Est. CBD</span> {formatStrainValue(strain.cbd_level)}</span>
                     </div>
-                    <p className="text-xs font-bold text-gray-400 uppercase mt-0.5">{strain.type} • {strain.thc_level !== 'Unknown' ? strain.thc_level : 'Custom'}</p>
                 </div>
                 <ChevronRight size={20} className="text-gray-300" />
-            </div>
+            </button>
         );
     };
 
@@ -129,43 +132,51 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
         };
 
         return (
-            <div className="fixed inset-0 z-[70] bg-white flex flex-col animate-in slide-in-from-right">
-                <div className="relative h-72">
+            <div className="fixed inset-0 z-[70] bg-white overflow-y-auto overscroll-contain animate-in slide-in-from-right pb-[calc(env(safe-area-inset-bottom)+2rem)]">
+                <div className="relative h-64">
                     <img
                         src={purpleGrowRoom}
                         className="w-full h-full object-cover"
                         alt="Hero"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                    <button onClick={onClose} className="absolute top-12 right-6 p-2 bg-black/20 backdrop-blur-md rounded-full text-white"><X size={20} /></button>
+                    <button aria-label="Back to strain library" onClick={onClose} className="absolute top-[calc(env(safe-area-inset-top)+1rem)] right-5 p-2 bg-black/50 rounded-full text-white"><X size={20} /></button>
                     <div className="absolute bottom-0 inset-x-0 h-32 bg-gradient-to-t from-black/80 to-transparent" />
-                    <div className="absolute bottom-6 left-6 text-white">
+                    <div className="absolute bottom-6 left-5 right-5 text-white">
                         <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">{strain.type}</span>
-                        <h1 className="text-4xl font-black mt-2 leading-none">{strain.name}</h1>
+                        <h1 className="text-3xl font-black mt-2 leading-tight break-words">{strain.name}</h1>
                     </div>
                 </div>
 
-                <div className="flex-1 p-6 overflow-y-auto">
-                    <div className="flex gap-4 mb-8">
-                        <div className="flex-1 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-center">
-                            <div className="text-[10px] font-bold text-gray-400 uppercase">THC Content</div>
-                            <div className="text-xl font-black text-gray-900 mt-1">{strain.thc_level || 'N/A'}</div>
+                <div className="p-5 max-w-2xl mx-auto">
+                    <div className="grid grid-cols-2 border-y border-gray-100 py-4 mb-6">
+                        <div className="pr-4 border-r border-gray-100 text-center min-w-0">
+                            <div className="text-[10px] font-bold text-gray-400 uppercase">Estimated THC</div>
+                            <div className="text-xl font-black text-gray-900 mt-1 break-words">{formatStrainValue(strain.thc_level)}</div>
                         </div>
-                        <div className="flex-1 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-center">
-                            <div className="text-[10px] font-bold text-gray-400 uppercase">Terpene</div>
-                            <div className="text-xl font-black text-gray-900 mt-1 truncate">{strain.most_common_terpene || 'Mystery'}</div>
+                        <div className="pl-4 text-center min-w-0">
+                            <div className="text-[10px] font-bold text-gray-400 uppercase">Estimated CBD</div>
+                            <div className="text-xl font-black text-gray-900 mt-1 break-words">{formatStrainValue(strain.cbd_level)}</div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-start gap-3 mb-6">
+                        <Leaf size={18} className="text-orange-500 mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                            <div className="text-[10px] font-bold text-gray-400 uppercase">Primary Terpene</div>
+                            <div className="font-black text-gray-900 break-words">{formatStrainValue(strain.most_common_terpene)}</div>
                         </div>
                     </div>
 
                     <div className="mb-8">
-                        <h3 className="font-bold text-gray-900 mb-2">Description</h3>
-                        <p className="text-gray-500 leading-relaxed text-sm">
-                            {strain.description || "No description provided for this strain."}
+                        <h3 className="font-black text-gray-900 mb-2">About This Strain</h3>
+                        <p className="text-gray-600 leading-relaxed text-sm whitespace-pre-wrap break-words">
+                            {formatStrainValue(strain.description)}
                         </p>
                     </div>
 
                     {/* AI INSIGHTS SECTION */}
-                    <div className="mb-24">
+                    <div className="mb-8">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="font-bold text-gray-900 flex items-center gap-2">
                                 <Sparkles size={18} className="text-purple-500" /> AI Strain Intelligence
@@ -197,16 +208,13 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
                             </div>
                         )}
                     </div>
-                </div>
-
-                {/* ADD TO GARDEN FAB */}
-                <div className="absolute bottom-8 right-6 left-6">
+                    {/* ADD TO GARDEN */}
                     <button
                         onClick={() => {
                             onAdd(strain);
                             onClose();
                         }}
-                        className="w-full py-4 bg-green-600 text-white rounded-2xl font-black text-lg shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-2"
+                        className="w-full py-4 bg-green-600 text-white rounded-xl font-black text-lg shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-2"
                     >
                         <Plus size={24} /> Add to Garden
                     </button>
@@ -216,7 +224,7 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
     };
 
     return (
-        <div className="bg-surface min-h-screen pb-24 pt-12 px-6 flex flex-col font-sans">
+        <div className="bg-surface min-h-screen pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[calc(3rem+env(safe-area-inset-top))] px-5 flex flex-col font-sans overflow-x-hidden">
 
             {/* 1. Header */}
             <div className="mb-6">
@@ -243,7 +251,8 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
             </div>
 
             {/* 3. List */}
-            <div className="flex-1 space-y-3 overflow-y-auto -mx-6 px-6 pb-20">
+            <div className="flex-1 space-y-3 overflow-y-auto -mx-5 px-5 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+                <p className="text-xs font-bold text-gray-400">{filteredStrains.length} strains</p>
                 {customStrains.length > 0 && searchQuery === '' && (
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2 mb-1">Your Genetics</h3>
                 )}
@@ -263,8 +272,8 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
 
             {/* --- ADD MODAL --- */}
             {showAddModal && (
-                <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
-                    <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-in zoom-in-95">
+                <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-5 pt-[calc(1.25rem+env(safe-area-inset-top))] pb-[calc(1.25rem+env(safe-area-inset-bottom))] animate-in fade-in overflow-y-auto">
+                    <div className="bg-white w-full max-w-sm rounded-lg p-5 shadow-2xl animate-in zoom-in-95 max-h-full overflow-y-auto">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-xl font-black text-gray-900">Add Genetics</h2>
                             <button onClick={() => setShowAddModal(false)} className="p-2 bg-gray-100 rounded-full"><X size={20} /></button>

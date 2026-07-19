@@ -5,6 +5,7 @@ import { Sun, CheckCircle2, Circle, Plus, Search, X, Trash2 } from 'lucide-react
 import { getDailyInsight } from '../services/geminiService';
 import { STRAIN_DATABASE } from '../data/strains'; // Import Database
 import StrainCard from '../components/StrainCard'; // Import StrainCard
+import { matchesStrainSearch } from '../utils/strainSearch';
 
 const Home: React.FC<any> = ({ plants, tasks, onToggleTask, onEditTask, onDeleteTask, onDeletePlant, onNavigateToPlant, onAddPlant }) => {
   const pendingTasks = tasks.filter((t: any) => !t.isCompleted);
@@ -20,7 +21,7 @@ const Home: React.FC<any> = ({ plants, tasks, onToggleTask, onEditTask, onDelete
   const [showStrainSearch, setShowStrainSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStrain, setSelectedStrain] = useState<any | null>(null); // New State for Details View
-  const filteredStrains = STRAIN_DATABASE.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredStrains = STRAIN_DATABASE.filter(strain => matchesStrainSearch(strain, searchQuery));
 
 
   return (

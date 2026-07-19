@@ -4,6 +4,7 @@ import { diagnosePlant, ExtendedDiagnosisResult } from '../services/geminiServic
 import { Plant, UserProfile } from '../types';
 import Growbot from '../components/Growbot';
 import { STRAIN_DATABASE } from '../data/strains';
+import { matchesStrainSearch } from '../utils/strainSearch';
 import { Share } from '@capacitor/share';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
@@ -225,7 +226,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     }
   };
 
-  const filteredStrains = STRAIN_DATABASE.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredStrains = STRAIN_DATABASE.filter(strain => matchesStrainSearch(strain, searchQuery));
 
   // 1. Loading State
   if (loading) return (
