@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "validate:strains": "node scripts/validate-strains.mjs"
   },
   "dependencies": {
     "@capacitor-community/in-app-review": "^6.0.0",

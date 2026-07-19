@@ -7,6 +7,7 @@ import { STRAIN_DATABASE } from '../data/strains';
 import { Share } from '@capacitor/share';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { InAppReview } from '@capacitor-community/in-app-review';
+import { matchesStrainSearch } from '../utils/strainSearch';
 import { formatMetricDisplay, formatDiagnosisReport } from '../utils/diagnosisFormatter';
 
 /**
@@ -223,7 +224,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     }
   };
 
-  const filteredStrains = STRAIN_DATABASE.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredStrains = STRAIN_DATABASE.filter(s => matchesStrainSearch(s, searchQuery));
 
   // 1. Loading State
   if (loading) return (

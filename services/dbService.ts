@@ -1,7 +1,8 @@
 
 import { supabase } from './supabaseClient';
-import { GrowTask, Plant } from '../types';
+import { GrowTask, Plant, Strain } from '../types';
 import { STRAIN_DATABASE } from '../data/strains';
+import { formatStrainValue } from '../utils/strainSearch';
 
 // --- Local Storage Helpers ---
 
@@ -579,13 +580,31 @@ const createLocalSession = (title: string): ChatSession => {
 
 // --- Custom Strains System ---
 
-export const getCustomStrains = (): any[] => {
-  return getLocal(STORAGE_KEYS.CUSTOM_STRAINS);
+const normalizeCustomStrain = (
+  strain: Partial<Strain> & Record<string, any>,
+  fallbackId = `custom_${Date.now()}`,
+): Strain => ({
+  ...strain,
+  id: strain.id || fallbackId,
+  name: strain.name?.trim() || 'Unnamed strain',
+  type: ['Indica', 'Sativa', 'Hybrid'].includes(strain.type || '') ? strain.type as Strain['type'] : 'Hybrid',
+  thc_level: formatStrainValue(strain.thc_level),
+  cbd_level: formatStrainValue(strain.cbd_level),
+  most_common_terpene: formatStrainValue(strain.most_common_terpene),
+  description: formatStrainValue(strain.description),
+  userCreated: true,
+});
+
+export const getCustomStrains = (): Strain[] => {
+  return getLocal(STORAGE_KEYS.CUSTOM_STRAINS).map((strain: Partial<Strain>, index: number) => {
+    const normalizedName = strain.name?.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_') || 'unnamed';
+    return normalizeCustomStrain(strain, `custom_legacy_${index}_${normalizedName}`);
+  });
 };
 
-export const saveCustomStrain = (strain: any): any => {
+export const saveCustomStrain = (strain: Partial<Strain>): Strain => {
   const strains = getLocal(STORAGE_KEYS.CUSTOM_STRAINS);
-  const newStrain = { ...strain, id: `custom_${Date.now()}`, userCreated: true };
+  const newStrain = normalizeCustomStrain({ ...strain, id: `custom_${Date.now()}` });
   strains.unshift(newStrain); // Add to top
   setLocal(STORAGE_KEYS.CUSTOM_STRAINS, strains);
   return newStrain;
