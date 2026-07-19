@@ -705,7 +705,7 @@ export const deleteUserData = async (): Promise<boolean> => {
   // 2. Delete from Supabase (if authenticated)
   if (session?.user?.id) {
     const uid = session.user.id;
-    const cleanupSteps: Array<[string, () => Promise<any>]> = [
+    const cleanupSteps: Array<[string, () => PromiseLike<any>]> = [
       ['profiles', () => supabase.from('profiles').delete().eq('id', uid)],
       ['grow_logs', () => supabase.from('grow_logs').delete().eq('user_id', uid)],
       ['journal_logs', () => supabase.from('journal_logs').delete().eq('user_id', uid)],

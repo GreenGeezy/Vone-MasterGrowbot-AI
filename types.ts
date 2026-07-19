@@ -169,6 +169,7 @@ export interface ChatMessage {
   content: string;            // The message text
   timestamp: number;
   isVoice?: boolean;          // Was this spoken?
+  attachmentUrl?: string;
 }
 
 export interface UserProfile {

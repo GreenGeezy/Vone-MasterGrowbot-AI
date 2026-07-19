@@ -144,10 +144,24 @@ function buildMessages(body: Record<string, unknown>): ChatMessage[] {
   return messages;
 }
 
+function bearerTokenHasSubject(authHeader: string): boolean {
+  try {
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    const payload = token.split(".")[1];
+    if (!payload) return false;
+
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = JSON.parse(atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")));
+    return typeof decoded?.sub === "string" && decoded.sub.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 async function enforceRateLimit(req: Request) {
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return;
+    if (!authHeader || !bearerTokenHasSubject(authHeader)) return;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";

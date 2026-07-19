@@ -61,6 +61,20 @@ function hasActivePaidAccess(customerInfo: any): boolean {
   return hasProEntitlement || hasSubscriptions;
 }
 
+async function waitForPurchasesConfiguration(Purchases: any, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const { isConfigured } = await Purchases.isConfigured();
+      if (isConfigured) return;
+    } catch {
+      // The background initializer may still be loading the native plugin.
+    }
+    await new Promise(resolve => setTimeout(resolve, 150));
+  }
+  throw new Error('Subscription service is still starting. Please try again.');
+}
+
 function parsePackagePrice(pkg?: PurchasesPackage): number | null {
   if (!pkg) return null;
   const product = pkg.product as any;
@@ -77,7 +91,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
   const [loading, setLoading] = useState(true);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [trialUsed, setTrialUsed] = useState(false);
+  const [trialEligibleProductIds, setTrialEligibleProductIds] = useState<string[]>([]);
   const [testimonialIndex, setTestimonialIndex] = useState(0);
 
   useEffect(() => {
@@ -104,6 +118,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       }
 
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
+      await waitForPurchasesConfiguration(Purchases);
       await Purchases.invalidateCustomerInfoCache();
 
       const timeoutPromise = new Promise((_, reject) =>
@@ -116,11 +131,22 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         const pkgs = offerings.current.availablePackages;
         setPackages(pkgs);
         const annual = pkgs.find((p: any) => p.packageType === 'ANNUAL');
-        setSelectedPkgIdentifier(annual ? annual.identifier : pkgs[0].identifier);
+        const defaultPkg = annual || pkgs[0];
+        setSelectedPkgIdentifier(defaultPkg.identifier);
 
-        const { customerInfo } = await Purchases.getCustomerInfo();
-        const hasEverTrialed = !!customerInfo?.originalPurchaseDate;
-        setTrialUsed(hasEverTrialed);
+        try {
+          const freeTrialProductIds = pkgs
+            .filter((pkg: any) => pkg.product?.introPrice?.price === 0)
+            .map((pkg: any) => pkg.product.identifier);
+          const eligibility = await Purchases.checkTrialOrIntroductoryPriceEligibility({
+            productIdentifiers: freeTrialProductIds,
+          });
+          setTrialEligibleProductIds(
+            freeTrialProductIds.filter((productId: string) => eligibility[productId]?.status === 2)
+          );
+        } catch {
+          setTrialEligibleProductIds([]);
+        }
       } else {
         setError('No subscription plans found at this time.');
       }
@@ -218,6 +244,9 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
   };
 
   const selectedPkg = packages.find(p => p.identifier === selectedPkgIdentifier);
+  const trialEligible = Boolean(
+    selectedPkg && trialEligibleProductIds.includes(selectedPkg.product.identifier)
+  );
   const annualPkg = packages.find((p: any) => p.packageType === 'ANNUAL');
   const monthlyPkg = packages.find((p: any) => p.packageType === 'MONTHLY');
 
@@ -248,10 +277,10 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     let period = 'month';
     if (selectedPkg.packageType === 'WEEKLY') period = 'week';
     if (selectedPkg.packageType === 'ANNUAL') period = 'year';
-    if (trialUsed) {
-      return `Auto-renews at ${price}/${period} unless canceled.`;
+    if (trialEligible) {
+      return `Free trial, then ${price}/${period} unless canceled.`;
     }
-    return `3-day free trial, then ${price}/${period} unless canceled.`;
+    return `Auto-renews at ${price}/${period} unless canceled.`;
   };
 
   const getPlanMeta = (pkg: any) => {
@@ -455,10 +484,10 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
             <span className="animate-pulse">{error}</span>
           ) : isPurchasing ? (
             <span className="animate-pulse">Processing...</span>
-          ) : trialUsed ? (
-            <>Subscribe Now <ArrowRight strokeWidth={3} size={20} /></>
+          ) : trialEligible ? (
+            <>Start Free Trial <ArrowRight strokeWidth={3} size={20} /></>
           ) : (
-            <>Start 3-Day Free Trial <ArrowRight strokeWidth={3} size={20} /></>
+            <>Subscribe Now <ArrowRight strokeWidth={3} size={20} /></>
           )}
         </button>
 
