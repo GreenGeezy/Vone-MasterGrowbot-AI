@@ -20,10 +20,7 @@ workflows:
     scripts:
       - name: Install dependencies
         script: |
-          # CRITICAL: Force clean install on the server
-          rm -rf node_modules package-lock.json
-          # CRITICAL: Use legacy-peer-deps to fix React 19 conflicts
-          npm install --legacy-peer-deps
+          npm ci --legacy-peer-deps
       
       - name: Build Web Assets
         script: |
