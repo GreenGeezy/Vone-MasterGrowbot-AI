@@ -70,6 +70,20 @@ function packageHasFreeTrial(pkg: PurchasesPackage | any): boolean {
   return googlePlayTrial || appStoreTrial;
 }
 
+async function waitForPurchasesConfiguration(Purchases: any, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const { isConfigured } = await Purchases.isConfigured();
+      if (isConfigured) return;
+    } catch {
+      // The background initializer may still be loading the native plugin.
+    }
+    await new Promise(resolve => setTimeout(resolve, 150));
+  }
+  throw new Error('Subscription service is still starting. Please try again.');
+}
+
 function parsePrice(priceString?: string): number | null {
   if (!priceString) return null;
   const parsed = Number(priceString.replace(/[^0-9.]/g, ''));
@@ -120,6 +134,7 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
       }
 
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
+      await waitForPurchasesConfiguration(Purchases);
       await Purchases.invalidateCustomerInfoCache();
 
       const timeoutPromise = new Promise((_, reject) =>
