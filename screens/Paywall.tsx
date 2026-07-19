@@ -60,6 +60,16 @@ function hasVerifiedSubscription(customerInfo: any): boolean {
   return hasProEntitlement || hasActiveSubscription;
 }
 
+function packageHasFreeTrial(pkg: PurchasesPackage | any): boolean {
+  const product = pkg?.product;
+  const googlePlayTrial = Boolean(
+    product?.defaultOption?.freePhase ||
+    product?.subscriptionOptions?.some((option: any) => option?.freePhase)
+  );
+  const appStoreTrial = product?.introPrice?.price === 0;
+  return googlePlayTrial || appStoreTrial;
+}
+
 function parsePrice(priceString?: string): number | null {
   if (!priceString) return null;
   const parsed = Number(priceString.replace(/[^0-9.]/g, ''));
@@ -84,7 +94,6 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
   const [loading, setLoading] = useState(true);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [trialUsed, setTrialUsed] = useState(false);
   const [testimonialIndex, setTestimonialIndex] = useState(0);
 
   useEffect(() => {
@@ -124,8 +133,6 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
         const annual = pkgs.find((p: any) => isAnnualPackage(p));
         setSelectedPkgIdentifier(annual ? annual.identifier : pkgs[0].identifier);
 
-        const { customerInfo } = await Purchases.getCustomerInfo();
-        setTrialUsed(!!customerInfo?.originalPurchaseDate);
       } else {
         setError('No subscription plans found at this time.');
       }
@@ -228,6 +235,7 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
   };
 
   const selectedPkg = packages.find(p => p.identifier === selectedPkgIdentifier);
+  const hasFreeTrial = packageHasFreeTrial(selectedPkg);
   const monthlyPkg = packages.find(p => isMonthlyPackage(p));
 
   const getDisplayPrice = (pkg: PurchasesPackage | any) => {
@@ -250,10 +258,10 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
     if (isWeeklyPackage(selectedPkg)) period = 'week';
     if (isAnnualPackage(selectedPkg)) period = 'year';
     const priceWithPeriod = isAnnualPackage(selectedPkg) && !price ? ANNUAL_FALLBACK_PRICE_WITH_PERIOD : `${price}/${period}`;
-    if (trialUsed) {
-      return `Auto-renews at ${priceWithPeriod} unless canceled.`;
+    if (hasFreeTrial) {
+      return `Free trial, then ${priceWithPeriod} unless canceled.`;
     }
-    return `3-day free trial, then ${priceWithPeriod} unless canceled.`;
+    return `Auto-renews at ${priceWithPeriod} unless canceled.`;
   };
 
   const getPlanMeta = (pkg: PurchasesPackage | any) => {
@@ -445,10 +453,10 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
             <span className="animate-pulse">{error}</span>
           ) : isPurchasing ? (
             <span className="animate-pulse">Processing...</span>
-          ) : trialUsed ? (
-            <>Subscribe Now <ArrowRight strokeWidth={3} size={20} /></>
+          ) : hasFreeTrial ? (
+            <>Start Free Trial <ArrowRight strokeWidth={3} size={20} /></>
           ) : (
-            <>Start 3-Day Free Trial <ArrowRight strokeWidth={3} size={20} /></>
+            <>Subscribe Now <ArrowRight strokeWidth={3} size={20} /></>
           )}
         </button>
 

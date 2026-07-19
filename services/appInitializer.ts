@@ -115,7 +115,7 @@ export async function initializeApp(): Promise<AppInitState> {
       const { data: inserted, error: insertError } = await withTimeout<any>(
         supabaseInit
           .from('profiles')
-          .upsert({ id: user.id, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+          .upsert({ id: user.id }, { onConflict: 'id' })
           .select()
           .maybeSingle(),
         4000,
