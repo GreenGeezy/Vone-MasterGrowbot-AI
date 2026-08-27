@@ -1,17 +1,23 @@
 /// <reference lib="deno.ns" />
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  buildMessages,
+  type ChatMessage,
+  modelListForMode,
+  RequestValidationError,
+  runModelFallback,
+  validateRequestBody,
+} from "./core.ts";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const REFERER = "https://mastergrowbot.com";
 const TITLE = "MasterGrowbot AI";
 
-const SYSTEM_MESSAGE =
-  "You are MasterGrowbot AI, a legal cannabis cultivation assistant. Provide practical, careful, structured plant-health guidance. Do not claim certainty from images. Recommend human verification for severe or high-risk issues.";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Expose-Headers": "x-mastergrowbot-model",
 };
 
 class FunctionError extends Error {
@@ -22,16 +28,6 @@ class FunctionError extends Error {
     this.status = status;
   }
 }
-
-type ChatMessage = {
-  role: "system" | "user" | "assistant";
-  content:
-    | string
-    | Array<
-      | { type: "text"; text: string }
-      | { type: "image_url"; image_url: { url: string } }
-    >;
-};
 
 type OpenRouterChoice = {
   message?: {
@@ -44,20 +40,11 @@ type OpenRouterResponse = {
   error?: { message?: string; code?: string | number };
 };
 
-function jsonResponse(payload: Record<string, unknown>, status = 200) {
+function jsonResponse(payload: Record<string, unknown>, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeaders, ...headers, "Content-Type": "application/json" },
   });
-}
-
-function isImageMimeType(mimeType?: string) {
-  return !mimeType || mimeType.toLowerCase().startsWith("image/");
-}
-
-function toImageDataUrl(image: string, mimeType = "image/jpeg") {
-  if (image.startsWith("data:")) return image;
-  return `data:${mimeType};base64,${image}`;
 }
 
 function extractText(payload: OpenRouterResponse) {
@@ -72,76 +59,13 @@ function extractText(payload: OpenRouterResponse) {
   return "";
 }
 
-function sanitizeHistory(history: unknown): ChatMessage[] {
-  if (!Array.isArray(history)) return [];
 
-  const mapped = history
-    .filter((message) =>
-      message &&
-      typeof message === "object" &&
-      typeof (message as { content?: unknown }).content === "string"
-    )
-    .map((message) => {
-      const role = (message as { role?: string }).role === "assistant" ? "assistant" : "user";
-      return {
-        role,
-        content: (message as { content: string }).content,
-      } satisfies ChatMessage;
-    });
-
-  while (mapped.length > 0 && mapped[0].role !== "user") mapped.shift();
-  return mapped;
-}
-
-function modelListForMode(mode: string) {
-  const diagnosisModel =
-    Deno.env.get("OPENROUTER_MODEL_DIAGNOSIS") || "google/gemini-3.1-flash-lite";
-  const insightModel =
-    Deno.env.get("OPENROUTER_MODEL_INSIGHT") || "google/gemini-2.5-flash-lite";
-  const fallbackModel =
-    Deno.env.get("OPENROUTER_FALLBACK_MODEL") || "google/gemini-3.1-flash-lite";
-  const emergencyModel =
-    Deno.env.get("OPENROUTER_EMERGENCY_FREE_MODEL") || "openrouter/free";
-
-  const primary = mode === "diagnosis" ? diagnosisModel : insightModel;
-  return Array.from(new Set([primary, fallbackModel, emergencyModel].filter(Boolean)));
-}
-
-function buildMessages(body: Record<string, unknown>): ChatMessage[] {
-  const mode = String(body.mode || "");
-  const prompt = typeof body.prompt === "string" ? body.prompt : "";
-  const image = typeof body.image === "string" ? body.image : "";
-  const fileData = typeof body.fileData === "string" ? body.fileData : "";
-  const mimeType = typeof body.mimeType === "string" ? body.mimeType : "image/jpeg";
-
-  const messages: ChatMessage[] = [{ role: "system", content: SYSTEM_MESSAGE }];
-
-  if (mode === "chat") {
-    messages.push(...sanitizeHistory(body.history));
+function statusOf(error: unknown) {
+  if (error instanceof FunctionError || error instanceof RequestValidationError) return error.status;
+  if (error && typeof error === "object" && typeof (error as { status?: unknown }).status === "number") {
+    return (error as { status: number }).status;
   }
-
-  const imagePayload = image || (fileData && isImageMimeType(mimeType) ? fileData : "");
-  if ((mode === "diagnosis" || mode === "chat") && imagePayload) {
-    messages.push({
-      role: "user",
-      content: [
-        { type: "text", text: prompt || "Analyze this plant image." },
-        { type: "image_url", image_url: { url: toImageDataUrl(imagePayload, mimeType) } },
-      ],
-    });
-    return messages;
-  }
-
-  if (fileData && !isImageMimeType(mimeType)) {
-    messages.push({
-      role: "user",
-      content: `${prompt}\n\nAttached file data:\n${fileData}`,
-    });
-    return messages;
-  }
-
-  messages.push({ role: "user", content: prompt });
-  return messages;
+  return 500;
 }
 
 function bearerTokenHasSubject(authHeader: string): boolean {
@@ -251,23 +175,18 @@ async function generateWithFallback(body: Record<string, unknown>) {
   const mode = String(body.mode || "insight");
   const maxTokens = mode === "diagnosis" ? 1400 : 900;
   const messages = buildMessages(body);
-  const models = modelListForMode(mode);
+  const emergencyModel = Deno.env.get("OPENROUTER_EMERGENCY_FREE_MODEL") || "openrouter/free";
+  const models = modelListForMode(mode, emergencyModel);
 
-  let lastError: unknown;
-  for (const [index, model] of models.entries()) {
+  return await runModelFallback(models, async (model, index) => {
     try {
       console.log("OpenRouter attempt", { mode, model, attempt: index + 1 });
       return await callOpenRouter(apiKey, model, messages, maxTokens);
     } catch (error) {
-      lastError = error;
-      const status = error instanceof FunctionError ? error.status : 500;
-      console.warn("OpenRouter attempt failed", { mode, model, status, attempt: index + 1 });
-      if (status === 401 || status === 402) break;
+      console.warn("OpenRouter attempt failed", { mode, model, status: statusOf(error), attempt: index + 1 });
+      throw error;
     }
-  }
-
-  if (lastError instanceof FunctionError) throw lastError;
-  throw new FunctionError("OpenRouter request failed", 500);
+  }, statusOf);
 }
 
 Deno.serve(async (req) => {
@@ -287,27 +206,18 @@ Deno.serve(async (req) => {
     }
 
     const mode = typeof body.mode === "string" ? body.mode : "";
-    const prompt = typeof body.prompt === "string" ? body.prompt : "";
-    const image = typeof body.image === "string" ? body.image : "";
-    const fileData = typeof body.fileData === "string" ? body.fileData : "";
 
     if (mode === "wakeup") {
       return jsonResponse({ message: "Backend awake", result: "Ready" });
     }
 
-    if (!prompt && !image && !fileData) {
-      return jsonResponse({ error: "Missing required fields: prompt or image" }, 400);
-    }
-
-    if (!["diagnosis", "insight", "chat", "voice"].includes(mode)) {
-      return jsonResponse({ error: `Invalid mode '${mode}' for gemini-v3` }, 400);
-    }
+    validateRequestBody(body);
 
     const normalizedBody = { ...body, mode: mode === "voice" ? "chat" : mode };
-    const result = await generateWithFallback(normalizedBody);
-    return jsonResponse({ result });
+    const generated = await generateWithFallback(normalizedBody);
+    return jsonResponse({ result: generated.result }, 200, { "X-MasterGrowbot-Model": generated.model });
   } catch (error) {
-    const status = error instanceof FunctionError ? error.status : 500;
+    const status = statusOf(error);
     const message = error instanceof Error ? error.message : "Unknown error occurred";
     console.error("gemini-v3 execution error", { status });
 
