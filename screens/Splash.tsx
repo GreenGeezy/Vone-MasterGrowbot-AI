@@ -4,9 +4,12 @@ import { ArrowRight, ShieldCheck, TrendingUp } from 'lucide-react';
 
 interface SplashProps {
   onGetStarted: () => void;
+  onRestorePurchases: () => void;
+  isRestoring?: boolean;
+  restoreMessage?: string | null;
 }
 
-const Splash: React.FC<SplashProps> = ({ onGetStarted }) => {
+const Splash: React.FC<SplashProps> = ({ onGetStarted, onRestorePurchases, isRestoring = false, restoreMessage }) => {
   return (
     <div className="h-screen bg-surface text-text-main relative overflow-hidden flex flex-col">
       {/* Light Mode Gradients */}
@@ -70,6 +73,15 @@ const Splash: React.FC<SplashProps> = ({ onGetStarted }) => {
             Start My Grow <ArrowRight size={24} />
           </span>
         </button>
+        <button
+          type="button"
+          onClick={onRestorePurchases}
+          disabled={isRestoring}
+          className="w-full mt-3 py-3 text-sm font-black text-primary disabled:opacity-50"
+        >
+          {isRestoring ? 'Checking Google Play…' : 'Already subscribed? Restore Purchases'}
+        </button>
+        {restoreMessage && <p role="status" className="text-center text-xs text-text-sub mt-1">{restoreMessage}</p>}
         <p className="text-center text-[10px] text-text-sub mt-4 font-medium">
           Secure • Private • AI-Powered
         </p>

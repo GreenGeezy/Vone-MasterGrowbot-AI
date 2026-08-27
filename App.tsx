@@ -21,9 +21,10 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 import { getDailyInsight, wakeUpBackend } from './services/geminiService';
 import { initializeApp, withTimeout } from './services/appInitializer';
+import { restoreRevenueCatPurchases } from './services/revenueCatService';
+import { supabase, updateOnboardingProfile } from './services/supabaseClient';
+import { LS_ONBOARDING_STATUS, LS_PROFILE, readLocalStartupState } from './services/startupState';
 
-const LS_ONBOARDING_STATUS = 'mg_onboarding_status';
-const LS_PROFILE = 'mastergrowbot_profile';
 const LS_LAST_VISIT = 'mastergrowbot_last_visit';
 const LS_STREAK = 'mastergrowbot_streak';
 
@@ -38,6 +39,8 @@ const App: React.FC = () => {
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [isRestoringPurchases, setIsRestoringPurchases] = useState(false);
+  const [restoreMessage, setRestoreMessage] = useState<string | null>(null);
   const isAuthProcessing = useRef(false);
   const hasLoadedUserData = useRef(false);
 
@@ -46,31 +49,10 @@ const App: React.FC = () => {
     let appUrlOpenHandle: any;
 
     const restoreLocalState = () => {
-      const savedOnboardingStatus = localStorage.getItem(LS_ONBOARDING_STATUS) as OnboardingStep | null;
-      const savedProfile = localStorage.getItem(LS_PROFILE);
-      let savedProfileData: UserProfile | null = null;
-
-      if (savedProfile) {
-        try {
-          savedProfileData = JSON.parse(savedProfile);
-          setUserProfile(savedProfileData);
-        } catch (error) {
-          console.warn('[App] Saved profile could not be parsed:', error);
-        }
-      }
-
-      if (savedOnboardingStatus === OnboardingStep.SUMMARY && !savedProfileData) {
-        console.warn('[App] Cached onboarding summary is missing its profile; restarting onboarding safely');
-        localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.SPLASH);
-        setOnboardingStatus(OnboardingStep.SPLASH);
-        return { savedOnboardingStatus: OnboardingStep.SPLASH, savedProfileData };
-      }
-
-      if (savedOnboardingStatus) {
-        setOnboardingStatus(savedOnboardingStatus);
-      }
-
-      return { savedOnboardingStatus, savedProfileData };
+      const local = readLocalStartupState(localStorage);
+      if (local.profile) setUserProfile(local.profile);
+      setOnboardingStatus(local.onboardingStatus);
+      return { savedOnboardingStatus: local.onboardingStatus, savedProfileData: local.profile };
     };
 
     const setupDeepLinks = () => {
@@ -162,7 +144,6 @@ const App: React.FC = () => {
   }, []);
 
   const handleAuthDeepLink = async (urlStr: string) => {
-    const { supabase } = await import('./services/supabaseClient');
     if (isAuthProcessing.current) {
       console.log("Auth already in progress, skipping duplicate link.");
       return;
@@ -314,6 +295,7 @@ const App: React.FC = () => {
     const updated = { ...userProfile, ...updates };
     setUserProfile(updated);
     localStorage.setItem(LS_PROFILE, JSON.stringify(updated));
+    void updateOnboardingProfile(updates as Record<string, unknown>).catch(() => undefined);
   };
 
   const handleToggleTask = async (taskId: string) => {
@@ -376,11 +358,37 @@ const App: React.FC = () => {
     localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.QUIZ_EXPERIENCE);
   };
 
+  const handleRestorePurchases = async () => {
+    if (isRestoringPurchases) return;
+    setIsRestoringPurchases(true);
+    setRestoreMessage(null);
+    try {
+      const result = await withTimeout(restoreRevenueCatPurchases(), 20000, '[App] restore purchases');
+      if (!result.restored) {
+        setRestoreMessage('No active subscription was found for this Google Play account.');
+        return;
+      }
+      setHasVerifiedPaidAccess(true);
+      setShowPaywall(false);
+      setShowAuth(false);
+      setShowTutorial(false);
+      setOnboardingStatus(OnboardingStep.COMPLETED);
+      localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
+      setRestoreMessage('Subscription restored. Opening MasterGrowbot…');
+      runLoadUserDataInBackground();
+    } catch (error: any) {
+      if (!error?.userCancelled) setRestoreMessage('Restore could not finish. Check your connection and try again.');
+    } finally {
+      setIsRestoringPurchases(false);
+    }
+  };
+
   const handleOnboardingComplete = (profile: UserProfile) => {
     setUserProfile(profile);
     localStorage.setItem(LS_PROFILE, JSON.stringify(profile));
     setOnboardingStatus(OnboardingStep.SUMMARY);
     localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.SUMMARY);
+    void updateOnboardingProfile(profile as unknown as Record<string, unknown>).catch(() => undefined);
   };
 
   const handleSummaryContinue = () => {
@@ -405,7 +413,7 @@ const App: React.FC = () => {
   }
 
   if (onboardingStatus === OnboardingStep.SPLASH) {
-    return <Splash onGetStarted={handleGetStarted} />;
+    return <Splash onGetStarted={handleGetStarted} onRestorePurchases={handleRestorePurchases} isRestoring={isRestoringPurchases} restoreMessage={restoreMessage} />;
   }
 
   if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) {
@@ -413,7 +421,7 @@ const App: React.FC = () => {
   }
 
   if (onboardingStatus === OnboardingStep.SUMMARY && !showAuth && !showTutorial) {
-    if (!userProfile) return null;
+    if (!userProfile) return <Splash onGetStarted={handleGetStarted} onRestorePurchases={handleRestorePurchases} isRestoring={isRestoringPurchases} restoreMessage={restoreMessage} />;
     if (showPaywall) {
       return (
         <ErrorBoundary>

@@ -6,6 +6,7 @@ import type { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import Growbot from '../components/Growbot';
+import { configureRevenueCat, hasVerifiedSubscription, restoreRevenueCatPurchases } from '../services/revenueCatService';
 
 interface PaywallProps {
   onClose: () => void;
@@ -51,14 +52,6 @@ const TestimonialCard = memo(({ testimonial, index }: { testimonial: typeof TEST
   </div>
 ));
 TestimonialCard.displayName = 'TestimonialCard';
-
-function hasVerifiedSubscription(customerInfo: any): boolean {
-  if (!customerInfo) return false;
-  const hasProEntitlement = !!customerInfo.entitlements?.active?.pro;
-  const hasActiveSubscription = (customerInfo.activeSubscriptions?.length || 0) > 0;
-  console.log('[Paywall] subscription verification:', { hasProEntitlement, hasActiveSubscription });
-  return hasProEntitlement || hasActiveSubscription;
-}
 
 function packageHasFreeTrial(pkg: PurchasesPackage | any): boolean {
   const product = pkg?.product;
@@ -133,7 +126,8 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
         return;
       }
 
-      const { Purchases } = await import('@revenuecat/purchases-capacitor');
+      const Purchases = await configureRevenueCat();
+      if (!Purchases) throw new Error('Purchases are unavailable on this platform.');
       await waitForPurchasesConfiguration(Purchases);
       await Purchases.invalidateCustomerInfoCache();
 
@@ -175,7 +169,8 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
         return;
       }
 
-      const { Purchases } = await import('@revenuecat/purchases-capacitor');
+      const Purchases = await configureRevenueCat();
+      if (!Purchases) throw new Error('Purchases are unavailable on this platform.');
       const pkg = packages.find(p => p.identifier === selectedPkgIdentifier);
       if (!pkg) {
         setError('Selected plan unavailable.');
@@ -188,20 +183,15 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
         return;
       }
 
-      await Purchases.invalidateCustomerInfoCache();
-      await Purchases.syncPurchases();
-
       const { customerInfo: freshInfo } = await Purchases.getCustomerInfo();
       if (hasVerifiedSubscription(freshInfo)) {
         onPurchase();
         return;
       }
 
-      for (let attempt = 1; attempt <= 10; attempt++) {
-        setError(`Activating your subscription... (${attempt}/10)`);
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        setError(`Activating your subscription... (${attempt}/3)`);
         await new Promise(r => setTimeout(r, 2000));
-        await Purchases.invalidateCustomerInfoCache();
-        await Purchases.syncPurchases();
         const { customerInfo: retryInfo } = await Purchases.getCustomerInfo();
         if (hasVerifiedSubscription(retryInfo)) {
           setError(null);
@@ -226,12 +216,8 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
     setError(null);
     try {
       if (Capacitor.isNativePlatform()) {
-        const { Purchases } = await import('@revenuecat/purchases-capacitor');
-        await Purchases.restorePurchases();
-        await Purchases.invalidateCustomerInfoCache();
-        await Purchases.syncPurchases();
-        const { customerInfo } = await Purchases.getCustomerInfo();
-        if (hasVerifiedSubscription(customerInfo)) {
+        const result = await restoreRevenueCatPurchases();
+        if (result.restored) {
           alert('Success! Your subscription has been restored.');
           onPurchase();
         } else {

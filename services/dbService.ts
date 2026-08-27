@@ -1,5 +1,6 @@
 
-import { supabase } from './supabaseClient';
+import { ensureProfileForCurrentUser, supabase } from './supabaseClient';
+import { isTransientPersistenceError, logOperationError } from './diagnostics';
 import { GrowTask, Plant, Strain } from '../types';
 import { STRAIN_DATABASE } from '../data/strains';
 import { formatStrainValue } from '../utils/strainSearch';
@@ -14,7 +15,8 @@ const STORAGE_KEYS = {
   TICKETS: 'mg_local_tickets',
   FEEDBACK: 'mg_local_feedback',
   CUSTOM_STRAINS: 'mg_custom_strains',
-  PLANTS: 'mg_local_plants'
+  PLANTS: 'mg_local_plants',
+  DIAGNOSES: 'mg_local_diagnoses'
 };
 
 const getLocal = (key: string) => {
@@ -23,6 +25,18 @@ const getLocal = (key: string) => {
 
 const setLocal = (key: string, data: any) => {
   localStorage.setItem(key, JSON.stringify(data));
+};
+
+const keepLocal = (key: string, value: any, error?: any) => {
+  const values = getLocal(key);
+  const localValue = {
+    ...value,
+    sync_status: error && !isTransientPersistenceError(error) ? 'blocked' : 'pending',
+    local_saved_at: new Date().toISOString(),
+  };
+  if (!values.some((item: any) => item.id === localValue.id)) values.push(localValue);
+  setLocal(key, values);
+  return localValue;
 };
 
 /**
@@ -125,32 +139,140 @@ const mapPlantRow = (row: any, journal: any[], tasks: GrowTask[], streak: number
   };
 };
 
-export const ensureDefaultGrow = async (): Promise<string | null> => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user?.id) return null;
+const growInitialization = new Map<string, Promise<string | null>>();
+
+async function createOrReadDefaultGrow(): Promise<string | null> {
+  const profile = await ensureProfileForCurrentUser();
+  if (!profile.ok || !profile.user?.id) {
+    logOperationError('ensure_default_grow.profile', profile.error, true);
+    return null;
+  }
+  const userId = profile.user.id;
 
   const { data: existing, error: existingError } = await supabase
     .from('grows')
     .select('id')
-    .eq('user_id', session.user.id)
+    .eq('user_id', userId)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
 
-  if (existingError) console.warn('ensureDefaultGrow lookup failed:', existingError);
+  if (existingError) {
+    logOperationError('ensure_default_grow.lookup', existingError, true);
+    return null;
+  }
   if (existing?.id) return existing.id;
 
   const { data, error } = await supabase
     .from('grows')
-    .insert({ user_id: session.user.id, name: 'My Grow', status: 'active' })
+    .insert({ user_id: userId, name: 'My Grow', status: 'active' })
     .select('id')
     .maybeSingle();
 
   if (error) {
-    console.warn('ensureDefaultGrow insert failed:', error);
+    logOperationError('ensure_default_grow.insert', error, true);
     return null;
   }
   return data?.id || null;
+}
+
+export const ensureDefaultGrow = async (): Promise<string | null> => {
+  const profile = await ensureProfileForCurrentUser();
+  if (!profile.ok || !profile.user?.id) return null;
+  const existingPromise = growInitialization.get(profile.user.id);
+  if (existingPromise) return existingPromise;
+  const promise = createOrReadDefaultGrow().finally(() => growInitialization.delete(profile.user!.id));
+  growInitialization.set(profile.user.id, promise);
+  return promise;
+};
+
+const markQueueError = (items: any[], index: number, error: any) => {
+  items[index] = { ...items[index], sync_status: isTransientPersistenceError(error) ? 'pending' : 'blocked' };
+};
+
+const persistCloudPlantIds = (plantIdMap: Map<string, string>) => {
+  if (!plantIdMap.size) return;
+  for (const key of [STORAGE_KEYS.JOURNAL, STORAGE_KEYS.DIAGNOSES, STORAGE_KEYS.TASKS]) {
+    const items = getLocal(key);
+    let changed = false;
+    const updated = items.map((item: any) => {
+      const cloudPlantId = plantIdMap.get(item.plant_id);
+      if (!cloudPlantId) return item;
+      changed = true;
+      return { ...item, plant_id: cloudPlantId };
+    });
+    if (changed) setLocal(key, updated);
+  }
+};
+
+/** Replays only pending local writes, in foreign-key dependency order. */
+export const reconcilePendingPersistence = async (): Promise<void> => {
+  const profile = await ensureProfileForCurrentUser();
+  if (!profile.ok || !profile.user?.id) return;
+  const userId = profile.user.id;
+  const growId = await ensureDefaultGrow();
+  if (!growId) return;
+
+  const plantIdMap = new Map<string, string>();
+  const localPlants = getLocal(STORAGE_KEYS.PLANTS);
+  for (let index = localPlants.length - 1; index >= 0; index--) {
+    const plant = localPlants[index];
+    if (plant.sync_status === 'blocked') continue;
+    const result = await supabase.from('plants').insert({
+      user_id: userId, grow_id: growId, name: plant.name, strain: plant.strain,
+      strain_details: plant.strainDetails || null, stage: plant.stage,
+      image_url: plant.imageUri || null, health_score: plant.healthScore ?? 100,
+      days_in_stage: plant.daysInStage ?? 1, total_days: plant.totalDays ?? 1,
+    }).select('id').single();
+    if (result.error) markQueueError(localPlants, index, result.error);
+    else { plantIdMap.set(plant.id, result.data.id); localPlants.splice(index, 1); }
+  }
+  setLocal(STORAGE_KEYS.PLANTS, localPlants);
+  persistCloudPlantIds(plantIdMap);
+
+  const replay = async (key: string, table: string, payloadFor: (item: any) => any | null) => {
+    const items = getLocal(key);
+    for (let index = items.length - 1; index >= 0; index--) {
+      const item = items[index];
+      if (item.sync_status === 'blocked') continue;
+      const payload = payloadFor(item);
+      if (!payload) continue;
+      const { error } = await supabase.from(table).insert(payload);
+      if (error) markQueueError(items, index, error);
+      else items.splice(index, 1);
+    }
+    setLocal(key, items);
+  };
+  const cloudPlantId = (id: string | null | undefined) => {
+    if (!id) return null;
+    if (!id.startsWith('local_')) return id;
+    return plantIdMap.get(id) || undefined;
+  };
+
+  await replay(STORAGE_KEYS.JOURNAL, 'journal_logs', item => {
+    const plantId = cloudPlantId(item.plant_id);
+    if (item.plant_id?.startsWith?.('local_') && !plantId) return null;
+    return { user_id: userId, plant_id: plantId || null, entry_type: item.entry_type, content: item.content,
+      media_url: item.media_url || null, tags: item.tags || [], ai_analysis: item.ai_analysis || null };
+  });
+  await replay(STORAGE_KEYS.DIAGNOSES, 'diagnosis_reports', item => {
+    const plantId = cloudPlantId(item.plant_id);
+    if (item.plant_id?.startsWith?.('local_') && !plantId) return null;
+    return { user_id: userId, plant_id: plantId || null, image_url: item.image_url || null,
+      diagnosis_json: item.diagnosis_json || null, confidence_score: item.confidence_score ?? null };
+  });
+  await replay(STORAGE_KEYS.TASKS, 'tasks', item => {
+    const plantId = cloudPlantId(item.plant_id);
+    if (item.plant_id?.startsWith?.('local_') && !plantId) return null;
+    return { user_id: userId, plant_id: plantId || null, title: item.title, is_completed: Boolean(item.is_completed),
+      due_date: item.due_date, source: item.source, type: item.type, recurrence: item.recurrence || null,
+      notes: item.notes || null, created_at: item.created_at || new Date().toISOString() };
+  });
+  await replay(STORAGE_KEYS.TICKETS, 'support_tickets', item => ({ user_id: userId, name: item.name,
+    email: item.email, issue: item.issue, message: item.message, status: item.status || 'open',
+    created_at: item.created_at || new Date().toISOString() }));
+  await replay(STORAGE_KEYS.FEEDBACK, 'user_feedback', item => ({ user_id: userId, rating: item.rating,
+    message: item.message, created_at: item.created_at || new Date().toISOString() }));
 };
 
 export const createPlantRecord = async (strain: any): Promise<Plant | null> => {
@@ -171,14 +293,12 @@ export const createPlantRecord = async (strain: any): Promise<Plant | null> => {
     weeklySummaries: [],
   };
 
-  if (!session?.user?.id) {
-    const plants = getLocal(STORAGE_KEYS.PLANTS);
-    plants.push(localPlant);
-    setLocal(STORAGE_KEYS.PLANTS, plants);
-    return localPlant;
-  }
+  if (!session?.user?.id) return keepLocal(STORAGE_KEYS.PLANTS, localPlant) as Plant;
 
+  const profile = await ensureProfileForCurrentUser();
+  if (!profile.ok) return keepLocal(STORAGE_KEYS.PLANTS, localPlant, profile.error) as Plant;
   const growId = await ensureDefaultGrow();
+  if (!growId) return keepLocal(STORAGE_KEYS.PLANTS, localPlant) as Plant;
   const { data, error } = await supabase
     .from('plants')
     .insert({
@@ -197,8 +317,8 @@ export const createPlantRecord = async (strain: any): Promise<Plant | null> => {
     .maybeSingle();
 
   if (error || !data) {
-    console.warn('createPlantRecord failed, keeping local plant:', error);
-    return localPlant;
+    logOperationError('create_plant', error, true);
+    return keepLocal(STORAGE_KEYS.PLANTS, localPlant, error) as Plant;
   }
 
   return mapPlantRow(data, [], [], 0);
@@ -266,7 +386,7 @@ export const saveJournalEntry = async (entry: {
   const newEntry = {
     id: `local_${Date.now()}`,
     user_id: session?.user.id || 'anon',
-    plant_id: entry.plant_id && !entry.plant_id.startsWith('local_') ? entry.plant_id : null,
+    plant_id: entry.plant_id || null,
     entry_type: entry.entry_type,
     content: entry.content,
     media_url: entry.media_url,
@@ -275,20 +395,29 @@ export const saveJournalEntry = async (entry: {
     created_at: new Date().toISOString()
   };
 
-  if (!session) {
-    const entries = getLocal(STORAGE_KEYS.JOURNAL);
-    entries.push(newEntry);
-    setLocal(STORAGE_KEYS.JOURNAL, entries);
-    return newEntry;
-  }
+  if (!session || entry.plant_id?.startsWith('local_')) return keepLocal(STORAGE_KEYS.JOURNAL, newEntry);
+
+  const profile = await ensureProfileForCurrentUser();
+  if (!profile.ok) return keepLocal(STORAGE_KEYS.JOURNAL, newEntry, profile.error);
 
   const { data, error } = await supabase
     .from('journal_logs')
-    .insert({ ...newEntry, id: undefined }) // Let DB gen ID
+    .insert({
+      user_id: session.user.id,
+      plant_id: entry.plant_id || null,
+      entry_type: entry.entry_type,
+      content: entry.content,
+      media_url: entry.media_url,
+      tags: entry.tags,
+      ai_analysis: entry.ai_analysis,
+    })
     .select()
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    logOperationError('save_journal_entry', error, true);
+    return keepLocal(STORAGE_KEYS.JOURNAL, newEntry, error);
+  }
   return data;
 };
 
@@ -324,7 +453,21 @@ export const saveAppJournalEntry = async (plantId: string | undefined, entry: an
 
 export const saveDiagnosisReport = async (plantId: string | undefined, entry: any) => {
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user?.id || !entry?.diagnosisData) return null;
+  if (!entry?.diagnosisData) return null;
+
+  const localDiagnosis = {
+    id: `local_diagnosis_${Date.now()}`,
+    user_id: session?.user.id || 'anon',
+    plant_id: plantId || null,
+    image_url: entry.imageUri || entry.image || null,
+    diagnosis_json: entry.diagnosisData,
+    confidence_score: entry.diagnosisData.confidence ?? null,
+  };
+  if (!session?.user?.id || plantId?.startsWith('local_')) {
+    return keepLocal(STORAGE_KEYS.DIAGNOSES, localDiagnosis);
+  }
+  const profile = await ensureProfileForCurrentUser();
+  if (!profile.ok) return keepLocal(STORAGE_KEYS.DIAGNOSES, localDiagnosis, profile.error);
 
   const { error } = await supabase.from('diagnosis_reports').insert({
     user_id: session.user.id,
@@ -334,8 +477,11 @@ export const saveDiagnosisReport = async (plantId: string | undefined, entry: an
     confidence_score: entry.diagnosisData.confidence ?? null,
   });
 
-  if (error) console.warn('saveDiagnosisReport failed:', error);
-  return !error;
+  if (error) {
+    logOperationError('save_diagnosis_report', error, true);
+    return keepLocal(STORAGE_KEYS.DIAGNOSES, localDiagnosis, error);
+  }
+  return true;
 };
 
 // --- Task Management System ---
@@ -401,7 +547,7 @@ export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCo
     created_at: new Date().toISOString()
   };
 
-  if (!session) {
+  if (!session || task.plantId?.startsWith('local_')) {
     const tasks = getLocal(STORAGE_KEYS.TASKS);
     const localTask = { ...newTaskObj, id: `local_${Date.now()}` };
     tasks.push(localTask);
@@ -423,13 +569,25 @@ export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCo
     };
   }
 
+  const profile = await ensureProfileForCurrentUser();
+  if (!profile.ok) {
+    const localTask = { ...newTaskObj, id: `local_${Date.now()}` };
+    keepLocal(STORAGE_KEYS.TASKS, localTask, profile.error);
+    return mapTaskRow(localTask);
+  }
+
   const { data, error } = await supabase
     .from('tasks')
     .insert(newTaskObj)
     .select()
     .single();
 
-  if (error) return null;
+  if (error) {
+    logOperationError('add_task', error, true);
+    const localTask = { ...newTaskObj, id: `local_${Date.now()}` };
+    keepLocal(STORAGE_KEYS.TASKS, localTask, error);
+    return mapTaskRow(localTask);
+  }
 
   return {
     id: data.id,
@@ -468,6 +626,16 @@ export const toggleTaskCompletion = async (taskId: string, isCompleted: boolean)
 
 export const createSupportTicket = async (ticket: { name: string, email: string, issue: string, message: string }) => {
   const { data: { session } } = await supabase.auth.getSession();
+  let persistenceError: unknown = null;
+
+  if (session?.user?.id) {
+    const profile = await ensureProfileForCurrentUser();
+    if (!profile.ok) {
+      const localTicket = { ...ticket, user_id: session.user.id, id: `local_${Date.now()}`, created_at: new Date().toISOString() };
+      keepLocal(STORAGE_KEYS.TICKETS, localTicket, profile.error);
+      return localTicket;
+    }
+  }
 
   // Submit to DB if possible (RLS might allow anon insert, check policy)
   // If strict RLS, we fallback to just returning success since Email is the primary channel.
@@ -486,17 +654,31 @@ export const createSupportTicket = async (ticket: { name: string, email: string,
       .select()
       .single();
     if (!error) return data;
-  } catch (e) { console.warn("Support DB insert failed (anon)", e); }
+    persistenceError = error;
+    logOperationError('create_support_ticket', error, true);
+  } catch (error) {
+    persistenceError = error;
+    logOperationError('create_support_ticket', error, true);
+  }
 
-  // Fallback: Store locally just for record
-  const tickets = getLocal(STORAGE_KEYS.TICKETS);
-  tickets.push({ ...ticket, id: `local_${Date.now()}`, created_at: new Date().toISOString() });
-  setLocal(STORAGE_KEYS.TICKETS, tickets);
-  return { id: 'local-ticket' };
+  return keepLocal(STORAGE_KEYS.TICKETS, {
+    ...ticket,
+    user_id: session?.user.id || null,
+    id: `local_${Date.now()}`,
+    created_at: new Date().toISOString(),
+  }, persistenceError);
 };
 
 export const submitUserFeedback = async (feedback: { rating: number, message: string }) => {
   const { data: { session } } = await supabase.auth.getSession();
+  let persistenceError: unknown = null;
+  if (session?.user?.id) {
+    const profile = await ensureProfileForCurrentUser();
+    if (!profile.ok) {
+      const localFeedback = { ...feedback, user_id: session.user.id, id: `local_feedback_${Date.now()}`, created_at: new Date().toISOString() };
+      return keepLocal(STORAGE_KEYS.FEEDBACK, localFeedback, profile.error);
+    }
+  }
   try {
     const { data, error } = await supabase
       .from('user_feedback')
@@ -509,8 +691,14 @@ export const submitUserFeedback = async (feedback: { rating: number, message: st
       .select()
       .single();
     if (!error) return data;
-  } catch (e) { console.warn("Feedback DB insert failed (anon)", e); }
-  return { id: 'local-feedback' };
+    persistenceError = error;
+    logOperationError('submit_user_feedback', error, true);
+  } catch (error) {
+    persistenceError = error;
+    logOperationError('submit_user_feedback', error, true);
+  }
+  const localFeedback = { ...feedback, id: `local_feedback_${Date.now()}`, created_at: new Date().toISOString(), sync_status: 'pending' };
+  return keepLocal(STORAGE_KEYS.FEEDBACK, localFeedback, persistenceError);
 };
 
 export const submitAppRating = async (rating: number) => {
