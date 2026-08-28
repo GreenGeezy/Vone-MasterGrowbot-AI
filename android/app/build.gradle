@@ -6,12 +6,12 @@ apply from: 'capacitor.build.gradle'
 
 android {
     namespace "com.mastergrowbot.app"
-    compileSdk 35
+    compileSdk rootProject.ext.compileSdkVersion
 
     defaultConfig {
         applicationId "com.mastergrowbot.app"
-        minSdk 23
-        targetSdk 35
+        minSdk rootProject.ext.minSdkVersion
+        targetSdk rootProject.ext.targetSdkVersion
         // Increment for each Google Play release.
         versionCode 149
         versionName "1.0.149"
@@ -35,9 +35,9 @@ android {
         }
     }
 
-    lintOptions {
-        checkReleaseBuilds false
-        abortOnError false
+    lint {
+        checkReleaseBuilds true
+        abortOnError true
     }
 
     compileOptions {

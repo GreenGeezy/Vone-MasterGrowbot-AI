@@ -5,9 +5,11 @@ node_modules
 
 # Testing
 coverage
+.playwright-cli/
 
 # Production
 dist
+.tooling/
 
 # Environment variables
 .env
@@ -23,6 +25,7 @@ GoogleService-Info.plist
 *.p12
 *.keystore
 key.properties
+android/local.properties
 
 # IDEs and editors
 .vscode/*
@@ -38,3 +41,6 @@ key.properties
 # Capacitor / Mobile
 # Removed /android to allow stable build configs in CI/CD
 /ios
+android/.gradle/
+android/build/
+android/app/build/

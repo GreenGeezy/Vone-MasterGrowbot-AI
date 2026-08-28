@@ -10,7 +10,7 @@ workflows:
       vars:
         CM_KEYSTORE_PATH: /tmp/keystore.jks
       node: 20.11.1
-      java: 17
+      java: 21
     triggering:
       events:
         - push
@@ -20,7 +20,12 @@ workflows:
     scripts:
       - name: Install dependencies
         script: |
-          npm ci --legacy-peer-deps
+          npm ci
+
+      - name: Install Android 16 SDK
+        script: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platforms;android-36" "build-tools;35.0.0" "build-tools;36.0.0"
       
       - name: Build Web Assets
         script: |
@@ -32,22 +37,25 @@ workflows:
       
       - name: Decode Security Files
         script: |
-          if [ -n "$CM_KEYSTORE_ENCODED" ]; then
-              echo $CM_KEYSTORE_ENCODED | base64 --decode > /tmp/keystore.jks
-          else
-              echo "Using debug keystore (CodeMagic artifact)"
-          fi
-
-          if [ -n "$ANDROID_GOOGLE_SERVICES_JSON" ]; then
-              echo $ANDROID_GOOGLE_SERVICES_JSON | base64 --decode > android/app/google-services.json
-          fi
+          : "${CM_KEYSTORE_ENCODED:?CM_KEYSTORE_ENCODED is required}"
+          : "${CM_KEYSTORE_PASSWORD:?CM_KEYSTORE_PASSWORD is required}"
+          : "${CM_KEY_ALIAS:?CM_KEY_ALIAS is required}"
+          : "${CM_KEY_PASSWORD:?CM_KEY_PASSWORD is required}"
+          : "${ANDROID_GOOGLE_SERVICES_JSON:?ANDROID_GOOGLE_SERVICES_JSON is required}"
+          printf '%s' "$CM_KEYSTORE_ENCODED" | base64 --decode > "$CM_KEYSTORE_PATH"
+          printf '%s' "$ANDROID_GOOGLE_SERVICES_JSON" | base64 --decode > android/app/google-services.json
+          test -s "$CM_KEYSTORE_PATH"
+          test -s android/app/google-services.json
       
       - name: Build Android App Bundle
         script: |
           cd android
-          gradle wrapper --gradle-version 8.5
+          test -s gradlew
+          test -s gradlew.bat
+          test -s gradle/wrapper/gradle-wrapper.jar
           chmod +x gradlew
-          ./gradlew clean bundleRelease --no-daemon
+          ./gradlew --version
+          ./gradlew clean :app:lintRelease :app:test :app:bundleRelease --no-daemon
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
     publishing:

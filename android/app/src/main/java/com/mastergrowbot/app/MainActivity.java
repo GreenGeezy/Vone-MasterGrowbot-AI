@@ -23,9 +23,12 @@ public class MainActivity extends BridgeActivity {
         if (webView == null) return;
 
         ViewCompat.setOnApplyWindowInsetsListener(webView, (view, windowInsets) -> {
-            Insets systemBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+            Insets systemBars = windowInsets.getInsets(
+                WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
+            );
             view.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-            return WindowInsetsCompat.CONSUMED;
+            // Preserve IME and plugin inset dispatch; only the WebView system-bar padding is owned here.
+            return windowInsets;
         });
         ViewCompat.requestApplyInsets(webView);
     }

@@ -6,7 +6,12 @@ import type { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import Growbot from '../components/Growbot';
-import { configureRevenueCat, hasVerifiedSubscription, restoreRevenueCatPurchases } from '../services/revenueCatService';
+import {
+  configureRevenueCat,
+  hasVerifiedSubscription,
+  packageHasFreeTrial,
+  restoreRevenueCatPurchases,
+} from '../services/revenueCatService';
 
 interface PaywallProps {
   onClose: () => void;
@@ -52,16 +57,6 @@ const TestimonialCard = memo(({ testimonial, index }: { testimonial: typeof TEST
   </div>
 ));
 TestimonialCard.displayName = 'TestimonialCard';
-
-function packageHasFreeTrial(pkg: PurchasesPackage | any): boolean {
-  const product = pkg?.product;
-  const googlePlayTrial = Boolean(
-    product?.defaultOption?.freePhase ||
-    product?.subscriptionOptions?.some((option: any) => option?.freePhase)
-  );
-  const appStoreTrial = product?.introPrice?.price === 0;
-  return googlePlayTrial || appStoreTrial;
-}
 
 async function waitForPurchasesConfiguration(Purchases: any, timeoutMs = 5000): Promise<void> {
   const deadline = Date.now() + timeoutMs;

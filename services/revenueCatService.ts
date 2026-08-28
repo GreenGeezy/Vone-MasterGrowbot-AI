@@ -10,6 +10,16 @@ export function hasVerifiedSubscription(customerInfo: CustomerInfo | any): boole
   return Boolean(customerInfo?.entitlements?.active?.pro || (customerInfo?.activeSubscriptions?.length || 0) > 0);
 }
 
+/**
+ * RevenueCat filters Google Play subscriptionOptions to offers for which the
+ * current Play account is eligible. purchasePackage() uses defaultOption, so
+ * the paywall must only advertise the trial attached to that exact option.
+ */
+export function packageHasFreeTrial(pkg: any): boolean {
+  const product = pkg?.product;
+  return Boolean(product?.defaultOption?.freePhase || product?.introPrice?.price === 0);
+}
+
 export async function configureRevenueCat(): Promise<any | null> {
   if (Capacitor.getPlatform() !== 'android') return null;
   if (!configurationPromise) {

@@ -1,0 +1,2 @@
+android/gradlew text eol=lf
+android/app/src/main/assets/public/assets/** -whitespace
