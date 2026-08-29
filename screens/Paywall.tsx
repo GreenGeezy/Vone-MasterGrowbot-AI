@@ -9,6 +9,7 @@ import Growbot from '../components/Growbot';
 import {
   configureRevenueCat,
   hasVerifiedSubscription,
+  loadRevenueCatPlans,
   packageHasFreeTrial,
   restoreRevenueCatPurchases,
 } from '../services/revenueCatService';
@@ -57,20 +58,6 @@ const TestimonialCard = memo(({ testimonial, index }: { testimonial: typeof TEST
   </div>
 ));
 TestimonialCard.displayName = 'TestimonialCard';
-
-async function waitForPurchasesConfiguration(Purchases: any, timeoutMs = 5000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      const { isConfigured } = await Purchases.isConfigured();
-      if (isConfigured) return;
-    } catch {
-      // The background initializer may still be loading the native plugin.
-    }
-    await new Promise(resolve => setTimeout(resolve, 150));
-  }
-  throw new Error('Subscription service is still starting. Please try again.');
-}
 
 function parsePrice(priceString?: string): number | null {
   if (!priceString) return null;
@@ -121,18 +108,9 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
         return;
       }
 
-      const Purchases = await configureRevenueCat();
-      if (!Purchases) throw new Error('Purchases are unavailable on this platform.');
-      await waitForPurchasesConfiguration(Purchases);
-      await Purchases.invalidateCustomerInfoCache();
+      const { packages: pkgs } = await loadRevenueCatPlans();
 
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Google Play connection timed out')), 8000)
-      );
-      const offerings = await Promise.race([Purchases.getOfferings(), timeoutPromise]) as any;
-
-      if (offerings.current?.availablePackages?.length > 0) {
-        const pkgs = offerings.current.availablePackages;
+      if (pkgs.length > 0) {
         setPackages(pkgs);
         const annual = pkgs.find((p: any) => isAnnualPackage(p));
         setSelectedPkgIdentifier(annual ? annual.identifier : pkgs[0].identifier);
@@ -141,8 +119,7 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
         setError('No subscription plans found at this time.');
       }
     } catch (e: any) {
-      console.error('RevenueCat Error:', e);
-      setError(e.message || 'Could not connect to Google Play.');
+      setError(e?.message || 'Could not connect to Google Play. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -198,7 +175,6 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
       setError('Subscription activation is taking longer than expected. Please tap "Restore Purchases" or try again later.');
     } catch (e: any) {
       if (!e.userCancelled) {
-        console.error('Purchase Error:', e);
         setError(e.message || 'Purchase failed. Please try again.');
       }
     } finally {
@@ -301,10 +277,13 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
     return (
       <div className="fixed inset-0 bg-white z-[60] flex flex-col items-center justify-center p-8 text-center">
         <Growbot size="xl" mood="alert" className="mb-6 opacity-80" />
-        <h2 className="text-xl font-black text-gray-900 mb-2">Connection Issues</h2>
+        <h2 className="text-xl font-black text-gray-900 mb-2">Plans Unavailable</h2>
         <p className="text-sm text-gray-500 mb-8 max-w-xs">{error}</p>
-        <button onClick={loadProducts} className="bg-green-600 text-white font-bold px-8 py-3 rounded-xl shadow-lg hover:bg-green-700 active:scale-95 transition-all">
+        <button onClick={loadProducts} disabled={isPurchasing} className="bg-green-600 text-white font-bold px-8 py-3 rounded-xl shadow-lg hover:bg-green-700 active:scale-95 transition-all disabled:opacity-50">
           Retry Connection
+        </button>
+        <button onClick={handleRestore} disabled={isPurchasing} className="mt-4 text-green-700 font-bold px-5 py-2 disabled:opacity-50">
+          {isPurchasing ? 'Checking Purchases...' : 'Already subscribed? Restore Purchases'}
         </button>
       </div>
     );

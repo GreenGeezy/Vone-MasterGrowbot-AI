@@ -4,7 +4,47 @@ import type { CustomerInfo } from '@revenuecat/purchases-capacitor';
 
 const ANDROID_REVENUECAT_KEY = 'goog_kqOynvNRCABzUPrpfyFvlMvHUna';
 const STARTUP_SYNC_KEY = 'mg_rc_startup_sync_v2';
-let configurationPromise: Promise<any> | null = null;
+const REVENUECAT_INITIALIZATION_TIMEOUT_MS = 10_000;
+export const REVENUECAT_OFFERINGS_TIMEOUT_MS = 12_000;
+let configurationWorkPromise: Promise<any> | null = null;
+
+export class RevenueCatTimeoutError extends Error {
+  readonly code = 'REVENUECAT_TIMEOUT';
+
+  constructor(operation: string) {
+    super(`${operation} timed out. Please check your connection and try again.`);
+    this.name = 'RevenueCatTimeoutError';
+  }
+}
+
+export function withRevenueCatTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new RevenueCatTimeoutError(operation)), timeoutMs);
+    promise.then(
+      value => { clearTimeout(timer); resolve(value); },
+      error => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
+function sanitizedRevenueCatError(error: unknown): { code: string; message: string } {
+  const candidate = error as { code?: unknown; readableErrorCode?: unknown; message?: unknown } | null;
+  const rawCode = candidate?.readableErrorCode ?? candidate?.code ?? 'UNKNOWN';
+  const rawMessage = candidate?.message ?? 'RevenueCat operation failed';
+  return {
+    code: String(rawCode).replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 80) || 'UNKNOWN',
+    message: String(rawMessage)
+      .replace(/\b(?:goog|appl|test)_[A-Za-z0-9_-]+\b/g, '[redacted-key]')
+      .replace(/\bBearer\s+\S+/gi, 'Bearer [redacted]')
+      .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[redacted-email]')
+      .replace(/[\r\n]+/g, ' ')
+      .slice(0, 240),
+  };
+}
+
+function logRevenueCat(operation: string, details: Record<string, string | number | boolean>): void {
+  console.info('[RevenueCat]', { operation, platform: 'android', ...details });
+}
 
 export function hasVerifiedSubscription(customerInfo: CustomerInfo | any): boolean {
   return Boolean(customerInfo?.entitlements?.active?.pro || (customerInfo?.activeSubscriptions?.length || 0) > 0);
@@ -22,14 +62,84 @@ export function packageHasFreeTrial(pkg: any): boolean {
 
 export async function configureRevenueCat(): Promise<any | null> {
   if (Capacitor.getPlatform() !== 'android') return null;
-  if (!configurationPromise) {
-    configurationPromise = import('@revenuecat/purchases-capacitor').then(async ({ Purchases }) => {
+  if (!configurationWorkPromise) {
+    logRevenueCat('initialize_start', { configured: false });
+    const work = import('@revenuecat/purchases-capacitor').then(async ({ Purchases }) => {
       const { isConfigured } = await Purchases.isConfigured();
       if (!isConfigured) await Purchases.configure({ apiKey: ANDROID_REVENUECAT_KEY });
+      logRevenueCat('initialize_success', { configured: true, keyType: 'google_public' });
       return Purchases;
-    }).catch(error => { configurationPromise = null; throw error; });
+    });
+    configurationWorkPromise = work.catch(error => {
+      if (configurationWorkPromise) configurationWorkPromise = null;
+      const sanitized = sanitizedRevenueCatError(error);
+      logRevenueCat('initialize_failure', { configured: false, ...sanitized });
+      throw error;
+    });
   }
-  return configurationPromise;
+  return withRevenueCatTimeout(
+    configurationWorkPromise,
+    REVENUECAT_INITIALIZATION_TIMEOUT_MS,
+    'Subscription service initialization',
+  ).catch(error => {
+    if (error instanceof RevenueCatTimeoutError) {
+      logRevenueCat('initialize_timeout', { configured: false, code: error.code });
+    }
+    throw error;
+  });
+}
+
+export interface RevenueCatPlansResult {
+  packages: any[];
+  currentOfferingIdentifier: string | null;
+}
+
+/** Supports both the documented return shape and the wrapper emitted by some 11.x native bridges. */
+export function normalizeRevenueCatOfferings(result: any): any {
+  return result?.offerings ?? result;
+}
+
+export async function loadRevenueCatPlans(options: {
+  configure?: () => Promise<any | null>;
+  initializationTimeoutMs?: number;
+  timeoutMs?: number;
+} = {}): Promise<RevenueCatPlansResult> {
+  const configure = options.configure ?? configureRevenueCat;
+  const timeoutMs = options.timeoutMs ?? REVENUECAT_OFFERINGS_TIMEOUT_MS;
+  const Purchases = await withRevenueCatTimeout(
+    configure(),
+    options.initializationTimeoutMs ?? REVENUECAT_INITIALIZATION_TIMEOUT_MS,
+    'Subscription service initialization',
+  );
+  if (!Purchases) throw new Error('Purchases are unavailable on this platform.');
+
+  logRevenueCat('get_offerings_start', { configured: true });
+  try {
+    const rawResult = await withRevenueCatTimeout(
+      Purchases.getOfferings(),
+      timeoutMs,
+      'Google Play plan retrieval',
+    );
+    const offerings = normalizeRevenueCatOfferings(rawResult);
+    const current = offerings?.current ?? null;
+    const packages = Array.isArray(current?.availablePackages) ? current.availablePackages : [];
+    logRevenueCat('get_offerings_success', {
+      configured: true,
+      currentOffering: Boolean(current),
+      packageCount: packages.length,
+    });
+    return {
+      packages,
+      currentOfferingIdentifier: current?.identifier ?? null,
+    };
+  } catch (error) {
+    const sanitized = sanitizedRevenueCatError(error);
+    logRevenueCat(error instanceof RevenueCatTimeoutError ? 'get_offerings_timeout' : 'get_offerings_failure', {
+      configured: true,
+      ...sanitized,
+    });
+    throw error;
+  }
 }
 
 export async function getStartupSubscriptionStatus(): Promise<{ isSubscribed: boolean; customerInfo: any | null }> {
@@ -49,11 +159,23 @@ export async function getStartupSubscriptionStatus(): Promise<{ isSubscribed: bo
   return { isSubscribed: hasVerifiedSubscription(customerInfo), customerInfo };
 }
 
-export async function restoreRevenueCatPurchases(): Promise<{ restored: boolean; customerInfo: any | null }> {
-  const Purchases = await configureRevenueCat();
+export async function restoreRevenueCatPurchases(options: {
+  configure?: () => Promise<any | null>;
+  timeoutMs?: number;
+} = {}): Promise<{ restored: boolean; customerInfo: any | null }> {
+  const timeoutMs = options.timeoutMs ?? REVENUECAT_OFFERINGS_TIMEOUT_MS;
+  const Purchases = await withRevenueCatTimeout(
+    (options.configure ?? configureRevenueCat)(),
+    timeoutMs,
+    'Subscription service initialization',
+  );
   if (!Purchases) return { restored: false, customerInfo: null };
-  await Purchases.restorePurchases();
-  const { customerInfo } = await Purchases.getCustomerInfo();
+  await withRevenueCatTimeout(Purchases.restorePurchases(), timeoutMs, 'Purchase restoration');
+  const { customerInfo } = await withRevenueCatTimeout<{ customerInfo: any }>(
+    Purchases.getCustomerInfo(),
+    timeoutMs,
+    'Subscription verification',
+  );
   const restored = hasVerifiedSubscription(customerInfo);
   if (restored) await Preferences.set({ key: STARTUP_SYNC_KEY, value: 'healthy' });
   return { restored, customerInfo };
