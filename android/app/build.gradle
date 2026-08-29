@@ -13,8 +13,8 @@ android {
         minSdk rootProject.ext.minSdkVersion
         targetSdk rootProject.ext.targetSdkVersion
         // Increment for each Google Play release.
-        versionCode 151
-        versionName "1.0.151"
+        versionCode 152
+        versionName "1.0.152"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 

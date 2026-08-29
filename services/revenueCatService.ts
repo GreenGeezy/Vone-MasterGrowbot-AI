@@ -9,7 +9,6 @@ const REVENUECAT_NATIVE_OPERATION_TIMEOUT_MS = 4_000;
 export const REVENUECAT_OFFERINGS_TIMEOUT_MS = 12_000;
 let configurationWorkPromise: Promise<any> | null = null;
 let configuredPurchases: any | null = null;
-let configureWasDispatched = false;
 
 export class RevenueCatTimeoutError extends Error {
   readonly code = 'REVENUECAT_TIMEOUT';
@@ -50,7 +49,7 @@ function logRevenueCat(operation: string, details: Record<string, string | numbe
 }
 
 async function runNativeOperation<T>(
-  operation: 'RC_IS_CONFIGURED' | 'RC_CONFIGURE',
+  operation: 'RC_CONFIGURE',
   work: () => Promise<T> | T,
   timeoutMs = REVENUECAT_NATIVE_OPERATION_TIMEOUT_MS,
 ): Promise<T> {
@@ -58,7 +57,7 @@ async function runNativeOperation<T>(
   logRevenueCat(`${operation}_START`, { configured: Boolean(configuredPurchases) });
   try {
     const result = await withRevenueCatTimeout(Promise.resolve().then(work), timeoutMs, operation);
-    logRevenueCat(`${operation}_SUCCESS`, { elapsedMs: Date.now() - startedAt, configured: operation === 'RC_CONFIGURE' ? true : Boolean((result as any)?.isConfigured) });
+    logRevenueCat(`${operation}_SUCCESS`, { elapsedMs: Date.now() - startedAt, configured: true });
     return result;
   } catch (error) {
     const sanitized = sanitizedRevenueCatError(error);
@@ -71,7 +70,6 @@ async function runNativeOperation<T>(
 }
 
 export interface RevenueCatNativePlugin {
-  isConfigured(): Promise<{ isConfigured: boolean }>;
   configure(options: { apiKey: string }): Promise<void> | void;
 }
 
@@ -79,29 +77,16 @@ async function initializeNativePurchases(
   Purchases: RevenueCatNativePlugin,
   nativeTimeoutMs = REVENUECAT_NATIVE_OPERATION_TIMEOUT_MS,
 ): Promise<any> {
-  // purchases-capacitor 11.3.2 declares configure as a Promise, but its Android
-  // plugin method is RETURN_NONE. Dispatch it once, then use isConfigured as
-  // the authoritative bridge acknowledgement instead of blocking on a
-  // pre-configuration isConfigured call that can strand startup forever.
-  if (!configureWasDispatched) {
-    configureWasDispatched = true;
-    try {
-      await runNativeOperation('RC_CONFIGURE', () => Purchases.configure({ apiKey: ANDROID_REVENUECAT_KEY }), nativeTimeoutMs);
-    } catch (error) {
-      // A definite rejection permits a safe retry. A timeout is uncertain, so
-      // Retry first re-checks native state before considering another dispatch.
-      if (!(error instanceof RevenueCatTimeoutError)) configureWasDispatched = false;
-      throw error;
-    }
-  }
-
-  const status = await runNativeOperation('RC_IS_CONFIGURED', () => Purchases.isConfigured(), nativeTimeoutMs);
-  if (!status?.isConfigured) {
-    // Native answered definitively that the earlier dispatch did not configure
-    // the SDK. A later Retry may now dispatch configure once more safely.
-    configureWasDispatched = false;
-    throw new Error('RevenueCat native SDK did not become configured.');
-  }
+  // The postinstall patch corrects purchases-capacitor 11.3.2's Android
+  // configure annotation from RETURN_NONE to RETURN_PROMISE. This await now
+  // resolves only after the native plugin has configured Purchases and called
+  // call.resolve(). Do not gate configuration on isConfigured(): that bridge
+  // method is the operation that remained unresolved on the affected devices.
+  await runNativeOperation(
+    'RC_CONFIGURE',
+    () => Purchases.configure({ apiKey: ANDROID_REVENUECAT_KEY }),
+    nativeTimeoutMs,
+  );
   configuredPurchases = Purchases;
   return Purchases;
 }
@@ -122,7 +107,6 @@ export function createRevenueCatInitializer(Purchases: RevenueCatNativePlugin, t
 export function resetRevenueCatInitializationForTests(): void {
   configurationWorkPromise = null;
   configuredPurchases = null;
-  configureWasDispatched = false;
 }
 
 export function hasVerifiedSubscription(customerInfo: CustomerInfo | any): boolean {

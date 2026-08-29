@@ -19,15 +19,14 @@ import {
 } from './revenueCatService';
 
 describe('RevenueCat native initialization', () => {
-  it('dispatches configure before checking native configured state', async () => {
+  it('awaits the native configure bridge completion', async () => {
     resetRevenueCatInitializationForTests();
     const order: string[] = [];
     const plugin = {
-      configure: vi.fn(() => { order.push('configure'); }),
-      isConfigured: vi.fn(async () => { order.push('isConfigured'); return { isConfigured: true }; }),
+      configure: vi.fn(async () => { order.push('configure'); }),
     };
     await createRevenueCatInitializer(plugin, 100)();
-    expect(order).toEqual(['configure', 'isConfigured']);
+    expect(order).toEqual(['configure']);
     expect(plugin.configure).toHaveBeenCalledOnce();
   });
 
@@ -35,48 +34,16 @@ describe('RevenueCat native initialization', () => {
     resetRevenueCatInitializationForTests();
     const plugin = {
       configure: vi.fn(async () => undefined),
-      isConfigured: vi.fn(async () => ({ isConfigured: true })),
     };
     const initialize = createRevenueCatInitializer(plugin, 100);
     await Promise.all([initialize(), initialize(), initialize()]);
     expect(plugin.configure).toHaveBeenCalledOnce();
-    expect(plugin.isConfigured).toHaveBeenCalledOnce();
-  });
-
-  it('recovers on Retry after a timed-out native configured check', async () => {
-    resetRevenueCatInitializationForTests();
-    const plugin = {
-      configure: vi.fn(() => undefined),
-      isConfigured: vi.fn()
-        .mockImplementationOnce(() => new Promise(() => undefined))
-        .mockResolvedValueOnce({ isConfigured: true }),
-    };
-    const initialize = createRevenueCatInitializer(plugin, 10);
-    await expect(initialize()).rejects.toBeInstanceOf(RevenueCatTimeoutError);
-    await expect(initialize()).resolves.toBe(plugin);
-    expect(plugin.configure).toHaveBeenCalledOnce();
-    expect(plugin.isConfigured).toHaveBeenCalledTimes(2);
-  });
-
-  it('allows a safe redispatch after native definitively reports not configured', async () => {
-    resetRevenueCatInitializationForTests();
-    const plugin = {
-      configure: vi.fn(() => undefined),
-      isConfigured: vi.fn()
-        .mockResolvedValueOnce({ isConfigured: false })
-        .mockResolvedValueOnce({ isConfigured: true }),
-    };
-    const initialize = createRevenueCatInitializer(plugin, 100);
-    await expect(initialize()).rejects.toThrow('did not become configured');
-    await expect(initialize()).resolves.toBe(plugin);
-    expect(plugin.configure).toHaveBeenCalledTimes(2);
   });
 
   it('recovers after configure rejects without retaining the failed attempt', async () => {
     resetRevenueCatInitializationForTests();
     const plugin = {
       configure: vi.fn().mockRejectedValueOnce(new Error('bridge unavailable')).mockResolvedValueOnce(undefined),
-      isConfigured: vi.fn(async () => ({ isConfigured: true })),
     };
     const initialize = createRevenueCatInitializer(plugin, 100);
     await expect(initialize()).rejects.toThrow('bridge unavailable');
@@ -88,10 +55,22 @@ describe('RevenueCat native initialization', () => {
     resetRevenueCatInitializationForTests();
     const plugin = {
       configure: vi.fn(() => new Promise<void>(() => undefined)),
-      isConfigured: vi.fn(async () => ({ isConfigured: true })),
     };
     await expect(createRevenueCatInitializer(plugin, 10)()).rejects.toBeInstanceOf(RevenueCatTimeoutError);
-    expect(plugin.isConfigured).not.toHaveBeenCalled();
+    expect(plugin.configure).toHaveBeenCalledOnce();
+  });
+
+  it('does not retain a timed-out configure attempt on Retry', async () => {
+    resetRevenueCatInitializationForTests();
+    const plugin = {
+      configure: vi.fn()
+        .mockImplementationOnce(() => new Promise<void>(() => undefined))
+        .mockResolvedValueOnce(undefined),
+    };
+    const initialize = createRevenueCatInitializer(plugin, 10);
+    await expect(initialize()).rejects.toBeInstanceOf(RevenueCatTimeoutError);
+    await expect(initialize()).resolves.toBe(plugin);
+    expect(plugin.configure).toHaveBeenCalledTimes(2);
   });
 });
 
