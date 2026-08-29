@@ -24,8 +24,23 @@ workflows:
 
       - name: Install Android 16 SDK
         script: |
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager "platforms;android-36" "build-tools;35.0.0" "build-tools;36.0.0"
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/share/android-sdk}}"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -x "$SDKMANAGER" ] && [ -x "/usr/local/share/android-sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDK_ROOT="/usr/local/share/android-sdk"
+            SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          fi
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            echo "Android SDK manager was not found under the configured SDK root: $SDK_ROOT" >&2
+            exit 1
+          fi
+
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "build-tools;36.0.0"
+          printf 'sdk.dir=%s\n' "$SDK_ROOT" > android/local.properties
+          test -d "$SDK_ROOT/platforms/android-36"
       
       - name: Build Web Assets
         script: |
