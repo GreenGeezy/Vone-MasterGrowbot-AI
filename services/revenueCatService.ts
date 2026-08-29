@@ -5,8 +5,11 @@ import type { CustomerInfo } from '@revenuecat/purchases-capacitor';
 const ANDROID_REVENUECAT_KEY = 'goog_kqOynvNRCABzUPrpfyFvlMvHUna';
 const STARTUP_SYNC_KEY = 'mg_rc_startup_sync_v2';
 const REVENUECAT_INITIALIZATION_TIMEOUT_MS = 10_000;
+const REVENUECAT_NATIVE_OPERATION_TIMEOUT_MS = 4_000;
 export const REVENUECAT_OFFERINGS_TIMEOUT_MS = 12_000;
 let configurationWorkPromise: Promise<any> | null = null;
+let configuredPurchases: any | null = null;
+let configureWasDispatched = false;
 
 export class RevenueCatTimeoutError extends Error {
   readonly code = 'REVENUECAT_TIMEOUT';
@@ -46,6 +49,82 @@ function logRevenueCat(operation: string, details: Record<string, string | numbe
   console.info('[RevenueCat]', { operation, platform: 'android', ...details });
 }
 
+async function runNativeOperation<T>(
+  operation: 'RC_IS_CONFIGURED' | 'RC_CONFIGURE',
+  work: () => Promise<T> | T,
+  timeoutMs = REVENUECAT_NATIVE_OPERATION_TIMEOUT_MS,
+): Promise<T> {
+  const startedAt = Date.now();
+  logRevenueCat(`${operation}_START`, { configured: Boolean(configuredPurchases) });
+  try {
+    const result = await withRevenueCatTimeout(Promise.resolve().then(work), timeoutMs, operation);
+    logRevenueCat(`${operation}_SUCCESS`, { elapsedMs: Date.now() - startedAt, configured: operation === 'RC_CONFIGURE' ? true : Boolean((result as any)?.isConfigured) });
+    return result;
+  } catch (error) {
+    const sanitized = sanitizedRevenueCatError(error);
+    logRevenueCat(error instanceof RevenueCatTimeoutError ? `${operation}_TIMEOUT` : `${operation}_ERROR`, {
+      elapsedMs: Date.now() - startedAt,
+      ...sanitized,
+    });
+    throw error;
+  }
+}
+
+export interface RevenueCatNativePlugin {
+  isConfigured(): Promise<{ isConfigured: boolean }>;
+  configure(options: { apiKey: string }): Promise<void> | void;
+}
+
+async function initializeNativePurchases(
+  Purchases: RevenueCatNativePlugin,
+  nativeTimeoutMs = REVENUECAT_NATIVE_OPERATION_TIMEOUT_MS,
+): Promise<any> {
+  // purchases-capacitor 11.3.2 declares configure as a Promise, but its Android
+  // plugin method is RETURN_NONE. Dispatch it once, then use isConfigured as
+  // the authoritative bridge acknowledgement instead of blocking on a
+  // pre-configuration isConfigured call that can strand startup forever.
+  if (!configureWasDispatched) {
+    configureWasDispatched = true;
+    try {
+      await runNativeOperation('RC_CONFIGURE', () => Purchases.configure({ apiKey: ANDROID_REVENUECAT_KEY }), nativeTimeoutMs);
+    } catch (error) {
+      // A definite rejection permits a safe retry. A timeout is uncertain, so
+      // Retry first re-checks native state before considering another dispatch.
+      if (!(error instanceof RevenueCatTimeoutError)) configureWasDispatched = false;
+      throw error;
+    }
+  }
+
+  const status = await runNativeOperation('RC_IS_CONFIGURED', () => Purchases.isConfigured(), nativeTimeoutMs);
+  if (!status?.isConfigured) {
+    // Native answered definitively that the earlier dispatch did not configure
+    // the SDK. A later Retry may now dispatch configure once more safely.
+    configureWasDispatched = false;
+    throw new Error('RevenueCat native SDK did not become configured.');
+  }
+  configuredPurchases = Purchases;
+  return Purchases;
+}
+
+/** Test seam for the native initialization state machine. */
+export function createRevenueCatInitializer(Purchases: RevenueCatNativePlugin, timeoutMs = REVENUECAT_INITIALIZATION_TIMEOUT_MS) {
+  let attempt: Promise<any> | null = null;
+  return () => {
+    if (configuredPurchases) return Promise.resolve(configuredPurchases);
+    if (!attempt) {
+      attempt = withRevenueCatTimeout(initializeNativePurchases(Purchases, timeoutMs), timeoutMs + 50, 'Subscription service initialization')
+        .finally(() => { attempt = null; });
+    }
+    return attempt;
+  };
+}
+
+export function resetRevenueCatInitializationForTests(): void {
+  configurationWorkPromise = null;
+  configuredPurchases = null;
+  configureWasDispatched = false;
+}
+
 export function hasVerifiedSubscription(customerInfo: CustomerInfo | any): boolean {
   return Boolean(customerInfo?.entitlements?.active?.pro || (customerInfo?.activeSubscriptions?.length || 0) > 0);
 }
@@ -62,31 +141,33 @@ export function packageHasFreeTrial(pkg: any): boolean {
 
 export async function configureRevenueCat(): Promise<any | null> {
   if (Capacitor.getPlatform() !== 'android') return null;
+  if (configuredPurchases) return configuredPurchases;
   if (!configurationWorkPromise) {
-    logRevenueCat('initialize_start', { configured: false });
-    const work = import('@revenuecat/purchases-capacitor').then(async ({ Purchases }) => {
-      const { isConfigured } = await Purchases.isConfigured();
-      if (!isConfigured) await Purchases.configure({ apiKey: ANDROID_REVENUECAT_KEY });
-      logRevenueCat('initialize_success', { configured: true, keyType: 'google_public' });
-      return Purchases;
-    });
+    const startedAt = Date.now();
+    logRevenueCat('RC_INIT_START', { configured: false, keyType: 'google_public' });
+    const work = import('@revenuecat/purchases-capacitor')
+      .then(({ Purchases }) => initializeNativePurchases(Purchases));
     configurationWorkPromise = work.catch(error => {
-      if (configurationWorkPromise) configurationWorkPromise = null;
       const sanitized = sanitizedRevenueCatError(error);
-      logRevenueCat('initialize_failure', { configured: false, ...sanitized });
+      logRevenueCat(error instanceof RevenueCatTimeoutError ? 'RC_INIT_TIMEOUT' : 'RC_INIT_ERROR', {
+        configured: false,
+        elapsedMs: Date.now() - startedAt,
+        ...sanitized,
+      });
       throw error;
+    }).finally(() => {
+      // Successful state is cached separately. Failed/timed-out attempts must
+      // be discarded so Retry never inherits a permanently pending Promise.
+      configurationWorkPromise = null;
     });
   }
-  return withRevenueCatTimeout(
+  const Purchases = await withRevenueCatTimeout(
     configurationWorkPromise,
     REVENUECAT_INITIALIZATION_TIMEOUT_MS,
     'Subscription service initialization',
-  ).catch(error => {
-    if (error instanceof RevenueCatTimeoutError) {
-      logRevenueCat('initialize_timeout', { configured: false, code: error.code });
-    }
-    throw error;
-  });
+  );
+  logRevenueCat('RC_INIT_SUCCESS', { configured: true, keyType: 'google_public' });
+  return Purchases;
 }
 
 export interface RevenueCatPlansResult {
@@ -113,7 +194,7 @@ export async function loadRevenueCatPlans(options: {
   );
   if (!Purchases) throw new Error('Purchases are unavailable on this platform.');
 
-  logRevenueCat('get_offerings_start', { configured: true });
+  logRevenueCat('RC_GET_OFFERINGS_START', { configured: true });
   try {
     const rawResult = await withRevenueCatTimeout(
       Purchases.getOfferings(),
@@ -123,7 +204,7 @@ export async function loadRevenueCatPlans(options: {
     const offerings = normalizeRevenueCatOfferings(rawResult);
     const current = offerings?.current ?? null;
     const packages = Array.isArray(current?.availablePackages) ? current.availablePackages : [];
-    logRevenueCat('get_offerings_success', {
+    logRevenueCat('RC_GET_OFFERINGS_SUCCESS', {
       configured: true,
       currentOffering: Boolean(current),
       packageCount: packages.length,
@@ -134,7 +215,7 @@ export async function loadRevenueCatPlans(options: {
     };
   } catch (error) {
     const sanitized = sanitizedRevenueCatError(error);
-    logRevenueCat(error instanceof RevenueCatTimeoutError ? 'get_offerings_timeout' : 'get_offerings_failure', {
+    logRevenueCat(error instanceof RevenueCatTimeoutError ? 'RC_GET_OFFERINGS_TIMEOUT' : 'RC_GET_OFFERINGS_ERROR', {
       configured: true,
       ...sanitized,
     });

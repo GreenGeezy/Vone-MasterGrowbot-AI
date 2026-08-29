@@ -8,13 +8,92 @@ vi.mock('@capacitor/preferences', () => ({
 }));
 
 import {
+  createRevenueCatInitializer,
   hasVerifiedSubscription,
   loadRevenueCatPlans,
   normalizeRevenueCatOfferings,
   packageHasFreeTrial,
   RevenueCatTimeoutError,
   restoreRevenueCatPurchases,
+  resetRevenueCatInitializationForTests,
 } from './revenueCatService';
+
+describe('RevenueCat native initialization', () => {
+  it('dispatches configure before checking native configured state', async () => {
+    resetRevenueCatInitializationForTests();
+    const order: string[] = [];
+    const plugin = {
+      configure: vi.fn(() => { order.push('configure'); }),
+      isConfigured: vi.fn(async () => { order.push('isConfigured'); return { isConfigured: true }; }),
+    };
+    await createRevenueCatInitializer(plugin, 100)();
+    expect(order).toEqual(['configure', 'isConfigured']);
+    expect(plugin.configure).toHaveBeenCalledOnce();
+  });
+
+  it('shares one configure operation between concurrent callers', async () => {
+    resetRevenueCatInitializationForTests();
+    const plugin = {
+      configure: vi.fn(async () => undefined),
+      isConfigured: vi.fn(async () => ({ isConfigured: true })),
+    };
+    const initialize = createRevenueCatInitializer(plugin, 100);
+    await Promise.all([initialize(), initialize(), initialize()]);
+    expect(plugin.configure).toHaveBeenCalledOnce();
+    expect(plugin.isConfigured).toHaveBeenCalledOnce();
+  });
+
+  it('recovers on Retry after a timed-out native configured check', async () => {
+    resetRevenueCatInitializationForTests();
+    const plugin = {
+      configure: vi.fn(() => undefined),
+      isConfigured: vi.fn()
+        .mockImplementationOnce(() => new Promise(() => undefined))
+        .mockResolvedValueOnce({ isConfigured: true }),
+    };
+    const initialize = createRevenueCatInitializer(plugin, 10);
+    await expect(initialize()).rejects.toBeInstanceOf(RevenueCatTimeoutError);
+    await expect(initialize()).resolves.toBe(plugin);
+    expect(plugin.configure).toHaveBeenCalledOnce();
+    expect(plugin.isConfigured).toHaveBeenCalledTimes(2);
+  });
+
+  it('allows a safe redispatch after native definitively reports not configured', async () => {
+    resetRevenueCatInitializationForTests();
+    const plugin = {
+      configure: vi.fn(() => undefined),
+      isConfigured: vi.fn()
+        .mockResolvedValueOnce({ isConfigured: false })
+        .mockResolvedValueOnce({ isConfigured: true }),
+    };
+    const initialize = createRevenueCatInitializer(plugin, 100);
+    await expect(initialize()).rejects.toThrow('did not become configured');
+    await expect(initialize()).resolves.toBe(plugin);
+    expect(plugin.configure).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers after configure rejects without retaining the failed attempt', async () => {
+    resetRevenueCatInitializationForTests();
+    const plugin = {
+      configure: vi.fn().mockRejectedValueOnce(new Error('bridge unavailable')).mockResolvedValueOnce(undefined),
+      isConfigured: vi.fn(async () => ({ isConfigured: true })),
+    };
+    const initialize = createRevenueCatInitializer(plugin, 100);
+    await expect(initialize()).rejects.toThrow('bridge unavailable');
+    await expect(initialize()).resolves.toBe(plugin);
+    expect(plugin.configure).toHaveBeenCalledTimes(2);
+  });
+
+  it('bounds a configure bridge call that never resolves', async () => {
+    resetRevenueCatInitializationForTests();
+    const plugin = {
+      configure: vi.fn(() => new Promise<void>(() => undefined)),
+      isConfigured: vi.fn(async () => ({ isConfigured: true })),
+    };
+    await expect(createRevenueCatInitializer(plugin, 10)()).rejects.toBeInstanceOf(RevenueCatTimeoutError);
+    expect(plugin.isConfigured).not.toHaveBeenCalled();
+  });
+});
 
 describe('paid access verification', () => {
   it('accepts the active pro entitlement', () => expect(hasVerifiedSubscription({ entitlements: { active: { pro: {} } }, activeSubscriptions: [] })).toBe(true));
