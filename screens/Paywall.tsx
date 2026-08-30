@@ -8,6 +8,8 @@ import { Browser } from '@capacitor/browser';
 import Growbot from '../components/Growbot';
 import {
   configureRevenueCat,
+  getRevenueCatDiagnosticSummary,
+  getRevenueCatUserFacingError,
   hasVerifiedSubscription,
   loadRevenueCatPlans,
   packageHasFreeTrial,
@@ -83,6 +85,8 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
   const [loading, setLoading] = useState(true);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [diagnosticCode, setDiagnosticCode] = useState<string | null>(null);
+  const [diagnosticsCopied, setDiagnosticsCopied] = useState(false);
   const [testimonialIndex, setTestimonialIndex] = useState(0);
 
   useEffect(() => {
@@ -95,6 +99,8 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
   const loadProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setDiagnosticCode(null);
+    setDiagnosticsCopied(false);
     try {
       if (!Capacitor.isNativePlatform()) {
         const mockPackages = [
@@ -115,11 +121,11 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
         const annual = pkgs.find((p: any) => isAnnualPackage(p));
         setSelectedPkgIdentifier(annual ? annual.identifier : pkgs[0].identifier);
 
-      } else {
-        setError('No subscription plans found at this time.');
       }
     } catch (e: any) {
-      setError(e?.message || 'Could not connect to Google Play. Please try again.');
+      const failure = getRevenueCatUserFacingError(e);
+      setDiagnosticCode(failure.code);
+      setError(failure.message || 'Could not connect to Google Play. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -202,6 +208,24 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
     }
   };
 
+  const copyDiagnostics = async () => {
+    const summary = getRevenueCatDiagnosticSummary();
+    const text = `MasterGrowbot RevenueCat: ${summary || `code=${diagnosticCode || 'UNKNOWN'}`}`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+    setDiagnosticsCopied(true);
+  };
+
   const openLink = async (url: string) => {
     try { await Browser.open({ url }); } catch { window.open(url, '_blank'); }
   };
@@ -278,12 +302,20 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
       <div className="fixed inset-0 bg-white z-[60] flex flex-col items-center justify-center p-8 text-center">
         <Growbot size="xl" mood="alert" className="mb-6 opacity-80" />
         <h2 className="text-xl font-black text-gray-900 mb-2">Plans Unavailable</h2>
-        <p className="text-sm text-gray-500 mb-8 max-w-xs">{error}</p>
+        <p className="text-sm text-gray-500 mb-2 max-w-xs">{error}</p>
+        {diagnosticCode && (
+          <p className="text-[11px] font-bold text-gray-400 mb-6" aria-label="RevenueCat diagnostic code">
+            Diagnostic: {diagnosticCode}
+          </p>
+        )}
         <button onClick={loadProducts} disabled={isPurchasing} className="bg-green-600 text-white font-bold px-8 py-3 rounded-xl shadow-lg hover:bg-green-700 active:scale-95 transition-all disabled:opacity-50">
           Retry Connection
         </button>
         <button onClick={handleRestore} disabled={isPurchasing} className="mt-4 text-green-700 font-bold px-5 py-2 disabled:opacity-50">
           {isPurchasing ? 'Checking Purchases...' : 'Already subscribed? Restore Purchases'}
+        </button>
+        <button onClick={copyDiagnostics} className="mt-2 text-gray-500 font-bold text-xs px-5 py-2">
+          {diagnosticsCopied ? 'Diagnostics Copied' : 'Copy Diagnostics'}
         </button>
       </div>
     );

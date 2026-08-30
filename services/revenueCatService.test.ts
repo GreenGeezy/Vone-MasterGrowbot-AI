@@ -7,8 +7,15 @@ vi.mock('@capacitor/preferences', () => ({
   },
 }));
 
+vi.mock('@capacitor/core', () => ({
+  Capacitor: {
+    getPlatform: vi.fn(() => 'android'),
+  },
+  registerPlugin: vi.fn((name: string) => ({ pluginName: name })),
+}));
+
 import {
-  createRevenueCatInitializer,
+  configureRevenueCat,
   hasVerifiedSubscription,
   loadRevenueCatPlans,
   normalizeRevenueCatOfferings,
@@ -19,62 +26,68 @@ import {
 } from './revenueCatService';
 
 describe('RevenueCat native initialization', () => {
-  it('loads the already natively configured plugin without calling configure', async () => {
+  const configuredStatus = {
+    attempted: true,
+    succeeded: true,
+    configured: true,
+    errorCode: 'NONE',
+    elapsedMs: 2,
+    pluginRegistered: true,
+    versionCode: 154,
+    versionName: '1.0.154',
+  };
+
+  it('uses the statically registered plugin after native readiness succeeds', async () => {
     resetRevenueCatInitializationForTests();
-    const plugin = {
-      getOfferings: vi.fn(),
-      getCustomerInfo: vi.fn(),
-      configure: vi.fn(),
-    };
-    await createRevenueCatInitializer(async () => plugin, 100)();
-    expect(plugin.configure).not.toHaveBeenCalled();
+    const ensureConfigured = vi.fn().mockResolvedValue(configuredStatus);
+    const plugin = await configureRevenueCat({ ensureConfigured });
+    expect(ensureConfigured).toHaveBeenCalledOnce();
+    expect(plugin).toBeTruthy();
   });
 
-  it('shares one plugin load operation between concurrent callers', async () => {
+  it('shares one native readiness operation between concurrent callers', async () => {
     resetRevenueCatInitializationForTests();
-    const plugin = {
-      getOfferings: vi.fn(),
-      getCustomerInfo: vi.fn(),
-    };
-    const loader = vi.fn(async () => plugin);
-    const initialize = createRevenueCatInitializer(loader, 100);
-    await Promise.all([initialize(), initialize(), initialize()]);
-    expect(loader).toHaveBeenCalledOnce();
+    const ensureConfigured = vi.fn(async () => configuredStatus);
+    await Promise.all([
+      configureRevenueCat({ ensureConfigured }),
+      configureRevenueCat({ ensureConfigured }),
+      configureRevenueCat({ ensureConfigured }),
+    ]);
+    expect(ensureConfigured).toHaveBeenCalledOnce();
   });
 
-  it('recovers after plugin loading rejects without retaining the failed attempt', async () => {
+  it('recovers after native readiness rejects without retaining the failed attempt', async () => {
     resetRevenueCatInitializationForTests();
-    const plugin = {
-      getOfferings: vi.fn(),
-      getCustomerInfo: vi.fn(),
-    };
-    const loader = vi.fn().mockRejectedValueOnce(new Error('bridge unavailable')).mockResolvedValueOnce(plugin);
-    const initialize = createRevenueCatInitializer(loader, 100);
-    await expect(initialize()).rejects.toThrow('bridge unavailable');
-    await expect(initialize()).resolves.toBe(plugin);
-    expect(loader).toHaveBeenCalledTimes(2);
+    const ensureConfigured = vi.fn()
+      .mockRejectedValueOnce(new Error('bridge unavailable'))
+      .mockResolvedValueOnce(configuredStatus);
+    await expect(configureRevenueCat({ ensureConfigured })).rejects.toThrow('bridge unavailable');
+    await expect(configureRevenueCat({ ensureConfigured })).resolves.toBeTruthy();
+    expect(ensureConfigured).toHaveBeenCalledTimes(2);
   });
 
-  it('bounds a plugin load that never resolves', async () => {
+  it('bounds a native bridge call that never resolves', async () => {
     resetRevenueCatInitializationForTests();
-    const loader = vi.fn(() => new Promise<any>(() => undefined));
-    await expect(createRevenueCatInitializer(loader, 10)()).rejects.toBeInstanceOf(RevenueCatTimeoutError);
-    expect(loader).toHaveBeenCalledOnce();
+    const ensureConfigured = vi.fn(() => new Promise<any>(() => undefined));
+    await expect(configureRevenueCat({ ensureConfigured, bridgeTimeoutMs: 5 })).rejects.toBeInstanceOf(RevenueCatTimeoutError);
+    expect(ensureConfigured).toHaveBeenCalledOnce();
   });
 
-  it('does not retain a timed-out plugin load on Retry', async () => {
+  it('does not retain a timed-out native bridge call on Retry', async () => {
     resetRevenueCatInitializationForTests();
-    const plugin = {
-      getOfferings: vi.fn(),
-      getCustomerInfo: vi.fn(),
-    };
-    const loader = vi.fn()
+    const ensureConfigured = vi.fn()
       .mockImplementationOnce(() => new Promise<any>(() => undefined))
-      .mockResolvedValueOnce(plugin);
-    const initialize = createRevenueCatInitializer(loader, 10);
-    await expect(initialize()).rejects.toBeInstanceOf(RevenueCatTimeoutError);
-    await expect(initialize()).resolves.toBe(plugin);
-    expect(loader).toHaveBeenCalledTimes(2);
+      .mockResolvedValueOnce(configuredStatus);
+    await expect(configureRevenueCat({ ensureConfigured, bridgeTimeoutMs: 5 })).rejects.toBeInstanceOf(RevenueCatTimeoutError);
+    await expect(configureRevenueCat({ ensureConfigured, bridgeTimeoutMs: 5 })).resolves.toBeTruthy();
+    expect(ensureConfigured).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects an explicit native not-configured status', async () => {
+    resetRevenueCatInitializationForTests();
+    await expect(configureRevenueCat({
+      ensureConfigured: async () => ({ ...configuredStatus, succeeded: false, configured: false, errorCode: 'IllegalStateException' }),
+    })).rejects.toMatchObject({ code: 'RC_NATIVE_NOT_CONFIGURED' });
   });
 });
 
@@ -124,6 +137,37 @@ describe('RevenueCat plan loading', () => {
     })).rejects.toThrow('Play Billing unavailable');
   });
 
+  it('verifies customer info before requesting offerings when the bridge supports it', async () => {
+    const callOrder: string[] = [];
+    const customerInfo = { entitlements: { active: {} }, activeSubscriptions: [] };
+    const result = await loadRevenueCatPlans({
+      configure: async () => ({
+        getCustomerInfo: async () => { callOrder.push('customerInfo'); return { customerInfo }; },
+        getOfferings: async () => {
+          callOrder.push('offerings');
+          return { current: { identifier: 'default', availablePackages: [annualPackage] } };
+        },
+      }),
+      customerInfoTimeoutMs: 100,
+      timeoutMs: 100,
+    });
+    expect(callOrder).toEqual(['customerInfo', 'offerings']);
+    expect(result.packages).toHaveLength(1);
+  });
+
+  it('reports a customer-info timeout before requesting offerings', async () => {
+    const getOfferings = vi.fn();
+    await expect(loadRevenueCatPlans({
+      configure: async () => ({
+        getCustomerInfo: () => new Promise(() => undefined),
+        getOfferings,
+      }),
+      customerInfoTimeoutMs: 5,
+      timeoutMs: 100,
+    })).rejects.toMatchObject({ code: 'RC_CUSTOMER_INFO_TIMEOUT' });
+    expect(getOfferings).not.toHaveBeenCalled();
+  });
+
   it('bounds a getOfferings call that never resolves', async () => {
     await expect(loadRevenueCatPlans({
       configure: async () => ({ getOfferings: () => new Promise(() => undefined) }),
@@ -131,20 +175,18 @@ describe('RevenueCat plan loading', () => {
     })).rejects.toBeInstanceOf(RevenueCatTimeoutError);
   });
 
-  it('reports no packages when the current offering is null', async () => {
-    const result = await loadRevenueCatPlans({
+  it('reports a specific error when the current offering is null', async () => {
+    await expect(loadRevenueCatPlans({
       configure: async () => ({ getOfferings: async () => ({ current: null, all: {} }) }),
       timeoutMs: 100,
-    });
-    expect(result).toEqual({ packages: [], currentOfferingIdentifier: null });
+    })).rejects.toMatchObject({ code: 'RC_CURRENT_OFFERING_MISSING' });
   });
 
-  it('reports no packages when the current offering is empty', async () => {
-    const result = await loadRevenueCatPlans({
+  it('reports a specific error when the current offering is empty', async () => {
+    await expect(loadRevenueCatPlans({
       configure: async () => ({ getOfferings: async () => ({ current: { identifier: 'default', availablePackages: [] } }) }),
       timeoutMs: 100,
-    });
-    expect(result.packages).toEqual([]);
+    })).rejects.toMatchObject({ code: 'RC_PACKAGES_EMPTY' });
   });
 
   it('waits for delayed initialization before requesting offerings', async () => {
@@ -163,14 +205,6 @@ describe('RevenueCat plan loading', () => {
       configure: async () => { throw new Error('ConfigurationError'); },
       timeoutMs: 100,
     })).rejects.toThrow('ConfigurationError');
-  });
-
-  it('bounds initialization that never resolves', async () => {
-    await expect(loadRevenueCatPlans({
-      configure: () => new Promise(() => undefined),
-      initializationTimeoutMs: 5,
-      timeoutMs: 100,
-    })).rejects.toBeInstanceOf(RevenueCatTimeoutError);
   });
 
   it('allows a successful retry after an offering failure', async () => {
