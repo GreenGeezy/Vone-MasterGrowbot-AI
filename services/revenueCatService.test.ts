@@ -19,58 +19,62 @@ import {
 } from './revenueCatService';
 
 describe('RevenueCat native initialization', () => {
-  it('awaits the native configure bridge completion', async () => {
+  it('loads the already natively configured plugin without calling configure', async () => {
     resetRevenueCatInitializationForTests();
-    const order: string[] = [];
     const plugin = {
-      configure: vi.fn(async () => { order.push('configure'); }),
+      getOfferings: vi.fn(),
+      getCustomerInfo: vi.fn(),
+      configure: vi.fn(),
     };
-    await createRevenueCatInitializer(plugin, 100)();
-    expect(order).toEqual(['configure']);
-    expect(plugin.configure).toHaveBeenCalledOnce();
+    await createRevenueCatInitializer(async () => plugin, 100)();
+    expect(plugin.configure).not.toHaveBeenCalled();
   });
 
-  it('shares one configure operation between concurrent callers', async () => {
+  it('shares one plugin load operation between concurrent callers', async () => {
     resetRevenueCatInitializationForTests();
     const plugin = {
-      configure: vi.fn(async () => undefined),
+      getOfferings: vi.fn(),
+      getCustomerInfo: vi.fn(),
     };
-    const initialize = createRevenueCatInitializer(plugin, 100);
+    const loader = vi.fn(async () => plugin);
+    const initialize = createRevenueCatInitializer(loader, 100);
     await Promise.all([initialize(), initialize(), initialize()]);
-    expect(plugin.configure).toHaveBeenCalledOnce();
+    expect(loader).toHaveBeenCalledOnce();
   });
 
-  it('recovers after configure rejects without retaining the failed attempt', async () => {
+  it('recovers after plugin loading rejects without retaining the failed attempt', async () => {
     resetRevenueCatInitializationForTests();
     const plugin = {
-      configure: vi.fn().mockRejectedValueOnce(new Error('bridge unavailable')).mockResolvedValueOnce(undefined),
+      getOfferings: vi.fn(),
+      getCustomerInfo: vi.fn(),
     };
-    const initialize = createRevenueCatInitializer(plugin, 100);
+    const loader = vi.fn().mockRejectedValueOnce(new Error('bridge unavailable')).mockResolvedValueOnce(plugin);
+    const initialize = createRevenueCatInitializer(loader, 100);
     await expect(initialize()).rejects.toThrow('bridge unavailable');
     await expect(initialize()).resolves.toBe(plugin);
-    expect(plugin.configure).toHaveBeenCalledTimes(2);
+    expect(loader).toHaveBeenCalledTimes(2);
   });
 
-  it('bounds a configure bridge call that never resolves', async () => {
+  it('bounds a plugin load that never resolves', async () => {
     resetRevenueCatInitializationForTests();
-    const plugin = {
-      configure: vi.fn(() => new Promise<void>(() => undefined)),
-    };
-    await expect(createRevenueCatInitializer(plugin, 10)()).rejects.toBeInstanceOf(RevenueCatTimeoutError);
-    expect(plugin.configure).toHaveBeenCalledOnce();
+    const loader = vi.fn(() => new Promise<any>(() => undefined));
+    await expect(createRevenueCatInitializer(loader, 10)()).rejects.toBeInstanceOf(RevenueCatTimeoutError);
+    expect(loader).toHaveBeenCalledOnce();
   });
 
-  it('does not retain a timed-out configure attempt on Retry', async () => {
+  it('does not retain a timed-out plugin load on Retry', async () => {
     resetRevenueCatInitializationForTests();
     const plugin = {
-      configure: vi.fn()
-        .mockImplementationOnce(() => new Promise<void>(() => undefined))
-        .mockResolvedValueOnce(undefined),
+      getOfferings: vi.fn(),
+      getCustomerInfo: vi.fn(),
     };
-    const initialize = createRevenueCatInitializer(plugin, 10);
+    const loader = vi.fn()
+      .mockImplementationOnce(() => new Promise<any>(() => undefined))
+      .mockResolvedValueOnce(plugin);
+    const initialize = createRevenueCatInitializer(loader, 10);
     await expect(initialize()).rejects.toBeInstanceOf(RevenueCatTimeoutError);
     await expect(initialize()).resolves.toBe(plugin);
-    expect(plugin.configure).toHaveBeenCalledTimes(2);
+    expect(loader).toHaveBeenCalledTimes(2);
   });
 });
 

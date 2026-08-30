@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 
-const APP_VERSION = '1.0.152';
+const APP_VERSION = '1.0.153';
 
 export function logOperationError(operation: string, error: any, localFallbackUsed: boolean): void {
   console.warn('[Reliability]', {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createAuthInitializer } from './supabaseClient';
+import { createAuthInitializer, createProfileEnsurer } from './supabaseClient';
 
 const session = { access_token: 'redacted', refresh_token: 'redacted', user: { id: 'user-1' } } as any;
 
@@ -32,5 +32,34 @@ describe('Supabase auth startup single-flight', () => {
     const result = await createAuthInitializer({ getSession, signInAnonymously } as any, 0)();
     expect(result.error).toBe(error);
     expect(signInAnonymously).not.toHaveBeenCalled();
+  });
+});
+
+describe('profile prerequisite single-flight', () => {
+  it('shares one profile creation attempt for the same authenticated user', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const work = vi.fn(async (user: any) => {
+      await gate;
+      return { ok: true, profile: { id: user.id }, user, error: null };
+    });
+    const ensure = createProfileEnsurer(work);
+    const user = { id: 'user-1' } as any;
+    const first = ensure(user);
+    const second = ensure(user);
+    release();
+    expect(await first).toEqual(await second);
+    expect(work).toHaveBeenCalledOnce();
+  });
+
+  it('allows a later retry after a failed attempt settles', async () => {
+    const user = { id: 'user-1' } as any;
+    const work = vi.fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ ok: true, profile: { id: user.id }, user, error: null });
+    const ensure = createProfileEnsurer(work);
+    await expect(ensure(user)).rejects.toThrow('offline');
+    await expect(ensure(user)).resolves.toMatchObject({ ok: true });
+    expect(work).toHaveBeenCalledTimes(2);
   });
 });

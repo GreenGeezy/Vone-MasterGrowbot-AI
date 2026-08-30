@@ -2,10 +2,8 @@ import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import type { CustomerInfo } from '@revenuecat/purchases-capacitor';
 
-const ANDROID_REVENUECAT_KEY = 'goog_kqOynvNRCABzUPrpfyFvlMvHUna';
 const STARTUP_SYNC_KEY = 'mg_rc_startup_sync_v2';
 const REVENUECAT_INITIALIZATION_TIMEOUT_MS = 10_000;
-const REVENUECAT_NATIVE_OPERATION_TIMEOUT_MS = 4_000;
 export const REVENUECAT_OFFERINGS_TIMEOUT_MS = 12_000;
 let configurationWorkPromise: Promise<any> | null = null;
 let configuredPurchases: any | null = null;
@@ -48,56 +46,25 @@ function logRevenueCat(operation: string, details: Record<string, string | numbe
   console.info('[RevenueCat]', { operation, platform: 'android', ...details });
 }
 
-async function runNativeOperation<T>(
-  operation: 'RC_CONFIGURE',
-  work: () => Promise<T> | T,
-  timeoutMs = REVENUECAT_NATIVE_OPERATION_TIMEOUT_MS,
-): Promise<T> {
-  const startedAt = Date.now();
-  logRevenueCat(`${operation}_START`, { configured: Boolean(configuredPurchases) });
-  try {
-    const result = await withRevenueCatTimeout(Promise.resolve().then(work), timeoutMs, operation);
-    logRevenueCat(`${operation}_SUCCESS`, { elapsedMs: Date.now() - startedAt, configured: true });
-    return result;
-  } catch (error) {
-    const sanitized = sanitizedRevenueCatError(error);
-    logRevenueCat(error instanceof RevenueCatTimeoutError ? `${operation}_TIMEOUT` : `${operation}_ERROR`, {
-      elapsedMs: Date.now() - startedAt,
-      ...sanitized,
-    });
-    throw error;
-  }
-}
-
 export interface RevenueCatNativePlugin {
-  configure(options: { apiKey: string }): Promise<void> | void;
+  getOfferings(): Promise<any>;
+  getCustomerInfo(): Promise<any>;
 }
 
-async function initializeNativePurchases(
-  Purchases: RevenueCatNativePlugin,
-  nativeTimeoutMs = REVENUECAT_NATIVE_OPERATION_TIMEOUT_MS,
-): Promise<any> {
-  // The postinstall patch corrects purchases-capacitor 11.3.2's Android
-  // configure annotation from RETURN_NONE to RETURN_PROMISE. This await now
-  // resolves only after the native plugin has configured Purchases and called
-  // call.resolve(). Do not gate configuration on isConfigured(): that bridge
-  // method is the operation that remained unresolved on the affected devices.
-  await runNativeOperation(
-    'RC_CONFIGURE',
-    () => Purchases.configure({ apiKey: ANDROID_REVENUECAT_KEY }),
-    nativeTimeoutMs,
-  );
-  configuredPurchases = Purchases;
-  return Purchases;
-}
-
-/** Test seam for the native initialization state machine. */
-export function createRevenueCatInitializer(Purchases: RevenueCatNativePlugin, timeoutMs = REVENUECAT_INITIALIZATION_TIMEOUT_MS) {
+/** Test seam for the single-flight native plugin loader. */
+export function createRevenueCatInitializer(
+  loadPurchases: () => Promise<RevenueCatNativePlugin>,
+  timeoutMs = REVENUECAT_INITIALIZATION_TIMEOUT_MS,
+) {
   let attempt: Promise<any> | null = null;
   return () => {
     if (configuredPurchases) return Promise.resolve(configuredPurchases);
     if (!attempt) {
-      attempt = withRevenueCatTimeout(initializeNativePurchases(Purchases, timeoutMs), timeoutMs + 50, 'Subscription service initialization')
+      attempt = withRevenueCatTimeout(loadPurchases(), timeoutMs, 'Subscription service initialization')
+        .then(Purchases => {
+          configuredPurchases = Purchases;
+          return Purchases;
+        })
         .finally(() => { attempt = null; });
     }
     return attempt;
@@ -128,9 +95,14 @@ export async function configureRevenueCat(): Promise<any | null> {
   if (configuredPurchases) return configuredPurchases;
   if (!configurationWorkPromise) {
     const startedAt = Date.now();
-    logRevenueCat('RC_INIT_START', { configured: false, keyType: 'google_public' });
+    logRevenueCat('RC_INIT_START', { configured: false, keyType: 'google_public', source: 'android_application' });
     const work = import('@revenuecat/purchases-capacitor')
-      .then(({ Purchases }) => initializeNativePurchases(Purchases));
+      .then(({ Purchases }) => {
+        // MasterGrowbotApplication configured the native singleton before the
+        // WebView started. Never call configure() or isConfigured() here.
+        configuredPurchases = Purchases;
+        return Purchases;
+      });
     configurationWorkPromise = work.catch(error => {
       const sanitized = sanitizedRevenueCatError(error);
       logRevenueCat(error instanceof RevenueCatTimeoutError ? 'RC_INIT_TIMEOUT' : 'RC_INIT_ERROR', {
@@ -150,7 +122,7 @@ export async function configureRevenueCat(): Promise<any | null> {
     REVENUECAT_INITIALIZATION_TIMEOUT_MS,
     'Subscription service initialization',
   );
-  logRevenueCat('RC_INIT_SUCCESS', { configured: true, keyType: 'google_public' });
+  logRevenueCat('RC_INIT_SUCCESS', { configured: true, keyType: 'google_public', source: 'android_application' });
   return Purchases;
 }
 

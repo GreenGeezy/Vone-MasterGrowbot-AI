@@ -67,22 +67,42 @@ export interface EnsureProfileResult {
   error: unknown | null;
 }
 
+export function createProfileEnsurer(
+  work: (user: User) => Promise<EnsureProfileResult>,
+) {
+  const inFlight = new Map<string, Promise<EnsureProfileResult>>();
+  return (user: User): Promise<EnsureProfileResult> => {
+    const existing = inFlight.get(user.id);
+    if (existing) return existing;
+    const attempt = work(user).finally(() => {
+      if (inFlight.get(user.id) === attempt) inFlight.delete(user.id);
+    });
+    inFlight.set(user.id, attempt);
+    return attempt;
+  };
+}
+
+const ensureProfileRow = createProfileEnsurer(async (user: User): Promise<EnsureProfileResult> => {
+  const existing = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  if (existing.data) return { ok: true, profile: existing.data, user, error: null };
+  if (existing.error) return { ok: false, profile: null, user, error: existing.error };
+
+  const inserted = await supabase.from('profiles').insert({ id: user.id }).select('*').maybeSingle();
+  if (inserted.data) return { ok: true, profile: inserted.data, user, error: null };
+  // Keep the cross-process recovery path. Same-process callers no longer race,
+  // but another process or an older installed client may still create the row.
+  if (inserted.error?.code === '23505') {
+    const concurrent = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    if (concurrent.data) return { ok: true, profile: concurrent.data, user, error: null };
+    return { ok: false, profile: null, user, error: concurrent.error || inserted.error };
+  }
+  return { ok: false, profile: null, user, error: inserted.error || new Error('Profile insert returned no row') };
+});
+
 export async function ensureProfileForCurrentUser(): Promise<EnsureProfileResult> {
   const auth = await initializeSupabaseAuth();
   if (!auth.user?.id) return { ok: false, profile: null, user: null, error: auth.error || new Error('No authenticated user') };
-
-  const existing = await supabase.from('profiles').select('*').eq('id', auth.user.id).maybeSingle();
-  if (existing.data) return { ok: true, profile: existing.data, user: auth.user, error: null };
-  if (existing.error) return { ok: false, profile: null, user: auth.user, error: existing.error };
-
-  const inserted = await supabase.from('profiles').insert({ id: auth.user.id }).select('*').maybeSingle();
-  if (inserted.data) return { ok: true, profile: inserted.data, user: auth.user, error: null };
-  if (inserted.error?.code === '23505') {
-    const concurrent = await supabase.from('profiles').select('*').eq('id', auth.user.id).maybeSingle();
-    if (concurrent.data) return { ok: true, profile: concurrent.data, user: auth.user, error: null };
-    return { ok: false, profile: null, user: auth.user, error: concurrent.error || inserted.error };
-  }
-  return { ok: false, profile: null, user: auth.user, error: inserted.error || new Error('Profile insert returned no row') };
+  return ensureProfileRow(auth.user);
 }
 
 export const signInWithGoogle = async () => {

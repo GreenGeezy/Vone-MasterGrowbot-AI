@@ -1,5 +1,6 @@
 # 1. PROTECT ENTRY POINTS (Fixes the Startup Crash)
 -keep public class com.mastergrowbot.app.MainActivity { *; }
+-keep public class com.mastergrowbot.app.MasterGrowbotApplication { *; }
 
 # 2. PROTECT CAPACITOR ENGINE
 -keep public class com.getcapacitor.** { *; }

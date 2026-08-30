@@ -4,7 +4,6 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "postinstall": "node scripts/patch-revenuecat-capacitor.mjs",
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",

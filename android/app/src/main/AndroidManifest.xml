@@ -14,6 +14,7 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
+        android:name=".MasterGrowbotApplication"
         android:allowBackup="true"
         android:backupAgent="com.revenuecat.purchases.backup.RevenueCatBackupAgent"
         android:icon="@mipmap/ic_launcher"
