@@ -4,8 +4,10 @@ import { Purchases, type CustomerInfo } from '@revenuecat/purchases-capacitor';
 
 const STARTUP_SYNC_KEY = 'mg_rc_startup_sync_v2';
 const REVENUECAT_BRIDGE_TIMEOUT_MS = 5_000;
-const REVENUECAT_CUSTOMER_INFO_TIMEOUT_MS = 8_000;
-export const REVENUECAT_OFFERINGS_TIMEOUT_MS = 12_000;
+const REVENUECAT_CUSTOMER_INFO_TIMEOUT_MS = 6_000;
+const REVENUECAT_RECOVERY_TIMEOUT_MS = 3_000;
+export const REVENUECAT_OFFERINGS_TIMEOUT_MS = 10_000;
+export const REVENUECAT_PAYWALL_TIMEOUT_MS = 12_000;
 
 export interface RevenueCatNativeStatus {
   attempted: boolean;
@@ -21,6 +23,7 @@ export interface RevenueCatNativeStatus {
 interface RevenueCatDiagnosticsPlugin {
   getStatus(): Promise<RevenueCatNativeStatus>;
   ensureConfigured(): Promise<RevenueCatNativeStatus>;
+  recoverConnection(): Promise<RevenueCatNativeStatus>;
 }
 
 // Intentionally static: the Play WebView must never fetch a lazy RevenueCat chunk.
@@ -118,9 +121,11 @@ export function getRevenueCatUserFacingError(error: unknown): { code: string; me
   const sanitized = sanitizedRevenueCatError(error);
   const messages: Record<string, string> = {
     RC_BRIDGE_TIMEOUT: 'The subscription connection did not respond. Please retry.',
+    RC_CONNECTION_RECOVERY_TIMEOUT: 'Google Play did not reconnect. Please retry after reopening the app.',
     RC_NATIVE_NOT_CONFIGURED: 'The subscription service could not start on this device.',
     RC_CUSTOMER_INFO_TIMEOUT: 'Google Play account verification timed out. Please retry.',
     RC_OFFERINGS_TIMEOUT: 'Google Play plans took too long to load. Please retry.',
+    RC_PAYWALL_TIMEOUT: 'Google Play plans took too long to load. Please retry.',
     RC_CURRENT_OFFERING_MISSING: 'No subscription offering is currently available.',
     RC_PACKAGES_EMPTY: 'Google Play returned no subscription plans for this account.',
   };
@@ -200,68 +205,88 @@ export function normalizeRevenueCatOfferings(result: any): any {
   return result?.offerings ?? result;
 }
 
-export async function loadRevenueCatPlans(options: {
-  configure?: () => Promise<any | null>;
-  customerInfoTimeoutMs?: number;
-  timeoutMs?: number;
-} = {}): Promise<RevenueCatPlansResult> {
-  const PurchasesPlugin = await (options.configure ?? configureRevenueCat)();
-  if (!PurchasesPlugin) {
-    throw new RevenueCatOperationError('RC_NATIVE_NOT_CONFIGURED', 'Purchases are unavailable on this platform.');
-  }
-
-  if (typeof PurchasesPlugin.getCustomerInfo === 'function') {
-    logRevenueCat('RC_GET_CUSTOMER_INFO_START', { configured: true });
-    try {
-      const { customerInfo } = await withRevenueCatTimeout<any>(
-        PurchasesPlugin.getCustomerInfo(),
-        options.customerInfoTimeoutMs ?? REVENUECAT_CUSTOMER_INFO_TIMEOUT_MS,
-        'Google Play account verification',
-        'RC_CUSTOMER_INFO_TIMEOUT',
-      );
-      logRevenueCat('RC_GET_CUSTOMER_INFO_SUCCESS', {
-        configured: true,
-        activeSubscription: hasVerifiedSubscription(customerInfo),
-      });
-    } catch (error) {
-      const sanitized = sanitizedRevenueCatError(error);
-      logRevenueCat(error instanceof RevenueCatTimeoutError ? 'RC_GET_CUSTOMER_INFO_TIMEOUT' : 'RC_GET_CUSTOMER_INFO_ERROR', {
-        configured: true,
-        ...sanitized,
-      });
-      throw error;
-    }
-  }
-
-  logRevenueCat('RC_GET_OFFERINGS_START', { configured: true });
+async function recoverNativeRevenueCatConnection(
+  recoverConnection: () => Promise<RevenueCatNativeStatus> = () => RevenueCatDiagnostics.recoverConnection(),
+): Promise<void> {
+  logRevenueCat('RC_CONNECTION_RECOVERY_START', { configured: Boolean(verifiedNativeStatus?.configured) });
   try {
-    const rawResult = await withRevenueCatTimeout(
-      PurchasesPlugin.getOfferings(),
-      options.timeoutMs ?? REVENUECAT_OFFERINGS_TIMEOUT_MS,
-      'Google Play plan retrieval',
-      'RC_OFFERINGS_TIMEOUT',
+    const status = await withRevenueCatTimeout(
+      recoverConnection(),
+      REVENUECAT_RECOVERY_TIMEOUT_MS,
+      'Google Play connection recovery',
+      'RC_CONNECTION_RECOVERY_TIMEOUT',
     );
-    const offerings = normalizeRevenueCatOfferings(rawResult);
-    const current = offerings?.current ?? null;
-    if (!current) {
-      throw new RevenueCatOperationError('RC_CURRENT_OFFERING_MISSING', 'No subscription offering is currently available.');
+    logRevenueCat('RC_CONNECTION_RECOVERY_SUCCESS', statusDetails(status));
+    if (!status.configured) {
+      verifiedNativeStatus = null;
+      throw new RevenueCatOperationError(
+        'RC_NATIVE_NOT_CONFIGURED',
+        'The subscription service could not restart on this device.',
+      );
     }
-    const packages = Array.isArray(current.availablePackages) ? current.availablePackages : [];
-    if (!packages.length) {
-      throw new RevenueCatOperationError('RC_PACKAGES_EMPTY', 'Google Play returned no subscription plans for this account.');
-    }
-    logRevenueCat('RC_GET_OFFERINGS_SUCCESS', {
-      configured: true,
-      currentOffering: true,
-      packageCount: packages.length,
-    });
-    return {
-      packages,
-      currentOfferingIdentifier: current.identifier ?? 'unknown',
-    };
+    verifiedNativeStatus = status;
   } catch (error) {
     const sanitized = sanitizedRevenueCatError(error);
-    logRevenueCat(error instanceof RevenueCatTimeoutError ? 'RC_GET_OFFERINGS_TIMEOUT' : 'RC_GET_OFFERINGS_ERROR', {
+    logRevenueCat(error instanceof RevenueCatTimeoutError ? 'RC_CONNECTION_RECOVERY_TIMEOUT' : 'RC_CONNECTION_RECOVERY_ERROR', {
+      configured: false,
+      ...sanitized,
+    });
+    throw error;
+  }
+}
+
+export async function loadRevenueCatPlans(options: {
+  configure?: () => Promise<any | null>;
+  recoverConnection?: () => Promise<RevenueCatNativeStatus>;
+  recoverBeforeLoad?: boolean;
+  timeoutMs?: number;
+  totalTimeoutMs?: number;
+} = {}): Promise<RevenueCatPlansResult> {
+  try {
+    return await withRevenueCatTimeout((async () => {
+      if (options.recoverBeforeLoad) {
+        await recoverNativeRevenueCatConnection(options.recoverConnection);
+      }
+
+      const PurchasesPlugin = await (options.configure ?? configureRevenueCat)();
+      if (!PurchasesPlugin) {
+        throw new RevenueCatOperationError('RC_NATIVE_NOT_CONFIGURED', 'Purchases are unavailable on this platform.');
+      }
+
+      // Offerings are the only prerequisite for rendering the paywall. Waiting for
+      // CustomerInfo first can strand this request behind a hung BillingClient call.
+      logRevenueCat('RC_GET_OFFERINGS_START', { configured: true });
+      const rawResult = await withRevenueCatTimeout(
+        PurchasesPlugin.getOfferings(),
+        options.timeoutMs ?? REVENUECAT_OFFERINGS_TIMEOUT_MS,
+        'Google Play plan retrieval',
+        'RC_OFFERINGS_TIMEOUT',
+      );
+      const offerings = normalizeRevenueCatOfferings(rawResult);
+      const current = offerings?.current ?? null;
+      if (!current) {
+        throw new RevenueCatOperationError('RC_CURRENT_OFFERING_MISSING', 'No subscription offering is currently available.');
+      }
+      const packages = Array.isArray(current.availablePackages) ? current.availablePackages : [];
+      if (!packages.length) {
+        throw new RevenueCatOperationError('RC_PACKAGES_EMPTY', 'Google Play returned no subscription plans for this account.');
+      }
+      logRevenueCat('RC_GET_OFFERINGS_SUCCESS', {
+        configured: true,
+        currentOffering: true,
+        packageCount: packages.length,
+      });
+      return {
+        packages,
+        currentOfferingIdentifier: current.identifier ?? 'unknown',
+      };
+    })(), options.totalTimeoutMs ?? REVENUECAT_PAYWALL_TIMEOUT_MS, 'Subscription plan loading', 'RC_PAYWALL_TIMEOUT');
+  } catch (error) {
+    const sanitized = sanitizedRevenueCatError(error);
+    const operation = error instanceof RevenueCatTimeoutError
+      ? (error.code === 'RC_PAYWALL_TIMEOUT' ? 'RC_PAYWALL_TIMEOUT' : 'RC_GET_OFFERINGS_TIMEOUT')
+      : 'RC_GET_OFFERINGS_ERROR';
+    logRevenueCat(operation, {
       configured: true,
       ...sanitized,
     });
@@ -269,21 +294,30 @@ export async function loadRevenueCatPlans(options: {
   }
 }
 
-export async function getStartupSubscriptionStatus(): Promise<{ isSubscribed: boolean; customerInfo: any | null }> {
-  const PurchasesPlugin = await configureRevenueCat();
+export async function getStartupSubscriptionStatus(options: {
+  configure?: () => Promise<any | null>;
+  timeoutMs?: number;
+} = {}): Promise<{ isSubscribed: boolean; customerInfo: any | null }> {
+  const PurchasesPlugin = await (options.configure ?? configureRevenueCat)();
   if (!PurchasesPlugin) return { isSubscribed: false, customerInfo: null };
-  let { customerInfo } = await PurchasesPlugin.getCustomerInfo();
+  logRevenueCat('RC_STARTUP_CUSTOMER_INFO_START', { configured: true });
+  const { customerInfo } = await withRevenueCatTimeout<{ customerInfo: any }>(
+    PurchasesPlugin.getCustomerInfo(),
+    options.timeoutMs ?? REVENUECAT_CUSTOMER_INFO_TIMEOUT_MS,
+    'Startup subscription verification',
+    'RC_CUSTOMER_INFO_TIMEOUT',
+  );
   if (hasVerifiedSubscription(customerInfo)) {
     await Preferences.set({ key: STARTUP_SYNC_KEY, value: 'healthy' });
+    logRevenueCat('RC_STARTUP_CUSTOMER_INFO_SUCCESS', { configured: true, activeSubscription: true });
     return { isSubscribed: true, customerInfo };
   }
-  const { value: syncState } = await Preferences.get({ key: STARTUP_SYNC_KEY });
-  if (!syncState) {
-    await PurchasesPlugin.syncPurchases();
-    ({ customerInfo } = await PurchasesPlugin.getCustomerInfo());
-    await Preferences.set({ key: STARTUP_SYNC_KEY, value: hasVerifiedSubscription(customerInfo) ? 'healthy' : 'checked' });
-  }
-  return { isSubscribed: hasVerifiedSubscription(customerInfo), customerInfo };
+  // Do not run syncPurchases during startup. RevenueCat manages purchases made
+  // through its SDK; explicit restoration remains available on the first screen.
+  // A startup sync can keep BillingClient busy after the UI timeout and block the
+  // later getOfferings request used by the paywall.
+  logRevenueCat('RC_STARTUP_CUSTOMER_INFO_SUCCESS', { configured: true, activeSubscription: false });
+  return { isSubscribed: false, customerInfo };
 }
 
 export async function restoreRevenueCatPurchases(options: {

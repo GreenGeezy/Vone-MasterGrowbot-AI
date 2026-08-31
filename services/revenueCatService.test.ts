@@ -16,6 +16,7 @@ vi.mock('@capacitor/core', () => ({
 
 import {
   configureRevenueCat,
+  getStartupSubscriptionStatus,
   hasVerifiedSubscription,
   loadRevenueCatPlans,
   normalizeRevenueCatOfferings,
@@ -33,8 +34,8 @@ describe('RevenueCat native initialization', () => {
     errorCode: 'NONE',
     elapsedMs: 2,
     pluginRegistered: true,
-    versionCode: 154,
-    versionName: '1.0.154',
+    versionCode: 155,
+    versionName: '1.0.155',
   };
 
   it('uses the statically registered plugin after native readiness succeeds', async () => {
@@ -100,6 +101,31 @@ describe('paid access verification', () => {
   });
 });
 
+describe('startup subscription verification', () => {
+  it('does not run syncPurchases during startup before paywall offerings load', async () => {
+    const syncPurchases = vi.fn();
+    const customerInfo = { entitlements: { active: {} }, activeSubscriptions: [] };
+    const result = await getStartupSubscriptionStatus({
+      configure: async () => ({
+        getCustomerInfo: vi.fn().mockResolvedValue({ customerInfo }),
+        syncPurchases,
+      }),
+      timeoutMs: 100,
+    });
+    expect(result.isSubscribed).toBe(false);
+    expect(syncPurchases).not.toHaveBeenCalled();
+  });
+
+  it('still recognizes a returning active pro subscriber', async () => {
+    const customerInfo = { entitlements: { active: { pro: {} } }, activeSubscriptions: [] };
+    const result = await getStartupSubscriptionStatus({
+      configure: async () => ({ getCustomerInfo: vi.fn().mockResolvedValue({ customerInfo }) }),
+      timeoutMs: 100,
+    });
+    expect(result.isSubscribed).toBe(true);
+  });
+});
+
 describe('trial disclosure', () => {
   it('shows a Google Play trial only when the selected default option has a free phase', () => {
     expect(packageHasFreeTrial({ product: { defaultOption: { freePhase: { billingPeriod: 'P7D' } } } })).toBe(true);
@@ -137,35 +163,32 @@ describe('RevenueCat plan loading', () => {
     })).rejects.toThrow('Play Billing unavailable');
   });
 
-  it('verifies customer info before requesting offerings when the bridge supports it', async () => {
+  it('requests offerings without waiting on customer info', async () => {
     const callOrder: string[] = [];
-    const customerInfo = { entitlements: { active: {} }, activeSubscriptions: [] };
     const result = await loadRevenueCatPlans({
       configure: async () => ({
-        getCustomerInfo: async () => { callOrder.push('customerInfo'); return { customerInfo }; },
+        getCustomerInfo: async () => { callOrder.push('customerInfo'); return { customerInfo: null }; },
         getOfferings: async () => {
           callOrder.push('offerings');
           return { current: { identifier: 'default', availablePackages: [annualPackage] } };
         },
       }),
-      customerInfoTimeoutMs: 100,
       timeoutMs: 100,
     });
-    expect(callOrder).toEqual(['customerInfo', 'offerings']);
+    expect(callOrder).toEqual(['offerings']);
     expect(result.packages).toHaveLength(1);
   });
 
-  it('reports a customer-info timeout before requesting offerings', async () => {
-    const getOfferings = vi.fn();
+  it('does not let a hung customer-info implementation block offerings', async () => {
+    const getOfferings = vi.fn().mockResolvedValue({ current: { identifier: 'default', availablePackages: [annualPackage] } });
     await expect(loadRevenueCatPlans({
       configure: async () => ({
         getCustomerInfo: () => new Promise(() => undefined),
         getOfferings,
       }),
-      customerInfoTimeoutMs: 5,
       timeoutMs: 100,
-    })).rejects.toMatchObject({ code: 'RC_CUSTOMER_INFO_TIMEOUT' });
-    expect(getOfferings).not.toHaveBeenCalled();
+    })).resolves.toMatchObject({ packages: [annualPackage] });
+    expect(getOfferings).toHaveBeenCalledOnce();
   });
 
   it('bounds a getOfferings call that never resolves', async () => {
@@ -214,6 +237,39 @@ describe('RevenueCat plan loading', () => {
     const configure = vi.fn(async () => ({ getOfferings }));
     await expect(loadRevenueCatPlans({ configure, timeoutMs: 100 })).rejects.toThrow('offline');
     await expect(loadRevenueCatPlans({ configure, timeoutMs: 100 })).resolves.toMatchObject({ packages: [annualPackage] });
+  });
+
+  it('re-arms the native billing connection before a user-requested retry', async () => {
+    const callOrder: string[] = [];
+    const recoverConnection = vi.fn(async () => {
+      callOrder.push('recover');
+      return {
+        attempted: true, succeeded: true, configured: true, errorCode: 'NONE', elapsedMs: 1,
+        pluginRegistered: true, versionCode: 155, versionName: '1.0.155',
+      };
+    });
+    const result = await loadRevenueCatPlans({
+      recoverBeforeLoad: true,
+      recoverConnection,
+      configure: async () => ({
+        getOfferings: async () => {
+          callOrder.push('offerings');
+          return { current: { identifier: 'default', availablePackages: [annualPackage] } };
+        },
+      }),
+      timeoutMs: 100,
+      totalTimeoutMs: 200,
+    });
+    expect(result.packages).toHaveLength(1);
+    expect(callOrder).toEqual(['recover', 'offerings']);
+  });
+
+  it('bounds the complete paywall sequence instead of stacking stage timeouts', async () => {
+    await expect(loadRevenueCatPlans({
+      configure: () => new Promise(() => undefined),
+      timeoutMs: 100,
+      totalTimeoutMs: 5,
+    })).rejects.toMatchObject({ code: 'RC_PAYWALL_TIMEOUT' });
   });
 
   it('normalizes the purchases-capacitor 11 wrapper response', () => {

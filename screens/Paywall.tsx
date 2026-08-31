@@ -96,7 +96,7 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
     return () => clearInterval(timer);
   }, []);
 
-  const loadProducts = useCallback(async () => {
+  const loadProducts = useCallback(async (recoverBeforeLoad = false) => {
     setLoading(true);
     setError(null);
     setDiagnosticCode(null);
@@ -114,7 +114,7 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
         return;
       }
 
-      const { packages: pkgs } = await loadRevenueCatPlans();
+      const { packages: pkgs } = await loadRevenueCatPlans({ recoverBeforeLoad });
 
       if (pkgs.length > 0) {
         setPackages(pkgs);
@@ -131,7 +131,7 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
     }
   }, []);
 
-  useEffect(() => { loadProducts(); }, [loadProducts]);
+  useEffect(() => { void loadProducts(false); }, [loadProducts]);
 
   const handleStartTrial = async () => {
     if (!selectedPkgIdentifier) {
@@ -308,7 +308,7 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
             Diagnostic: {diagnosticCode}
           </p>
         )}
-        <button onClick={loadProducts} disabled={isPurchasing} className="bg-green-600 text-white font-bold px-8 py-3 rounded-xl shadow-lg hover:bg-green-700 active:scale-95 transition-all disabled:opacity-50">
+        <button onClick={() => void loadProducts(true)} disabled={isPurchasing} className="bg-green-600 text-white font-bold px-8 py-3 rounded-xl shadow-lg hover:bg-green-700 active:scale-95 transition-all disabled:opacity-50">
           Retry Connection
         </button>
         <button onClick={handleRestore} disabled={isPurchasing} className="mt-4 text-green-700 font-bold px-5 py-2 disabled:opacity-50">
