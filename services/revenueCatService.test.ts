@@ -15,12 +15,14 @@ vi.mock('@capacitor/core', () => ({
 }));
 
 import {
+  buildPackagesFromStoreProducts,
   configureRevenueCat,
   getStartupSubscriptionStatus,
   hasVerifiedSubscription,
   loadRevenueCatPlans,
   normalizeRevenueCatOfferings,
   packageHasFreeTrial,
+  purchaseRevenueCatPlan,
   RevenueCatTimeoutError,
   restoreRevenueCatPurchases,
   resetRevenueCatInitializationForTests,
@@ -34,8 +36,8 @@ describe('RevenueCat native initialization', () => {
     errorCode: 'NONE',
     elapsedMs: 2,
     pluginRegistered: true,
-    versionCode: 155,
-    versionName: '1.0.155',
+    versionCode: 156,
+    versionName: '1.0.156',
   };
 
   it('uses the statically registered plugin after native readiness succeeds', async () => {
@@ -148,6 +150,72 @@ describe('trial disclosure', () => {
 const annualPackage = { identifier: '$rc_annual', packageType: 'ANNUAL', product: { priceString: '$99.99' } };
 
 describe('RevenueCat plan loading', () => {
+  const directProduct = {
+    identifier: 'mastergrowbot_pro',
+    priceString: '$99.99',
+    subscriptionOptions: [
+      {
+        id: 'mastergrowbot_pro:weekly',
+        billingPeriod: { iso8601: 'P1W' },
+        fullPricePhase: { price: { formatted: '$7.99' } },
+      },
+      {
+        id: 'mastergrowbot_pro:monthly',
+        billingPeriod: { iso8601: 'P1M' },
+        fullPricePhase: { price: { formatted: '$29.99' } },
+      },
+      {
+        id: 'mastergrowbot_pro:annual',
+        billingPeriod: { iso8601: 'P1Y' },
+        fullPricePhase: { price: { formatted: '$99.99' } },
+        freePhase: { billingPeriod: { iso8601: 'P7D' } },
+      },
+    ],
+  };
+
+  it('builds all three paywall choices from Google Play subscription options', () => {
+    const packages = buildPackagesFromStoreProducts({ products: [directProduct] });
+    expect(packages.map(pkg => pkg.packageType)).toEqual(['WEEKLY', 'MONTHLY', 'ANNUAL']);
+    expect(packages[2].product.priceString).toBe('$99.99');
+    expect(packageHasFreeTrial(packages[2])).toBe(true);
+  });
+
+  it('uses direct Google Play products before the Offering call', async () => {
+    const getProducts = vi.fn().mockResolvedValue({ products: [directProduct] });
+    const getOfferings = vi.fn();
+    const result = await loadRevenueCatPlans({
+      configure: async () => ({ getProducts, getOfferings }),
+      productsTimeoutMs: 100,
+    });
+    expect(result.source).toBe('google_play_products');
+    expect(result.packages).toHaveLength(3);
+    expect(getOfferings).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the RevenueCat Offering after direct product timeout', async () => {
+    const getOfferings = vi.fn().mockResolvedValue({ current: { identifier: 'default', availablePackages: [annualPackage] } });
+    const result = await loadRevenueCatPlans({
+      configure: async () => ({
+        getProducts: () => new Promise(() => undefined),
+        getOfferings,
+      }),
+      productsTimeoutMs: 5,
+      timeoutMs: 100,
+      totalTimeoutMs: 200,
+    });
+    expect(result.source).toBe('revenuecat_offering');
+    expect(getOfferings).toHaveBeenCalledOnce();
+  });
+
+  it('purchases a direct plan through its Google subscription option', async () => {
+    const packages = buildPackagesFromStoreProducts({ products: [directProduct] });
+    const purchaseSubscriptionOption = vi.fn().mockResolvedValue({ customerInfo: {} });
+    const purchasePackage = vi.fn();
+    await purchaseRevenueCatPlan({ purchaseSubscriptionOption, purchasePackage }, packages[0]);
+    expect(purchaseSubscriptionOption).toHaveBeenCalledWith({ subscriptionOption: packages[0].__subscriptionOption });
+    expect(purchasePackage).not.toHaveBeenCalled();
+  });
+
   it('loads packages from the current offering', async () => {
     const getOfferings = vi.fn().mockResolvedValue({ current: { identifier: 'default', availablePackages: [annualPackage] } });
     const result = await loadRevenueCatPlans({ configure: async () => ({ getOfferings }), timeoutMs: 100 });
@@ -245,7 +313,7 @@ describe('RevenueCat plan loading', () => {
       callOrder.push('recover');
       return {
         attempted: true, succeeded: true, configured: true, errorCode: 'NONE', elapsedMs: 1,
-        pluginRegistered: true, versionCode: 155, versionName: '1.0.155',
+        pluginRegistered: true, versionCode: 156, versionName: '1.0.156',
       };
     });
     const result = await loadRevenueCatPlans({

@@ -17,10 +17,14 @@ export async function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number,
   finally { if (timeoutId) clearTimeout(timeoutId); }
 }
 
-async function runInitialization(): Promise<AppInitState> {
+async function runInitialization(verifySubscription: boolean): Promise<AppInitState> {
   const authPromise = withTimeout(initializeSupabaseAuth(), 8000, '[AppInitializer] Supabase auth')
     .catch(error => ({ session: null, user: null, error }));
-  const revenueCatPromise = Capacitor.getPlatform() === 'android'
+  // Only returning, fully-onboarded users need subscription verification during
+  // startup. Starting getCustomerInfo for a fresh onboarding user can leave an
+  // uncancellable native BillingClient request queued after the JS timeout and
+  // block the later paywall product request.
+  const revenueCatPromise = Capacitor.getPlatform() === 'android' && verifySubscription
     ? withTimeout(getStartupSubscriptionStatus(), 8000, '[AppInitializer] RevenueCat').catch(() => ({ isSubscribed: false, customerInfo: null }))
     : Promise.resolve({ isSubscribed: false, customerInfo: null });
   const [auth, subscription] = await Promise.all([authPromise, revenueCatPromise]);
@@ -35,7 +39,7 @@ async function runInitialization(): Promise<AppInitState> {
 }
 
 /** StrictMode and every startup caller share this one bounded initialization. */
-export function initializeApp(): Promise<AppInitState> {
-  if (!appInitializationPromise) appInitializationPromise = runInitialization();
+export function initializeApp(options: { verifySubscription?: boolean } = {}): Promise<AppInitState> {
+  if (!appInitializationPromise) appInitializationPromise = runInitialization(Boolean(options.verifySubscription));
   return appInitializationPromise;
 }

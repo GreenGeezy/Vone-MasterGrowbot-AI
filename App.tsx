@@ -94,7 +94,7 @@ const App: React.FC = () => {
         runLoadUserDataInBackground();
       }
 
-      void initializeApp()
+      void initializeApp({ verifySubscription: savedOnboardingStatus === OnboardingStep.COMPLETED })
         .then((init) => {
           if (!isMounted) return;
 

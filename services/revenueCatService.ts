@@ -6,8 +6,10 @@ const STARTUP_SYNC_KEY = 'mg_rc_startup_sync_v2';
 const REVENUECAT_BRIDGE_TIMEOUT_MS = 5_000;
 const REVENUECAT_CUSTOMER_INFO_TIMEOUT_MS = 6_000;
 const REVENUECAT_RECOVERY_TIMEOUT_MS = 3_000;
-export const REVENUECAT_OFFERINGS_TIMEOUT_MS = 10_000;
-export const REVENUECAT_PAYWALL_TIMEOUT_MS = 12_000;
+const REVENUECAT_STORE_PRODUCTS_TIMEOUT_MS = 8_000;
+export const REVENUECAT_OFFERINGS_TIMEOUT_MS = 8_000;
+export const REVENUECAT_PAYWALL_TIMEOUT_MS = 18_000;
+const ANDROID_SUBSCRIPTION_PRODUCT_ID = 'mastergrowbot_pro';
 
 export interface RevenueCatNativeStatus {
   attempted: boolean;
@@ -109,7 +111,8 @@ export function getRevenueCatDiagnosticSummary(): string {
   const allowedOrder = [
     'operation', 'platform', 'versionName', 'versionCode', 'configured',
     'bootstrapAttempted', 'bootstrapSucceeded', 'pluginRegistered',
-    'currentOffering', 'packageCount', 'code', 'nativeErrorCode',
+    'planSource', 'stage', 'storeProducts', 'currentOffering',
+    'packageCount', 'code', 'nativeErrorCode',
   ];
   return allowedOrder
     .filter(key => latestDiagnostic[key] !== undefined)
@@ -124,6 +127,7 @@ export function getRevenueCatUserFacingError(error: unknown): { code: string; me
     RC_CONNECTION_RECOVERY_TIMEOUT: 'Google Play did not reconnect. Please retry after reopening the app.',
     RC_NATIVE_NOT_CONFIGURED: 'The subscription service could not start on this device.',
     RC_CUSTOMER_INFO_TIMEOUT: 'Google Play account verification timed out. Please retry.',
+    RC_STORE_PRODUCTS_TIMEOUT: 'Google Play products took too long to load. Please retry.',
     RC_OFFERINGS_TIMEOUT: 'Google Play plans took too long to load. Please retry.',
     RC_PAYWALL_TIMEOUT: 'Google Play plans took too long to load. Please retry.',
     RC_CURRENT_OFFERING_MISSING: 'No subscription offering is currently available.',
@@ -199,10 +203,71 @@ export async function configureRevenueCat(options: {
 export interface RevenueCatPlansResult {
   packages: any[];
   currentOfferingIdentifier: string;
+  source: 'google_play_products' | 'revenuecat_offering';
 }
 
 export function normalizeRevenueCatOfferings(result: any): any {
   return result?.offerings ?? result;
+}
+
+function packageTypeForPeriod(period: string): 'WEEKLY' | 'MONTHLY' | 'ANNUAL' | null {
+  const normalized = period.toUpperCase();
+  if (normalized === 'P1W' || normalized === 'P7D') return 'WEEKLY';
+  if (normalized === 'P1M') return 'MONTHLY';
+  if (normalized === 'P1Y' || normalized === 'P12M') return 'ANNUAL';
+  return null;
+}
+
+/**
+ * Builds the existing paywall contract from RevenueCat StoreProducts. This is
+ * an Android recovery path for devices where getOfferings remains queued in
+ * BillingClient even though the RevenueCat backend Offering is valid.
+ */
+export function buildPackagesFromStoreProducts(result: any): any[] {
+  const products = Array.isArray(result?.products) ? result.products : [];
+  const packagesByType = new Map<string, any>();
+
+  for (const product of products) {
+    const options = Array.isArray(product?.subscriptionOptions)
+      ? product.subscriptionOptions
+      : product?.defaultOption ? [product.defaultOption] : [];
+
+    for (const option of options) {
+      const period = option?.billingPeriod?.iso8601
+        ?? option?.fullPricePhase?.billingPeriod?.iso8601
+        ?? product?.subscriptionPeriod;
+      const packageType = packageTypeForPeriod(String(period ?? ''));
+      if (!packageType) continue;
+
+      const existing = packagesByType.get(packageType);
+      const candidateHasTrial = Boolean(option?.freePhase);
+      if (existing && (Boolean(existing.__subscriptionOption?.freePhase) || !candidateHasTrial)) continue;
+
+      const priceString = option?.fullPricePhase?.price?.formatted ?? product?.priceString ?? '';
+      packagesByType.set(packageType, {
+        identifier: `google_play_${packageType.toLowerCase()}`,
+        packageType,
+        product: {
+          ...product,
+          priceString,
+          defaultOption: option,
+        },
+        __purchaseMode: 'subscriptionOption',
+        __subscriptionOption: option,
+      });
+    }
+  }
+
+  return ['WEEKLY', 'MONTHLY', 'ANNUAL']
+    .map(type => packagesByType.get(type))
+    .filter(Boolean);
+}
+
+export async function purchaseRevenueCatPlan(PurchasesPlugin: any, plan: any): Promise<any> {
+  if (plan?.__purchaseMode === 'subscriptionOption' && plan?.__subscriptionOption) {
+    return PurchasesPlugin.purchaseSubscriptionOption({ subscriptionOption: plan.__subscriptionOption });
+  }
+  return PurchasesPlugin.purchasePackage({ aPackage: plan });
 }
 
 async function recoverNativeRevenueCatConnection(
@@ -239,22 +304,72 @@ export async function loadRevenueCatPlans(options: {
   configure?: () => Promise<any | null>;
   recoverConnection?: () => Promise<RevenueCatNativeStatus>;
   recoverBeforeLoad?: boolean;
+  productsTimeoutMs?: number;
   timeoutMs?: number;
   totalTimeoutMs?: number;
 } = {}): Promise<RevenueCatPlansResult> {
+  let activeStage = 'configure';
+  let storeProductsResult = 'not_started';
   try {
     return await withRevenueCatTimeout((async () => {
       if (options.recoverBeforeLoad) {
+        activeStage = 'connection_recovery';
         await recoverNativeRevenueCatConnection(options.recoverConnection);
       }
 
+      activeStage = 'configure';
       const PurchasesPlugin = await (options.configure ?? configureRevenueCat)();
       if (!PurchasesPlugin) {
         throw new RevenueCatOperationError('RC_NATIVE_NOT_CONFIGURED', 'Purchases are unavailable on this platform.');
       }
 
-      // Offerings are the only prerequisite for rendering the paywall. Waiting for
-      // CustomerInfo first can strand this request behind a hung BillingClient call.
+      // Query the Play product directly first. The production RevenueCat backend
+      // already returns the default Offering and three packages for this public key,
+      // while getOfferings can remain queued indefinitely in BillingClient on-device.
+      // This supported RevenueCat API still returns store-validated localized prices
+      // and subscription options; it never fabricates access or bypasses RevenueCat.
+      if (typeof PurchasesPlugin.getProducts === 'function') {
+        activeStage = 'get_products';
+        logRevenueCat('RC_GET_PRODUCTS_START', { configured: true, stage: activeStage });
+        try {
+          const rawProducts = await withRevenueCatTimeout(
+            PurchasesPlugin.getProducts({
+              productIdentifiers: [ANDROID_SUBSCRIPTION_PRODUCT_ID],
+              type: 'SUBSCRIPTION',
+            }),
+            options.productsTimeoutMs ?? REVENUECAT_STORE_PRODUCTS_TIMEOUT_MS,
+            'Google Play product retrieval',
+            'RC_STORE_PRODUCTS_TIMEOUT',
+          );
+          const directPackages = buildPackagesFromStoreProducts(rawProducts);
+          storeProductsResult = directPackages.length ? 'success' : 'empty';
+          logRevenueCat(directPackages.length ? 'RC_GET_PRODUCTS_SUCCESS' : 'RC_GET_PRODUCTS_EMPTY', {
+            configured: true,
+            stage: activeStage,
+            storeProducts: storeProductsResult,
+            packageCount: directPackages.length,
+            planSource: 'google_play_products',
+          });
+          if (directPackages.length) {
+            return {
+              packages: directPackages,
+              currentOfferingIdentifier: 'google_play_direct',
+              source: 'google_play_products',
+            };
+          }
+        } catch (productError) {
+          const sanitized = sanitizedRevenueCatError(productError);
+          storeProductsResult = productError instanceof RevenueCatTimeoutError ? 'timeout' : 'error';
+          logRevenueCat(productError instanceof RevenueCatTimeoutError ? 'RC_GET_PRODUCTS_TIMEOUT' : 'RC_GET_PRODUCTS_ERROR', {
+            configured: true,
+            stage: activeStage,
+            storeProducts: storeProductsResult,
+            ...sanitized,
+          });
+        }
+      }
+
+      activeStage = 'get_offerings';
       logRevenueCat('RC_GET_OFFERINGS_START', { configured: true });
       const rawResult = await withRevenueCatTimeout(
         PurchasesPlugin.getOfferings(),
@@ -273,12 +388,16 @@ export async function loadRevenueCatPlans(options: {
       }
       logRevenueCat('RC_GET_OFFERINGS_SUCCESS', {
         configured: true,
+        stage: activeStage,
+        storeProducts: storeProductsResult,
         currentOffering: true,
         packageCount: packages.length,
+        planSource: 'revenuecat_offering',
       });
       return {
         packages,
         currentOfferingIdentifier: current.identifier ?? 'unknown',
+        source: 'revenuecat_offering',
       };
     })(), options.totalTimeoutMs ?? REVENUECAT_PAYWALL_TIMEOUT_MS, 'Subscription plan loading', 'RC_PAYWALL_TIMEOUT');
   } catch (error) {
@@ -288,6 +407,8 @@ export async function loadRevenueCatPlans(options: {
       : 'RC_GET_OFFERINGS_ERROR';
     logRevenueCat(operation, {
       configured: true,
+      stage: activeStage,
+      storeProducts: storeProductsResult,
       ...sanitized,
     });
     throw error;

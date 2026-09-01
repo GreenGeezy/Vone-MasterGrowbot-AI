@@ -13,6 +13,7 @@ import {
   hasVerifiedSubscription,
   loadRevenueCatPlans,
   packageHasFreeTrial,
+  purchaseRevenueCatPlan,
   restoreRevenueCatPurchases,
 } from '../services/revenueCatService';
 
@@ -155,7 +156,7 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
         return;
       }
 
-      const purchaseResult = await Purchases.purchasePackage({ aPackage: pkg });
+      const purchaseResult = await purchaseRevenueCatPlan(Purchases, pkg);
       if (hasVerifiedSubscription(purchaseResult.customerInfo)) {
         onPurchase();
         return;
