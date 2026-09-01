@@ -17,6 +17,7 @@ vi.mock('@capacitor/core', () => ({
 import {
   buildPackagesFromStoreProducts,
   configureRevenueCat,
+  createRevenueCatConfiguredClient,
   getStartupSubscriptionStatus,
   hasVerifiedSubscription,
   loadRevenueCatPlans,
@@ -36,8 +37,8 @@ describe('RevenueCat native initialization', () => {
     errorCode: 'NONE',
     elapsedMs: 2,
     pluginRegistered: true,
-    versionCode: 156,
-    versionName: '1.0.156',
+    versionCode: 157,
+    versionName: '1.0.157',
   };
 
   it('uses the statically registered plugin after native readiness succeeds', async () => {
@@ -46,6 +47,20 @@ describe('RevenueCat native initialization', () => {
     const plugin = await configureRevenueCat({ ensureConfigured });
     expect(ensureConfigured).toHaveBeenCalledOnce();
     expect(plugin).toBeTruthy();
+    expect(plugin).toHaveProperty('plugin');
+    expect(typeof (plugin as any).then).toBe('undefined');
+  });
+
+  it('never returns a Capacitor plugin Proxy directly across an async boundary', async () => {
+    const thenablePlugin = new Proxy({}, {
+      get: (_target, property) => (..._args: unknown[]) => property,
+    });
+    expect(typeof (thenablePlugin as any).then).toBe('function');
+
+    const client = createRevenueCatConfiguredClient(thenablePlugin);
+    expect(typeof (client as any).then).toBe('undefined');
+    await expect(Promise.resolve(client)).resolves.toBe(client);
+    expect(client.plugin).toBe(thenablePlugin);
   });
 
   it('shares one native readiness operation between concurrent callers', async () => {
@@ -313,7 +328,7 @@ describe('RevenueCat plan loading', () => {
       callOrder.push('recover');
       return {
         attempted: true, succeeded: true, configured: true, errorCode: 'NONE', elapsedMs: 1,
-        pluginRegistered: true, versionCode: 156, versionName: '1.0.156',
+        pluginRegistered: true, versionCode: 157, versionName: '1.0.157',
       };
     });
     const result = await loadRevenueCatPlans({

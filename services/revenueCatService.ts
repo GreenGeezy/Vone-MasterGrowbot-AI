@@ -39,6 +39,23 @@ let latestDiagnostic: Record<string, string | number | boolean> = {
   platform: 'android',
 };
 
+export interface RevenueCatConfiguredClient {
+  // Keep the Capacitor Proxy nested. Returning it directly from an async
+  // function makes JavaScript assimilate its generated `then()` method and the
+  // Promise never settles.
+  plugin: any;
+}
+
+export function createRevenueCatConfiguredClient(plugin: any): RevenueCatConfiguredClient {
+  return Object.freeze({ plugin });
+}
+
+const configuredPurchasesClient = createRevenueCatConfiguredClient(Purchases);
+
+function unwrapRevenueCatPlugin(value: any): any {
+  return value?.plugin ?? value;
+}
+
 export class RevenueCatTimeoutError extends Error {
   readonly code: string;
 
@@ -111,7 +128,7 @@ export function getRevenueCatDiagnosticSummary(): string {
   const allowedOrder = [
     'operation', 'platform', 'versionName', 'versionCode', 'configured',
     'bootstrapAttempted', 'bootstrapSucceeded', 'pluginRegistered',
-    'planSource', 'stage', 'storeProducts', 'currentOffering',
+    'clientThenable', 'planSource', 'stage', 'storeProducts', 'currentOffering',
     'packageCount', 'code', 'nativeErrorCode',
   ];
   return allowedOrder
@@ -194,10 +211,11 @@ async function ensureNativeRevenueCat(
 export async function configureRevenueCat(options: {
   ensureConfigured?: () => Promise<RevenueCatNativeStatus>;
   bridgeTimeoutMs?: number;
-} = {}): Promise<any | null> {
+} = {}): Promise<RevenueCatConfiguredClient | null> {
   if (Capacitor.getPlatform() !== 'android') return null;
   await ensureNativeRevenueCat(options.ensureConfigured, options.bridgeTimeoutMs);
-  return Purchases;
+  logRevenueCat('RC_CLIENT_READY', { configured: true, clientThenable: false });
+  return configuredPurchasesClient;
 }
 
 export interface RevenueCatPlansResult {
@@ -318,7 +336,8 @@ export async function loadRevenueCatPlans(options: {
       }
 
       activeStage = 'configure';
-      const PurchasesPlugin = await (options.configure ?? configureRevenueCat)();
+      const configuredClient = await (options.configure ?? configureRevenueCat)();
+      const PurchasesPlugin = unwrapRevenueCatPlugin(configuredClient);
       if (!PurchasesPlugin) {
         throw new RevenueCatOperationError('RC_NATIVE_NOT_CONFIGURED', 'Purchases are unavailable on this platform.');
       }
@@ -419,7 +438,8 @@ export async function getStartupSubscriptionStatus(options: {
   configure?: () => Promise<any | null>;
   timeoutMs?: number;
 } = {}): Promise<{ isSubscribed: boolean; customerInfo: any | null }> {
-  const PurchasesPlugin = await (options.configure ?? configureRevenueCat)();
+  const configuredClient = await (options.configure ?? configureRevenueCat)();
+  const PurchasesPlugin = unwrapRevenueCatPlugin(configuredClient);
   if (!PurchasesPlugin) return { isSubscribed: false, customerInfo: null };
   logRevenueCat('RC_STARTUP_CUSTOMER_INFO_START', { configured: true });
   const { customerInfo } = await withRevenueCatTimeout<{ customerInfo: any }>(
@@ -446,7 +466,8 @@ export async function restoreRevenueCatPurchases(options: {
   timeoutMs?: number;
 } = {}): Promise<{ restored: boolean; customerInfo: any | null }> {
   const timeoutMs = options.timeoutMs ?? REVENUECAT_OFFERINGS_TIMEOUT_MS;
-  const PurchasesPlugin = await (options.configure ?? configureRevenueCat)();
+  const configuredClient = await (options.configure ?? configureRevenueCat)();
+  const PurchasesPlugin = unwrapRevenueCatPlugin(configuredClient);
   if (!PurchasesPlugin) return { restored: false, customerInfo: null };
   await withRevenueCatTimeout(PurchasesPlugin.restorePurchases(), timeoutMs, 'Purchase restoration', 'RC_RESTORE_TIMEOUT');
   const { customerInfo } = await withRevenueCatTimeout<{ customerInfo: any }>(

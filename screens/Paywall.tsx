@@ -148,7 +148,8 @@ const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
         return;
       }
 
-      const Purchases = await configureRevenueCat();
+      const configuredClient = await configureRevenueCat();
+      const Purchases = configuredClient?.plugin;
       if (!Purchases) throw new Error('Purchases are unavailable on this platform.');
       const pkg = packages.find(p => p.identifier === selectedPkgIdentifier);
       if (!pkg) {
