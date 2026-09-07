@@ -81,8 +81,14 @@ workflows:
       
       - name: Build Web App
         script: |
+          set -e
+          test -n "$VITE_SUPABASE_ANON_KEY" || { echo "Missing public Supabase key in ios-config"; exit 1; }
+          test -n "$VITE_REVENUECAT_IOS_KEY" || { echo "Missing public RevenueCat iOS key in ios-config"; exit 1; }
+          npm run typecheck
+          npm run test:reliability
           npm run build
           npx cap sync ios
+          cat ios/App/Podfile.lock
             
       - name: Set up keychain to be used for code signing using fetched certificates
         script: |

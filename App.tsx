@@ -18,7 +18,7 @@ import { SplashScreen } from '@capacitor/splash-screen';
 import { getPendingTasksForToday, toggleTaskCompletion, addNewTask, updateTaskProperties, deleteTask, deleteJournalEntry, deletePlant, loadGrowData, createPlantRecord, saveAppJournalEntry, saveDiagnosisReport } from './services/dbService';
 import ErrorBoundary from './components/ErrorBoundary';
 import { wakeUpBackend } from './services/geminiService';
-import { initializeApp, withTimeout } from './services/appInitializer';
+import { initializeApp, initializeSubscriptions, withTimeout } from './services/appInitializer';
 
 // --- LocalStorage Keys for State Persistence ---
 const LS_ONBOARDING_STATUS = 'mg_onboarding_status';
@@ -31,6 +31,7 @@ const App: React.FC = () => {
   const [isAppReady, setIsAppReady] = useState(false);
   const [isReturningSubscriber, setIsReturningSubscriber] = useState(false);
   const [hasVerifiedPaidAccess, setHasVerifiedPaidAccess] = useState(!Capacitor.isNativePlatform());
+  const [checkingSubscription, setCheckingSubscription] = useState(Capacitor.isNativePlatform());
 
   // --- App State ---
   const [onboardingStatus, setOnboardingStatus] = useState(OnboardingStep.SPLASH);
@@ -112,6 +113,13 @@ const App: React.FC = () => {
       const { savedOnboardingStatus, savedProfileData } = restoreLocalState();
       setIsAppReady(true);
       setupDeepLinks();
+
+      void initializeSubscriptions().then((active) => {
+        if (!isMounted) return;
+        if (active) setHasVerifiedPaidAccess(true);
+      }).finally(() => {
+        if (isMounted) setCheckingSubscription(false);
+      });
 
       if (!Capacitor.isNativePlatform() && savedOnboardingStatus === OnboardingStep.COMPLETED) {
         runLoadUserDataInBackground();
@@ -501,6 +509,15 @@ const App: React.FC = () => {
   // Native paid access is never trusted from local cache. If RevenueCat has not
   // confirmed active access yet, keep the user on a safe paywall/restore path.
   if (onboardingStatus === OnboardingStep.COMPLETED && Capacitor.isNativePlatform() && !hasVerifiedPaidAccess) {
+    if (checkingSubscription) return (
+      <div className="h-screen bg-surface flex items-center justify-center" role="status" aria-live="polite">
+        <div className="text-center px-6">
+          <div className="mx-auto mb-4 w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="font-semibold">Restoring your subscription</p>
+          <p className="text-sm text-text-sub mt-2">Your saved data stays on this device.</p>
+        </div>
+      </div>
+    );
     return (
       <ErrorBoundary>
         <Paywall

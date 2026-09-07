@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { CONFIG } from './config';
-import { Capacitor } from '@capacitor/core';
-import { Browser } from '@capacitor/browser';
+import { createSessionInitializer } from './authSession';
 import { UserProfile } from '../types';
 
 // Initialize Supabase using the CONFIG we fixed in the previous step
@@ -13,6 +12,15 @@ export const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_K
     detectSessionInUrl: false, // DISABLED: We handle this manually in App.tsx to avoid race conditions
     flowType: 'pkce',
   },
+});
+
+const IDENTITY_MARKER = 'mg_supabase_identity_exists';
+const AUTH_STORAGE_KEY = `sb-${new URL(CONFIG.SUPABASE_URL).hostname.split('.')[0]}-auth-token`;
+// Preserve evidence of older installations before the SDK can clear an invalid token.
+if (localStorage.getItem(AUTH_STORAGE_KEY)) localStorage.setItem(IDENTITY_MARKER, 'true');
+export const initializeSupabaseSession = createSessionInitializer(supabase.auth, {
+  exists: () => localStorage.getItem(IDENTITY_MARKER) === 'true',
+  remember: () => localStorage.setItem(IDENTITY_MARKER, 'true'),
 });
 
 // DEPRECATED: OAuth is disabled for this app. Users use RevenueCat/Anonymous auth only.
@@ -55,7 +63,7 @@ export const ensureProfileExists = async () => {
   const { data, error } = await supabase
     .from('profiles')
     .upsert(
-      { id: user.id, updated_at: new Date().toISOString() },
+      { id: user.id },
       { onConflict: 'id', ignoreDuplicates: true }
     )
     .select()
@@ -71,7 +79,9 @@ export const updateOnboardingProfile = async (updates: any) => {
 
   const { error } = await supabase
     .from('profiles')
-    .upsert({ id: user.id, ...updates, updated_at: new Date().toISOString() });
+    .upsert({ ...Object.fromEntries(Object.entries(updates).filter(([key]) =>
+      ['email', 'grow_experience', 'subscription_status', 'experience_level', 'grow_environment', 'primary_goal', 'grow_space_size'].includes(key)
+    )), id: user.id });
 
   if (error) throw error;
 };

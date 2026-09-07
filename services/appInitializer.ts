@@ -1,18 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
-import { CONFIG } from './config';
+import { supabase, initializeSupabaseSession } from './supabaseClient';
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
-
-// Re-create a dedicated client for initialization to avoid circular deps
-const supabaseInit = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
-  auth: {
-    storage: localStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce',
-  },
-});
 
 export interface AppInitState {
   user: any | null;
@@ -66,94 +54,20 @@ async function getStableAnonymousId(): Promise<string> {
  * RULES:
  * - NO API call may run before auth is complete
  * - NO database query may assume a row exists
- * - Waits for anonymous auth, ensures profile row, THEN initializes RevenueCat
+ * - Cloud initialization and RevenueCat verification run independently
  * - RevenueCat appUserID is STABLE and never changes (stored in Capacitor Preferences)
  */
-export async function initializeApp(): Promise<AppInitState> {
-  // 1. Await existing session
-  let session = null;
-  try {
-    session = (await withTimeout(
-      supabaseInit.auth.getSession(),
-      3000,
-      '[AppInitializer] getSession'
-    )).data?.session;
-  } catch (e) {
-    console.warn('[AppInitializer] getSession did not finish before startup timeout:', e);
+let initialization: Promise<AppInitState> | null = null;
+let subscriptions: Promise<boolean> | null = null;
+
+export function initializeSubscriptions(): Promise<boolean> {
+  if (!subscriptions) {
+    subscriptions = checkSubscriptions().finally(() => { subscriptions = null; });
   }
-  let user = session?.user || null;
+  return subscriptions;
+}
 
-  // 2. If no session, sign in anonymously
-  if (!session || !user) {
-    try {
-      const { data: authData, error: authError } = await withTimeout(
-        supabaseInit.auth.signInAnonymously(),
-        5000,
-        '[AppInitializer] anonymous sign-in'
-      );
-      if (authError) {
-        console.error('[AppInitializer] Anonymous sign-in failed:', authError);
-        return { user: null, session: null, profile: null, isReady: false, isReturningSubscriber: false };
-      }
-      session = authData?.session;
-      user = authData?.user;
-    } catch (e) {
-      console.error('[AppInitializer] Unexpected auth error:', e);
-      return { user: null, session: null, profile: null, isReady: false, isReturningSubscriber: false };
-    }
-  }
-
-  // 3. GUARD: Ensure user.id exists
-  if (!user?.id) {
-    console.error('[AppInitializer] Auth resolved but user.id is missing');
-    return { user: null, session: null, profile: null, isReady: false, isReturningSubscriber: false };
-  }
-
-  // 4. Fetch or create profile using maybeSingle()
-  let profile = null;
-  try {
-    const { data: profileData, error: profileError } = await withTimeout<any>(
-      supabaseInit
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle(),
-      4000,
-      '[AppInitializer] profile fetch'
-    );
-
-    if (profileError) {
-      console.warn('[AppInitializer] Profile fetch error:', profileError);
-    }
-
-    profile = profileData;
-
-    // 5. If profile is null, INSERT a new row
-    if (!profile) {
-      const newProfile = {
-        id: user.id,
-        created_at: new Date().toISOString(),
-      };
-      const { data: inserted, error: insertError } = await withTimeout<any>(
-        supabaseInit
-          .from('profiles')
-          .insert(newProfile)
-          .select()
-          .maybeSingle(),
-        4000,
-        '[AppInitializer] profile create'
-      );
-
-      if (insertError) {
-        console.warn('[AppInitializer] Profile insert error:', insertError);
-      } else {
-        profile = inserted;
-      }
-    }
-  } catch (e) {
-    console.error('[AppInitializer] Profile operation failed:', e);
-  }
-
+async function checkSubscriptions(): Promise<boolean> {
   // 6. Initialize RevenueCat with STABLE anonymous ID
   let isReturningSubscriber = false;
   if (Capacitor.isNativePlatform()) {
@@ -166,9 +80,10 @@ export async function initializeApp(): Promise<AppInitState> {
 
       if (apiKey) {
         // Use STABLE ID — never changes, even if Supabase anonymous user changes
-        const stableAppUserId = await getStableAnonymousId();
+        const stableAppUserId = await withTimeout(getStableAnonymousId(), 3000, 'Subscription identity');
 
-        await withTimeout(
+        const { isConfigured } = await withTimeout(Purchases.isConfigured(), 3000, "Subscription configuration check");
+        if (!isConfigured) await withTimeout(
           Purchases.configure({ apiKey, appUserID: stableAppUserId }),
           5000,
           '[AppInitializer] RevenueCat configure'
@@ -181,7 +96,7 @@ export async function initializeApp(): Promise<AppInitState> {
           '[AppInitializer] RevenueCat customer info'
         );
         const hasActiveProEntitlement = Boolean(customerInfo?.entitlements?.active?.pro);
-        const hasActiveSubscriptions = (customerInfo?.activeSubscriptions?.length || 0) > 0;
+        const hasActiveSubscriptions = (customerInfo?.activeSubscriptions || []).some(id => ["weekly_pro_v2", "monthly_pro_v2", "yearly_pro_v2", "mastergrowbot_pro_weekly_v3", "mastergrowbot_pro_yearly_v3", "com.mastergrowbot.ai.sub.weekly", "com.mastergrowbot.ai.sub.monthly"].includes(id));
 
         if (hasActiveProEntitlement || hasActiveSubscriptions) {
           isReturningSubscriber = true;
@@ -200,11 +115,38 @@ export async function initializeApp(): Promise<AppInitState> {
     }
   }
 
-  return {
-    user,
-    session,
-    profile,
-    isReady: true,
-    isReturningSubscriber,
-  };
+  return isReturningSubscriber;
+}
+
+export function initializeApp(): Promise<AppInitState> {
+  if (!initialization) initialization = runInitialization().finally(() => { initialization = null; });
+  return initialization;
+}
+
+async function runInitialization(): Promise<AppInitState> {
+  // Native paid access must remain independent of network/database availability.
+  const paidAccess = initializeSubscriptions();
+  let session = null;
+  let profile = null;
+  try {
+    // Timeout only the caller; the single-flight auth operation remains shared.
+    session = await withTimeout(initializeSupabaseSession(), 8000, 'Session initialization');
+    const existing = await withTimeout(
+      supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
+      4000, 'Profile lookup'
+    );
+    if (existing.error) throw existing.error;
+    profile = existing.data;
+    if (!profile) {
+      const created = await withTimeout(
+        supabase.from('profiles').upsert({ id: session.user.id }, { onConflict: 'id', ignoreDuplicates: true }).select().maybeSingle(),
+        4000, 'Profile initialization'
+      );
+      if (created.error) throw created.error;
+      profile = created.data;
+    }
+  } catch {
+    console.warn('[AppInitializer] Cloud session/profile unavailable; retaining local identity and data');
+  }
+  return { user: session?.user || null, session, profile, isReady: true, isReturningSubscriber: await paidAccess };
 }

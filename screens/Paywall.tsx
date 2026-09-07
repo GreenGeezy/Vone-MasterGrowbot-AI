@@ -6,6 +6,7 @@ import type { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import Growbot from '../components/Growbot';
+import { initializeSubscriptions, withTimeout } from '../services/appInitializer';
 
 interface PaywallProps {
   onClose: () => void;
@@ -57,7 +58,7 @@ TestimonialCard.displayName = 'TestimonialCard';
 function hasActivePaidAccess(customerInfo: any): boolean {
   if (!customerInfo) return false;
   const hasProEntitlement = Boolean(customerInfo.entitlements?.active?.pro);
-  const hasSubscriptions = (customerInfo.activeSubscriptions?.length || 0) > 0;
+  const hasSubscriptions = (customerInfo.activeSubscriptions || []).some((id: string) => ["weekly_pro_v2", "monthly_pro_v2", "yearly_pro_v2", "mastergrowbot_pro_weekly_v3", "mastergrowbot_pro_yearly_v3", "com.mastergrowbot.ai.sub.weekly", "com.mastergrowbot.ai.sub.monthly"].includes(id));
   return hasProEntitlement || hasSubscriptions;
 }
 
@@ -65,7 +66,7 @@ async function waitForPurchasesConfiguration(Purchases: any, timeoutMs = 5000): 
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const { isConfigured } = await Purchases.isConfigured();
+      const { isConfigured } = await withTimeout<{ isConfigured: boolean }>(Purchases.isConfigured(), 1500, "Subscription configuration check");
       if (isConfigured) return;
     } catch {
       // The background initializer may still be loading the native plugin.
@@ -81,8 +82,7 @@ function parsePackagePrice(pkg?: PurchasesPackage): number | null {
   if (typeof product.price === 'number' && Number.isFinite(product.price)) {
     return product.price;
   }
-  const parsed = Number(String(product.priceString || '').replace(/[^0-9.]/g, ''));
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  return null; // Localized formatted strings are not safe numeric input.
 }
 
 const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
@@ -104,6 +104,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
   const loadProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setTrialEligibleProductIds([]);
     try {
       if (!Capacitor.isNativePlatform()) {
         const mockPackages = [
@@ -118,8 +119,9 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       }
 
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
+      await initializeSubscriptions();
       await waitForPurchasesConfiguration(Purchases);
-      await Purchases.invalidateCustomerInfoCache();
+      await withTimeout(Purchases.invalidateCustomerInfoCache(), 3000, "Subscription refresh");
 
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('App Store connection timed out')), 8000)
@@ -138,9 +140,9 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
           const freeTrialProductIds = pkgs
             .filter((pkg: any) => pkg.product?.introPrice?.price === 0)
             .map((pkg: any) => pkg.product.identifier);
-          const eligibility = await Purchases.checkTrialOrIntroductoryPriceEligibility({
+          const eligibility = await withTimeout(Purchases.checkTrialOrIntroductoryPriceEligibility({
             productIdentifiers: freeTrialProductIds,
-          });
+          }), 5000, "Trial eligibility");
           setTrialEligibleProductIds(
             freeTrialProductIds.filter((productId: string) => eligibility[productId]?.status === 2)
           );
@@ -182,21 +184,21 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         return;
       }
 
-      await Purchases.invalidateCustomerInfoCache();
-      await Purchases.syncPurchases();
+      await withTimeout(Purchases.invalidateCustomerInfoCache(), 3000, "Subscription refresh");
+      await withTimeout(Purchases.syncPurchases(), 8000, "Purchase synchronization");
 
-      const { customerInfo: freshInfo } = await Purchases.getCustomerInfo();
+      const { customerInfo: freshInfo } = await withTimeout(Purchases.getCustomerInfo(), 8000, "Subscription verification");
       if (hasActivePaidAccess(freshInfo)) {
         onPurchase();
         return;
       }
 
-      for (let attempt = 1; attempt <= 10; attempt++) {
-        setError(`Activating your subscription... (${attempt}/10)`);
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        setError(`Activating your subscription... (${attempt}/3)`);
         await new Promise(r => setTimeout(r, 2000));
-        await Purchases.invalidateCustomerInfoCache();
-        await Purchases.syncPurchases();
-        const { customerInfo: retryInfo } = await Purchases.getCustomerInfo();
+        await withTimeout(Purchases.invalidateCustomerInfoCache(), 3000, "Subscription refresh");
+        await withTimeout(Purchases.syncPurchases(), 8000, "Purchase synchronization");
+        const { customerInfo: retryInfo } = await withTimeout(Purchases.getCustomerInfo(), 8000, "Subscription verification");
         if (hasActivePaidAccess(retryInfo)) {
           setError(null);
           onPurchase();
@@ -221,10 +223,10 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     try {
       if (Capacitor.isNativePlatform()) {
         const { Purchases } = await import('@revenuecat/purchases-capacitor');
-        await Purchases.restorePurchases();
-        await Purchases.invalidateCustomerInfoCache();
-        await Purchases.syncPurchases();
-        const { customerInfo } = await Purchases.getCustomerInfo();
+        await withTimeout(Purchases.restorePurchases(), 20000, "Restore purchases");
+        await withTimeout(Purchases.invalidateCustomerInfoCache(), 3000, "Subscription refresh");
+        await withTimeout(Purchases.syncPurchases(), 8000, "Purchase synchronization");
+        const { customerInfo } = await withTimeout(Purchases.getCustomerInfo(), 8000, "Subscription verification");
         if (hasActivePaidAccess(customerInfo)) {
           alert('Success! Your subscription has been restored.');
           onPurchase();
@@ -260,14 +262,14 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       if (Number.isFinite(savings) && savings > 0 && Number.isFinite(weeklyEquivalent)) {
         return {
           badge: `Save ${savings}% vs monthly`,
-          subtext: `Equivalent to $${weeklyEquivalent.toFixed(2)}/week, billed yearly`,
+          subtext: `Billed yearly at ${annualPkg?.product.priceString}`,
         };
       }
     }
 
     return {
-      badge: 'Save 72% vs monthly',
-      subtext: 'Equivalent to $1.92/week, billed yearly',
+      badge: 'Yearly plan',
+      subtext: annualPkg ? `Billed yearly at ${annualPkg.product.priceString}` : 'Billed yearly',
     };
   };
 

@@ -1,5 +1,5 @@
 
-import { supabase } from './supabaseClient';
+import { supabase, ensureProfileExists } from './supabaseClient';
 import { GrowTask, Plant, Strain } from '../types';
 import { STRAIN_DATABASE } from '../data/strains';
 import { formatStrainValue } from '../utils/strainSearch';
@@ -128,6 +128,8 @@ const mapPlantRow = (row: any, journal: any[], tasks: GrowTask[], streak: number
 export const ensureDefaultGrow = async (): Promise<string | null> => {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user?.id) return null;
+  const profile = await ensureProfileExists();
+  if (profile.error) return null;
 
   const { data: existing, error: existingError } = await supabase
     .from('grows')
@@ -137,7 +139,10 @@ export const ensureDefaultGrow = async (): Promise<string | null> => {
     .limit(1)
     .maybeSingle();
 
-  if (existingError) console.warn('ensureDefaultGrow lookup failed:', existingError);
+  if (existingError) {
+    console.warn('ensureDefaultGrow lookup failed:', existingError);
+    return null;
+  }
   if (existing?.id) return existing.id;
 
   const { data, error } = await supabase
@@ -179,6 +184,12 @@ export const createPlantRecord = async (strain: any): Promise<Plant | null> => {
   }
 
   const growId = await ensureDefaultGrow();
+  if (!growId) {
+    const plants = getLocal(STORAGE_KEYS.PLANTS);
+    plants.push(localPlant);
+    setLocal(STORAGE_KEYS.PLANTS, plants);
+    return localPlant;
+  }
   const { data, error } = await supabase
     .from('plants')
     .insert({
@@ -219,7 +230,7 @@ export const loadGrowData = async (streak: number): Promise<Plant[]> => {
 
   if (plantError) {
     console.warn('loadGrowData plants failed:', plantError);
-    return [];
+    throw plantError; // Keep the current UI/cache; a failed read is not an empty journal.
   }
 
   if (!plantRows || plantRows.length === 0) {
@@ -238,10 +249,11 @@ export const loadGrowData = async (streak: number): Promise<Plant[]> => {
     if (created?.id.startsWith('local_')) return [created];
   }
 
-  const [{ data: journalRows }, { data: taskRows }] = await Promise.all([
+  const [{ data: journalRows, error: journalError }, { data: taskRows, error: taskError }] = await Promise.all([
     supabase.from('journal_logs').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
     supabase.from('tasks').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
   ]);
+  if (journalError || taskError) throw journalError || taskError;
 
   return (plantRows || []).map((plant: any) => {
     const plantJournal = (journalRows || []).filter((row: any) => row.plant_id === plant.id).map(mapJournalRow);
