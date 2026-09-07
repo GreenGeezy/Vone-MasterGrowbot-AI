@@ -30,6 +30,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate }) => {
       <div className="relative -top-6">
         <button
           onClick={() => onNavigate(AppScreen.DIAGNOSE)}
+          aria-label="Plant Health"
           className="bg-primary text-white w-14 h-14 rounded-full flex items-center justify-center shadow-xl shadow-primary/30 border-4 border-surface hover:scale-105 transition-transform"
         >
           <ScanLine size={24} />

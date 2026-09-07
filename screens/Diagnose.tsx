@@ -364,7 +364,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
 
   // 4. Initial View (Main)
   return (
-    <div className="bg-gray-50 h-full pb-20 overflow-y-auto w-full absolute inset-0">
+    <div className="bg-gray-50 min-h-full w-full pb-[calc(3rem+env(safe-area-inset-bottom,0px))]">
       <div className="bg-white px-6 pt-12 pb-8 rounded-b-[3rem] shadow-sm mb-6">
         <div className="flex justify-between items-center mb-4">{onBack && <button onClick={onBack}><ChevronRight className="rotate-180 text-gray-400" /></button>}<Growbot size="lg" mood="happy" /><div className="w-6" /></div>
         <h1 className="text-3xl font-black text-gray-900 mb-2 tracking-tight">Analyze Your Plant's Health with AI</h1>
