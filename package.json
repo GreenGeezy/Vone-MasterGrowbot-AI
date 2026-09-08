@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "validate:strains": "node scripts/validate-strains.mjs",
     "typecheck": "tsc --noEmit",
-    "test:reliability": "node --test scripts/auth-session.test.mjs"
+    "test:reliability": "node --test scripts/auth-session.test.mjs",
+    "test:premium": "node --test scripts/premium-catalog.test.mjs scripts/video-visual-result.test.mjs"
   },
   "dependencies": {
     "@capacitor-community/in-app-review": "^6.0.0",
