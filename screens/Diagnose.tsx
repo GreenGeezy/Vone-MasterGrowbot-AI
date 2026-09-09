@@ -5,7 +5,8 @@ import { Plant, UserProfile } from '../types';
 import Growbot from '../components/Growbot';
 import { STRAIN_DATABASE } from '../data/strains';
 import { matchesStrainSearch } from '../utils/strainSearch';
-import { Share } from '@capacitor/share';
+import AnalysisShareDialog from '../components/AnalysisShareDialog';
+import type { AnalysisShareSummary } from '../services/analysisShareCard';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 // InAppReview dynamically imported below — static import crashes on web
@@ -94,6 +95,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ExtendedDiagnosisResult | null>(null);
+  const [shareSummary, setShareSummary] = useState<AnalysisShareSummary | null>(null);
   const [premiumActive, setPremiumActive] = useState(false);
   const [showPremiumPaywall, setShowPremiumPaywall] = useState(false);
   const [showVideoFlow, setShowVideoFlow] = useState(false);
@@ -275,16 +277,9 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     } catch (err) { console.log("Gallery cancelled"); }
   };
 
-  const handleShare = async () => {
+  const handleShare = () => {
     if (!result) return;
-    try {
-      const reportText = formatDiagnosisReport(result);
-      await Share.share({
-        title: 'MasterGrowbot Diagnosis',
-        text: reportText,
-        dialogTitle: 'Share Result'
-      });
-    } catch (e) { }
+    setShareSummary({ kind: 'photo', headline: result.diagnosis, score: result.healthScore });
   };
 
   const handleSave = () => {
@@ -441,8 +436,10 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
 
           <div className="grid grid-cols-2 gap-4 pb-4">
             <button onClick={handleSave} className="py-4 bg-gray-900 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"><Save size={18} /> Save to Journal</button>
-            <button onClick={handleShare} className="py-4 bg-gray-100 text-gray-900 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-gray-200"><Share2 size={18} /> Share Result</button>
+            <button onClick={handleShare} className="py-4 bg-emerald-100 text-emerald-900 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-emerald-200"><Share2 size={18} /> Share Analysis</button>
           </div>
+          <p className="text-xs text-center text-gray-500 pb-3">Share a plant check-in. Invite a second look.</p>
+          {shareSummary && <AnalysisShareDialog summary={shareSummary} onClose={() => setShareSummary(null)} />}
         </div>
       </div>
     );
@@ -611,12 +608,14 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
                 ].map(([title, items]) => <div key={title as string} className="rounded-2xl bg-white/[0.06] border border-white/10 p-4"><h4 className="text-xs font-black text-slate-200 mb-3">{title as string}</h4><ul className="space-y-2">{(items as string[]).map(item => <li key={item} className="text-xs text-slate-300 flex gap-2"><span className="text-emerald-400">•</span>{item}</li>)}</ul></div>)}
                 <div className="grid grid-cols-1 gap-3"><div className="rounded-2xl bg-white/[0.06] p-4"><p className="text-[10px] font-black text-slate-400">ENVIRONMENTAL CONTEXT</p><p className="text-xs mt-2 text-slate-200">{videoResult.environmentSummary}</p></div><div className="rounded-2xl bg-white/[0.06] p-4"><p className="text-[10px] font-black text-slate-400">MEDIA QUALITY / LIMITATIONS</p><p className="text-xs mt-2 text-slate-200">{videoResult.mediaQuality}</p></div><div className="rounded-2xl bg-emerald-400/10 border border-emerald-400/20 p-4"><p className="text-[10px] font-black text-emerald-300">SUGGESTED NEXT VISUAL CHECK</p><p className="text-xs mt-2 text-slate-200">{videoResult.recommendedVerification}</p></div></div>
                 <div className="grid grid-cols-2 gap-3"><button onClick={saveVideoObservation} className="rounded-xl bg-white/10 py-3 font-bold text-sm"><Save size={16} className="inline mr-1" /> Save</button><button onClick={() => { setVideoResult(null); setVideoFile(null); setVideoUrl(null); }} className="rounded-xl bg-emerald-400 text-slate-950 py-3 font-black text-sm"><RefreshCw size={16} className="inline mr-1" /> New Video</button></div>
+                <button onClick={() => setShareSummary({ kind: 'video', headline: videoResult.healthLabel, score: videoResult.healthScore })} className="w-full rounded-xl bg-emerald-400/15 border border-emerald-400/30 py-4 font-bold text-sm text-emerald-200"><Share2 size={16} className="inline mr-2" /> Share Analysis</button>
               </div>
             )}
             {videoError && <div role="alert" className="max-w-md mx-auto mt-5 rounded-2xl bg-red-500/15 border border-red-400/30 p-4 text-sm text-red-100"><p>{videoError}</p><div className="flex gap-3 mt-3"><button onClick={runVideoAnalysis} disabled={!videoFile || videoLoading} className="font-black text-white disabled:opacity-40">Retry</button><button onClick={() => { setVideoError(null); setVideoFile(null); setVideoUrl(null); }} className="font-bold text-slate-300">Choose another</button></div></div>}
           </div>
         </div>
       )}
+      {shareSummary && <AnalysisShareDialog summary={shareSummary} onClose={() => setShareSummary(null)} />}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Check, Film, Lock, RotateCcw, Sparkles } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
@@ -14,9 +14,12 @@ import {
 import {
   beginPremiumRevenueCatBinding,
   completePremiumRevenueCatBinding,
+  hasPendingPremiumPurchase,
+  markPremiumPurchasePending,
   RevenueCatBinding,
   rollbackPremiumRevenueCatBinding,
 } from '../services/revenueCatIdentity';
+import { isPurchaseCancelled, premiumStatusMessage, purchaseErrorMessage, refreshPremiumCustomer } from '../services/premiumPurchaseStatus';
 
 interface PremiumPaywallProps {
   onClose: () => void;
@@ -35,6 +38,20 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const operation = useRef(false);
+  const statusPanel = useRef<HTMLDivElement>(null);
+  const unlocked = useRef(onUnlocked);
+  unlocked.current = onUnlocked;
+  useEffect(() => {
+    if (error || notice) statusPanel.current?.scrollIntoView({ block: 'nearest' });
+  }, [error, notice]);
+
+  const refresh = async (Purchases: any, initial?: any) => refreshPremiumCustomer({
+    invalidateCustomerInfoCache: () => withTimeout(Purchases.invalidateCustomerInfoCache(), 5000, 'Refresh subscription'),
+    getCustomerInfo: () => withTimeout(Purchases.getCustomerInfo(), 8000, 'Subscription status'),
+  }, initial);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,12 +70,15 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
 
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
       await initializeSubscriptions();
+      const awaitingVerification = await hasPendingPremiumPurchase();
+      setPending(awaitingVerification);
       const [offerings, { customerInfo }] = await Promise.all([
         withTimeout(Purchases.getOfferings(), 8000, 'Premium plans'),
         withTimeout(Purchases.getCustomerInfo(), 8000, 'Subscription status'),
       ]);
       if (hasPremiumAccess(customerInfo)) {
-        onUnlocked();
+        await completePremiumRevenueCatBinding(customerInfo);
+        unlocked.current();
         return;
       }
       const offering = offerings.all[PREMIUM_OFFERING];
@@ -67,68 +87,131 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
       const cadence = preferredPremiumCadence(customerInfo);
       setPackages(verified);
       setSelected(cadence && verified.some(pkg => pkg.identifier === cadence) ? cadence : null);
+      if (awaitingVerification) setNotice(premiumStatusMessage(customerInfo));
     } catch (cause: any) {
       setError(cause?.message || 'Could not load Premium plans.');
     } finally {
       setLoading(false);
     }
-  }, [onUnlocked]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let disposed = false;
+    let remove: (() => Promise<unknown>) | undefined;
+    import('@revenuecat/purchases-capacitor').then(async ({ Purchases }) => {
+      const id = await Purchases.addCustomerInfoUpdateListener(info => {
+        if (!disposed && !operation.current && hasPremiumAccess(info)) {
+          completePremiumRevenueCatBinding(info).then(() => {
+            if (!disposed) unlocked.current();
+          }).catch(() => { /* Check status retries preference persistence. */ });
+        }
+      });
+      remove = () => Purchases.removeCustomerInfoUpdateListener({ listenerToRemove: id });
+      if (disposed) await remove();
+    }).catch(() => { /* Manual status refresh remains available. */ });
+    return () => { disposed = true; remove?.().catch(() => {}); };
+  }, []);
 
   const savings = useMemo(() => {
     const monthly = packages.find(pkg => pkg.identifier === 'monthly');
     const annual = packages.find(pkg => pkg.identifier === 'annual');
     return monthly && annual ? annualSavingsPercent(monthly.product as any, annual.product as any) : null;
   }, [packages]);
+  const selectedPackage = packages.find(pkg => pkg.identifier === selected);
 
   const purchase = async () => {
+    if (operation.current || pending) return;
     const pkg = packages.find(item => item.identifier === selected);
     if (!pkg) return;
-    if (!Capacitor.isNativePlatform()) { onUnlocked(); return; }
+    if (!Capacitor.isNativePlatform()) { setNotice('Purchases are available in the iOS app through Apple.'); return; }
+    operation.current = true;
     setBusy(true);
     setError(null);
+    setNotice(null);
     let binding: RevenueCatBinding | null = null;
+    let storeStarted = false;
+    const wasPending = await hasPendingPremiumPurchase().catch(() => true);
     try {
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
       binding = await beginPremiumRevenueCatBinding(Purchases);
-      const { customerInfo } = await withTimeout(Purchases.purchasePackage({ aPackage: pkg }), 60000, 'Apple purchase');
-      await completePremiumRevenueCatBinding(customerInfo);
-      onUnlocked();
+      await markPremiumPurchasePending();
+      storeStarted = true;
+      // Apple owns the payment sheet's lifetime. A JS timeout cannot cancel it.
+      const result = await Purchases.purchasePackage({ aPackage: pkg });
+      const customerInfo = await refresh(Purchases, result.customerInfo);
+      if (hasPremiumAccess(customerInfo)) {
+        await completePremiumRevenueCatBinding(customerInfo);
+        unlocked.current();
+      } else {
+        setPending(true);
+        setNotice(premiumStatusMessage(customerInfo));
+      }
     } catch (cause: any) {
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
-      try {
-        const { customerInfo } = await Purchases.getCustomerInfo();
-        if (hasPremiumAccess(customerInfo)) {
-          await completePremiumRevenueCatBinding(customerInfo);
-          onUnlocked();
-          return;
-        }
-        await rollbackPremiumRevenueCatBinding(Purchases, binding);
-      } catch { /* startup recovery will resolve an interrupted binding */ }
-      if (!cause?.userCancelled) setError(cause?.message || 'The purchase could not be completed. Please try again.');
+      if (!wasPending && (!storeStarted || isPurchaseCancelled(cause))) {
+        try { await rollbackPremiumRevenueCatBinding(Purchases, binding); } catch { /* retained for startup recovery */ }
+      } else {
+        setPending(true);
+      }
+      if (!isPurchaseCancelled(cause)) setError(purchaseErrorMessage(cause));
     } finally {
+      operation.current = false;
       setBusy(false);
     }
   };
 
   const restore = async () => {
-    if (!Capacitor.isNativePlatform()) return;
+    if (operation.current || !Capacitor.isNativePlatform()) return;
+    operation.current = true;
     setBusy(true);
     setError(null);
+    setNotice(null);
     let binding: RevenueCatBinding | null = null;
+    const wasPending = await hasPendingPremiumPurchase().catch(() => true);
+    let storeStarted = false;
     try {
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
       binding = await beginPremiumRevenueCatBinding(Purchases);
-      const { customerInfo } = await withTimeout(Purchases.restorePurchases(), 30000, 'Restore purchases');
-      if (!hasPremiumAccess(customerInfo)) throw new Error('No active MasterGrowbot AI Premium purchase was found.');
-      await completePremiumRevenueCatBinding(customerInfo);
-      onUnlocked();
+      await markPremiumPurchasePending();
+      storeStarted = true;
+      const restored = await Purchases.restorePurchases();
+      const customerInfo = await refresh(Purchases, restored.customerInfo);
+      if (hasPremiumAccess(customerInfo)) {
+        await completePremiumRevenueCatBinding(customerInfo);
+        unlocked.current();
+      } else {
+        // A returned receipt may still be processing. Keep this identity so
+        // delayed updates and the backend agree about the receipt's owner.
+        setPending(true);
+        setNotice(premiumStatusMessage(customerInfo, true));
+      }
     } catch (cause: any) {
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
-      try { await rollbackPremiumRevenueCatBinding(Purchases, binding); } catch { /* recovered at next launch */ }
-      setError(cause?.message || 'Restore Purchases could not be completed.');
-    } finally { setBusy(false); }
+      if (!storeStarted && !wasPending) {
+        try { await rollbackPremiumRevenueCatBinding(Purchases, binding); } catch { /* recovered at next launch */ }
+      }
+      setPending(wasPending || storeStarted);
+      if (!isPurchaseCancelled(cause)) setError(purchaseErrorMessage(cause));
+    } finally { operation.current = false; setBusy(false); }
+  };
+
+  const checkStatus = async () => {
+    if (operation.current || !Capacitor.isNativePlatform()) return;
+    operation.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      const { Purchases } = await import('@revenuecat/purchases-capacitor');
+      const customerInfo = await refresh(Purchases);
+      if (hasPremiumAccess(customerInfo)) {
+        await completePremiumRevenueCatBinding(customerInfo);
+        unlocked.current();
+      } else setNotice(premiumStatusMessage(customerInfo, true));
+    } catch (cause) { setError(purchaseErrorMessage(cause)); }
+    finally { operation.current = false; setBusy(false); }
   };
 
   const openLink = async (url: string) => {
@@ -138,14 +221,14 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
   return (
     <div className="fixed inset-0 z-[120] bg-slate-950 text-white flex flex-col overflow-hidden" data-testid="premium-paywall">
       <div className="flex items-center px-5 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-3">
-        <button onClick={onClose} aria-label="Close Premium" className="p-2 rounded-full bg-white/10"><ArrowLeft size={20} /></button>
+        <button onClick={onClose} disabled={busy} aria-label="Close Premium" className="p-3 rounded-full bg-white/10 disabled:opacity-40"><ArrowLeft size={20} /></button>
         <span className="ml-auto text-[10px] font-black tracking-[0.2em] text-emerald-300">MASTERGROWBOT AI PREMIUM</span>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-6">
         <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-emerald-500/25 to-cyan-400/10 border border-emerald-300/20 p-6 mt-2">
           <Sparkles className="text-emerald-300 mb-4" />
-          <h1 className="text-3xl font-black leading-tight">See the whole plant,<br />not one frame.</h1>
+          <h1 className="text-3xl font-black leading-tight">Bring your plant<br />into focus.</h1>
           <p className="text-sm text-slate-300 mt-3 leading-relaxed">Everything in Pro, plus Premium Video Plant Analysis for broader visual context across multiple angles.</p>
         </div>
 
@@ -160,11 +243,11 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
         {loading ? <div className="py-12 text-center text-sm text-slate-300">Loading localized App Store prices…</div> : (
           <div className="space-y-3" data-testid="premium-plans">
             {packages.map(pkg => (
-              <button key={pkg.identifier} onClick={() => setSelected(pkg.identifier)} className={`w-full text-left rounded-2xl p-4 border transition ${selected === pkg.identifier ? 'bg-emerald-400/15 border-emerald-400' : 'bg-white/[0.04] border-white/10'}`}>
+              <button key={pkg.identifier} disabled={busy || pending} aria-pressed={selected === pkg.identifier} onClick={() => setSelected(pkg.identifier)} className={`w-full text-left rounded-2xl p-4 border transition ${selected === pkg.identifier ? 'bg-emerald-400/15 border-emerald-400' : 'bg-white/[0.04] border-white/10'}`}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="flex items-center gap-2"><span className="font-black">{labelFor(pkg)}</span>{pkg.identifier === 'annual' && savings && <span className="rounded-full bg-emerald-400 text-slate-950 px-2 py-0.5 text-[9px] font-black">SAVE {savings}% VS MONTHLY</span>}</div>
-                    <p className="text-xs text-slate-400 mt-1">{pkg.product.priceString} per {periodFor(pkg)}</p>
+                    <div className="flex flex-wrap items-center gap-2"><span className="font-black">{labelFor(pkg)}</span>{pkg.identifier === 'annual' && savings && <span className="rounded-full bg-emerald-400 text-slate-950 px-2 py-0.5 text-[10px] font-black">SAVE {savings}% VS MONTHLY</span>}</div>
+                    <p className="text-sm text-slate-300 mt-1">{pkg.product.priceString} per {periodFor(pkg)}</p>
                   </div>
                   <div className={`h-6 w-6 rounded-full border-2 flex items-center justify-center ${selected === pkg.identifier ? 'bg-emerald-400 border-emerald-400' : 'border-slate-500'}`}>{selected === pkg.identifier && <Check size={15} className="text-slate-950" />}</div>
                 </div>
@@ -174,20 +257,30 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
           </div>
         )}
 
+        <div ref={statusPanel}>
         {error && <div role="alert" className="mt-4 rounded-xl bg-red-500/15 border border-red-400/30 p-3 text-xs text-red-100">{error}</div>}
+        {notice && <div role="status" className="mt-4 rounded-xl bg-amber-400/10 border border-amber-300/30 p-3 text-xs text-amber-100 leading-relaxed">{notice}</div>}
+        {!loading && packages.length === 0 && <button onClick={load} disabled={busy} className="mt-3 p-3 text-sm underline">Reload plans</button>}
+        {(pending || error || notice) && <div className="flex flex-wrap gap-3 mt-4 text-xs">
+          <button onClick={() => openLink('https://apps.apple.com/account/subscriptions')} className="p-2 underline">Apple Subscriptions</button>
+          <a href="mailto:support@mastergrowbot.com?subject=Premium%20purchase%20support" className="p-2 underline">Contact support</a>
+        </div>}
+        {pending && <button disabled={busy} onClick={() => { setPending(false); setNotice('Before trying again, confirm Apple Subscriptions does not show an active or scheduled Premium plan.'); }} className="mt-2 p-2 text-xs text-slate-300 underline">No Premium plan in Apple Subscriptions? Choose a plan</button>}
+        </div>
       </div>
 
       <div className="border-t border-white/10 bg-slate-950/95 px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
-        <button onClick={purchase} disabled={busy || loading || !selected} className="w-full rounded-2xl bg-emerald-400 text-slate-950 py-4 font-black disabled:opacity-50 flex justify-center items-center gap-2">
-          {busy ? 'Waiting for Apple…' : <><Film size={19} /> Upgrade with Apple</>}
+        {!pending && selectedPackage && <p className="mb-2 text-center text-sm font-semibold text-slate-200">{selectedPackage.product.priceString} per {periodFor(selectedPackage)} • {labelFor(selectedPackage)} subscription</p>}
+        <button onClick={pending ? checkStatus : purchase} disabled={busy || loading || (!pending && !selected)} className="w-full rounded-2xl bg-emerald-400 text-slate-950 py-4 font-black disabled:opacity-50 flex justify-center items-center gap-2">
+          {busy ? 'Waiting for Apple…' : pending ? 'Check status' : <><Film size={19} /> Unlock video analysis</>}
         </button>
-        <p className="text-[10px] text-slate-400 text-center mt-2 leading-relaxed">Upgrading activates MasterGrowbot AI Premium through your Apple subscription. Apple confirms the billing terms before purchase. Auto-renews until canceled.</p>
-        <div className="flex justify-center gap-3 mt-3 text-[10px] text-slate-400 font-bold">
-          <button onClick={restore} disabled={busy} className="flex items-center gap-1"><RotateCcw size={11} /> Restore Purchases</button>
-          <button onClick={() => openLink('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>Terms</button>
-          <button onClick={() => openLink('https://www.mastergrowbot.com/privacy-policy')}>Privacy</button>
-          <span className="flex items-center gap-1"><Lock size={10} /> Apple payment</span>
+        <p className="text-[10px] text-slate-400 text-center mt-2 leading-relaxed">Apple confirms your price and when the plan starts before purchase. Premium unlocks once your subscription is active. Auto-renews until canceled.</p>
+        <div className="flex flex-wrap justify-center gap-x-3 mt-2 text-xs text-slate-300 font-bold">
+          <button onClick={restore} disabled={busy} className="min-h-11 flex items-center gap-1"><RotateCcw size={13} /> Restore Purchases</button>
+          <button className="min-h-11 px-1" onClick={() => openLink('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>Terms</button>
+          <button className="min-h-11 px-1" onClick={() => openLink('https://www.mastergrowbot.com/privacy-policy')}>Privacy</button>
         </div>
+        <p className="flex items-center justify-center gap-1 text-[10px] text-slate-400"><Lock size={10} /> Secure payment through Apple</p>
       </div>
     </div>
   );

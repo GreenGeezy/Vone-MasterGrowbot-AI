@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, CheckCircle2, ScanLine, MessageSquare, Database, ClipboardCheck } from 'lucide-react';
+import { ChevronRight, CheckCircle2, ScanLine, Share2, Database, ClipboardCheck } from 'lucide-react';
 
 interface GetStartedTutorialProps {
     onComplete: () => void;
@@ -30,7 +30,7 @@ const GetStartedTutorial: React.FC<GetStartedTutorialProps> = ({ onComplete }) =
         {
             id: 'strains_intro',
             title: "Explore Strains",
-            subtitle: "Detailed insights for 100+ strains.",
+            subtitle: "Detailed insights for 300+ strains.",
             icon: <Database size={64} className="text-purple-500" />,
             desc: "Find the perfect environment and growing tips for your specific genetics.",
             action: "Next",
@@ -39,7 +39,7 @@ const GetStartedTutorial: React.FC<GetStartedTutorialProps> = ({ onComplete }) =
         {
             id: 'strains',
             title: "Unlock Genetic Intelligence",
-            subtitle: "100+ Strains at Your Fingertips",
+            subtitle: "300+ Strains at Your Fingertips",
             icon: <Database size={64} className="text-orange-500" />,
             desc: "Select your specific strain to calibrate the AI. Get advice tailored to your plant's unique DNA and traits.",
             action: "Next",
@@ -51,8 +51,17 @@ const GetStartedTutorial: React.FC<GetStartedTutorialProps> = ({ onComplete }) =
             subtitle: "Track, Log, and Optimize",
             icon: <ClipboardCheck size={64} className="text-teal-500" />,
             desc: "Manage daily tasks and keep a visual journal. Our AI analyzes your logs to predict yields and catch issues early.",
-            action: "Start Growing",
+            action: "Next",
             color: "bg-teal-50"
+        },
+        {
+            id: 'share',
+            title: "Invite a Second Look",
+            subtitle: "Your plant check-in, your way.",
+            icon: <Share2 size={64} className="text-emerald-600" />,
+            desc: "After an analysis, tap Share Analysis to preview your card, edit your caption, and choose where to share. Your original photo or video stays out of the card.",
+            action: "Explore My Dashboard",
+            color: "bg-emerald-50"
         }
     ];
 

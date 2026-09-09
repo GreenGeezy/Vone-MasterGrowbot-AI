@@ -339,7 +339,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 </div>
 
                 <div className="text-center pb-8 opacity-40">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 1.6.4</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 1.6.5</p>
                 </div>
             </div>
 

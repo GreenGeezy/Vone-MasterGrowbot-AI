@@ -1,13 +1,23 @@
 # MasterGrowbot AI Premium — App Store release checklist
 
+## 1.6.5 (166) purchase recovery and sharing update
+
+On September 9, 2026, RevenueCat **Project settings → General → Sandbox testing access** was found set to **Nobody**. Apple had recorded an active Premium weekly Sandbox subscription, but both customer and subscription entitlement lists were empty. Changing this setting to **Anybody** restored both `machine_vision` and `pro` on the existing transaction, verified through RevenueCat API v2. No promotional entitlement or client-side access bypass was used. Restore behavior remains **Transfer to new App User ID**.
+
+Use **Restore Purchases** on the existing TestFlight build before purchasing again. TestFlight purchases use Apple's Sandbox environment. An actual device retest is still required; the live configuration and API entitlement fix do not themselves verify StoreKit UI, recording, or native sharing.
+
+All three Premium products still returned `MISSING_METADATA` during this audit. US prices and absence of introductory offers are correct; review information is missing. Do not use the supplied error screenshots or browser fixtures as the release's App Review screenshot. Capture the corrected paywall from the actual iPhone build.
+
+Version 1.6.5 adds branded, locally rendered photo/video analysis share cards with editable captions and an App Store link. Raw media, location and journal contents are excluded. Sharing is always initiated by the user through the system share sheet. Details and validation are in [release-1.6.5.md](release-1.6.5.md).
+
 ## Manual steps required
 
 1. In App Store Connect, complete the name, description, localization, and App Review screenshot for all three Premium subscriptions. Confirm that they remain above every Pro product in the existing **MasterGrowbot Subscriptions** group, use $12.99/week, $49.99/month, and **$199.00/year** in the US storefront, and have no introductory offer.
-2. Add all three Premium subscriptions to the 1.6.4 app-version submission. Do not submit them separately before the matching binary is available.
+2. Add all three Premium subscriptions to the 1.6.5 app-version submission. Do not submit them separately before the matching binary is available.
 3. Update the public privacy policy and App Privacy answers if needed to disclose that a user-selected video, which can contain audio, is sent through Supabase and OpenRouter to the selected AI provider for visual analysis. MasterGrowbot does not save the raw video, but provider processing practices must be described accurately.
-4. Run the **MasterGrowbot iOS App Store** (`ios-app-store`) Codemagic workflow from branch `ios`. Test build 165 in Sandbox/TestFlight before submitting it for review.
+4. Run the **MasterGrowbot iOS App Store** (`ios-app-store`) Codemagic workflow from branch `ios`. Test build 166 in Sandbox/TestFlight before submitting it for review.
 
-## Products to add to version 1.6.4
+## Products to add to version 1.6.5
 
 | Plan | Product ID | Apple ID | Duration | US target |
 | --- | --- | ---: | --- | ---: |
@@ -19,19 +29,19 @@ These products are higher service levels in the same Apple subscription group as
 
 ## Exact App Review screenshot
 
-On an actual iPhone running build 165:
+On an actual iPhone running build 166:
 
 1. Use a Sandbox account with Pro access but without Premium.
 2. Open **Plant Health** and scroll past Growing Environment.
 3. Tap **Video Plant Analysis** on the MasterGrowbot AI Premium card.
-4. Capture the Premium paywall with the title, feature summary, all three localized recurring prices, annual value badge, **Upgrade with Apple**, renewal disclosure, **Restore Purchases**, **Terms**, and **Privacy** visible. If the device cannot show the complete scrollable page at once, capture the purchase choices and required subscription disclosure in the same image.
+4. Capture the Premium paywall with the title, feature summary, all three localized recurring prices, annual value badge, **Unlock video analysis**, renewal disclosure, **Restore Purchases**, **Terms**, and **Privacy** visible. If the device cannot show the complete scrollable page at once, capture the purchase choices and required subscription disclosure in the same image.
 5. Use the actual app screen, not a mockup. Repeat with each plan selected if App Store Connect requires a product-specific screenshot.
 
 For public App Store screenshots, use one screenshot of the Plant Health Premium card and optionally one real video-result screen based on a plant video you own. Do not imply that video is part of the Pro trial, promise a diagnosis or outcome, show private locations, or display credentials.
 
 ## App Review Notes
 
-> MasterGrowbot AI is intended only for lawful use where permitted by applicable local laws. It does not sell or deliver cannabis, provide consumption functionality, or provide medical claims. Version 1.6.4 adds general visual observations from user-supplied plant videos. Results separate visible evidence from possible interpretations and use uncertainty and confidence language; they do not provide controlled-substance cultivation optimization instructions.
+> MasterGrowbot AI is intended only for lawful use where permitted by applicable local laws. It does not sell or deliver cannabis, provide consumption functionality, or provide medical claims. Version 1.6.5 adds general visual observations from user-supplied plant videos. Results separate visible evidence from possible interpretations and use uncertainty and confidence language; they do not provide controlled-substance cultivation optimization instructions.
 >
 > No email, password, or social login is required. The app creates and persists an anonymous authenticated Supabase session. To review Premium, open Plant Health, scroll below Growing Environment, and tap Video Plant Analysis. MasterGrowbot AI Premium includes Pro plus video visual analysis. Its three products are higher tiers in the existing MasterGrowbot Subscriptions group and have no introductory offer. Existing Pro products retain their introductory offers. StoreKit controls upgrade billing and shows the applicable terms before purchase.
 >
@@ -53,7 +63,7 @@ For public App Store screenshots, use one screenshot of the Plant Health Premium
 2. In Codemagic, open **MasterGrowbot iOS App Store**.
 3. Verify the `ios-config` group contains `VITE_SUPABASE_ANON_KEY` and `VITE_REVENUECAT_IOS_KEY`.
 4. Run the workflow for `ios` at the final commit. It uses Node 20.11.1, Xcode 26.6, runs typecheck and both test suites, builds, syncs Capacitor/CocoaPods, signs the App Store IPA, and uploads it to TestFlight.
-5. Confirm TestFlight reports version **1.6.4 (165)**. If build 165 already exists, increment only the iOS build number, commit it, and rerun.
+5. Confirm TestFlight reports version **1.6.5 (166)**. If build 166 already exists, increment only the iOS build number, commit it, and rerun.
 
 ## Five-minute iPhone smoke test
 

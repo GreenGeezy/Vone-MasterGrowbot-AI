@@ -4,6 +4,17 @@ import { PREMIUM_ENTITLEMENT } from './premiumCatalog';
 
 const STABLE_ID_KEY = 'mg_rc_stable_id';
 const PENDING_PREVIOUS_ID_KEY = 'mg_rc_pending_previous_id';
+const PENDING_PURCHASE_KEY = 'mg_rc_pending_premium_purchase';
+
+export async function hasPendingPremiumPurchase(): Promise<boolean> {
+  return Boolean((await Preferences.get({ key: PENDING_PURCHASE_KEY })).value);
+}
+
+// Persist BEFORE StoreKit starts. A crash or a network error does not mean Apple
+// cancelled the transaction. Keep receipt verification on the authenticated ID.
+export async function markPremiumPurchasePending(): Promise<void> {
+  await Preferences.set({ key: PENDING_PURCHASE_KEY, value: 'true' });
+}
 
 type PurchasesIdentityApi = {
   getAppUserID(): Promise<{ appUserID: string }>;
@@ -34,8 +45,11 @@ export async function recoverPendingRevenueCatBinding(
 
   if (customerInfo.entitlements.active[PREMIUM_ENTITLEMENT]) {
     await Preferences.remove({ key: PENDING_PREVIOUS_ID_KEY });
+    await Preferences.remove({ key: PENDING_PURCHASE_KEY });
     return customerInfo;
   }
+
+  if (await hasPendingPremiumPurchase()) return customerInfo;
 
   const { customerInfo: recoveredInfo } = await Purchases.logIn({ appUserID: previousId });
   await Preferences.set({ key: STABLE_ID_KEY, value: previousId });
@@ -70,17 +84,22 @@ export async function completePremiumRevenueCatBinding(
   customerInfo: RevenueCatCustomerInfo,
 ): Promise<void> {
   if (!customerInfo.entitlements.active[PREMIUM_ENTITLEMENT]) {
-    throw new Error('Premium purchase is still being verified. Use Restore Purchases if it does not appear shortly.');
+    throw new Error('Premium access is not active yet.');
   }
   await Preferences.remove({ key: PENDING_PREVIOUS_ID_KEY });
+  await Preferences.remove({ key: PENDING_PURCHASE_KEY });
 }
 
 export async function rollbackPremiumRevenueCatBinding(
   Purchases: PurchasesIdentityApi,
   binding: RevenueCatBinding | null,
 ): Promise<void> {
-  if (!binding?.previousId) return;
+  if (!binding?.previousId) {
+    await Preferences.remove({ key: PENDING_PURCHASE_KEY });
+    return;
+  }
   await Purchases.logIn({ appUserID: binding.previousId });
   await Preferences.set({ key: STABLE_ID_KEY, value: binding.previousId });
   await Preferences.remove({ key: PENDING_PREVIOUS_ID_KEY });
+  await Preferences.remove({ key: PENDING_PURCHASE_KEY });
 }

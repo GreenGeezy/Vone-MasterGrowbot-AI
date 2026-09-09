@@ -84,9 +84,11 @@ workflows:
           set -e
           test -n "$VITE_SUPABASE_ANON_KEY" || { echo "Missing public Supabase key in ios-config"; exit 1; }
           test -n "$VITE_REVENUECAT_IOS_KEY" || { echo "Missing public RevenueCat iOS key in ios-config"; exit 1; }
+          case "$VITE_REVENUECAT_IOS_KEY" in appl_*) ;; *) echo "RevenueCat iOS builds require an App Store public SDK key (appl_ prefix)"; exit 1 ;; esac
           npm run typecheck
           npm run test:reliability
           npm run test:premium
+          npm run test:sharing
           npm run build
           npx cap sync ios
           cat ios/App/Podfile.lock

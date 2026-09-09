@@ -33,8 +33,8 @@ export async function withTimeout<T>(
  * Get or create a STABLE anonymous ID for RevenueCat.
  * This ID persists across app restarts and anonymous auth refreshes.
  * Uses Capacitor Preferences for iOS-safe native storage.
- * CRITICAL: RevenueCat appUserID must NEVER change once set,
- * otherwise purchases become orphaned.
+ * Keep legacy Pro/lifetime identity until an explicit Premium purchase or restore
+ * binds RevenueCat to the authenticated Supabase user.
  */
 /**
  * Global App Initializer
@@ -43,7 +43,7 @@ export async function withTimeout<T>(
  * - NO API call may run before auth is complete
  * - NO database query may assume a row exists
  * - Cloud initialization and RevenueCat verification run independently
- * - RevenueCat appUserID is STABLE and never changes (stored in Capacitor Preferences)
+ * - RevenueCat identity persists in Preferences, including pending Premium verification
  */
 let initialization: Promise<AppInitState> | null = null;
 let subscriptions: Promise<boolean> | null = null;
