@@ -6,7 +6,8 @@ const source = await readFile(new URL('../services/videoVisualResult.ts', import
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const { parseVideoVisualResult: parse } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const result = {
-  visualSummary: 'Several lower leaves appear yellow.', severity: 'uncertain', confidence: 45,
+  visualSummary: 'Several lower leaves appear yellow.', severity: 'uncertain', confidence: 45, healthScore: 58,
+  healthLabel: 'Mixed visual condition',
   visibleSigns: ['Yellowing at lower leaf edges.'], possibleInterpretations: ['Color cast may contribute.'],
   areasToInspect: ['Lower leaves'], environmentSummary: 'Purple lighting limits color assessment.',
   mediaQuality: 'The camera moves quickly.', recommendedVerification: 'Capture a stable close-up in neutral light.',
@@ -28,6 +29,10 @@ test('rejects malformed JSON, primitives and oversized responses', () => {
 });
 test('rejects invalid confidence instead of displaying false precision', () => {
   for (const confidence of [-1, 101, NaN, Infinity, '90', null]) assert.throws(() => parse({ ...result, confidence }));
+});
+test('rejects invalid health score and unsupported health labels', () => {
+  assert.throws(() => parse({ ...result, healthScore: 101 }));
+  assert.throws(() => parse({ ...result, healthLabel: 'Perfect' }));
 });
 test('rejects unknown severity', () => assert.throws(() => parse({ ...result, severity: 'certain' })));
 test('rejects oversized, blank or unstructured observation lists', () => {

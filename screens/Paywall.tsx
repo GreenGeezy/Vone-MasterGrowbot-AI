@@ -27,12 +27,12 @@ const TESTIMONIALS = [
 ];
 
 const FEATURES = [
-  { icon: '🧬', title: 'AI Strain Intelligence', desc: 'Genetic-specific grow guides' },
-  { icon: '🌱', title: 'Personalized Grow Plans', desc: 'Tailored to your setup' },
-  { icon: '🔬', title: 'Nutrient Deficiency Detection', desc: 'Catch problems early' },
-  { icon: '📸', title: 'Unlimited AI Plant Scans', desc: 'Diagnose with photos' },
-  { icon: '🪴', title: 'Smart Grow Journal', desc: 'Track every grow cycle' },
-  { icon: '⏰', title: 'Daily Reminders & Tasks', desc: 'Never miss a feeding' },
+  { icon: '📸', title: 'AI Plant Health Analysis', desc: 'Review visible signs in photos' },
+  { icon: '🧬', title: '300 Strain Profiles', desc: 'Detailed strain reference library' },
+  { icon: '🌱', title: 'Personalized Grow Guidance', desc: 'Adapted to your setup' },
+  { icon: '🪴', title: 'Smart Grow Journal', desc: 'Track each grow cycle' },
+  { icon: '⏰', title: 'Daily Reminders & Tasks', desc: 'Keep care on schedule' },
+  { icon: '🎥', title: 'Premium Video Analysis Available', desc: 'MasterGrowbot AI Premium upgrade' },
 ];
 
 const TestimonialCard = memo(({ testimonial, index }: { testimonial: typeof TESTIMONIALS[0]; index: number }) => (
@@ -362,7 +362,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
             <span className="text-emerald-300">Starting Today.</span>
           </h1>
           <p className="text-sm font-medium text-green-100/80 max-w-sm leading-relaxed">
-            Unlimited AI plant scans, personalized grow plans, and expert cannabis guidance in your pocket.
+            AI plant health analysis, personalized guidance, and a smart grow journal. MasterGrowbot AI Premium video analysis is available as an upgrade.
           </p>
         </div>
       </div>

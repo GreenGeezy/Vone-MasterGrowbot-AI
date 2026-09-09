@@ -1,104 +1,49 @@
-# Premium backend audit — incomplete release
+# Premium video backend and cost audit
 
-Live readback: gemini-v3 version **24**, active, gateway JWT verification disabled;
-the handler's own authentication can fail open. No deployment or database/schema
-mutation was made during this Premium checkpoint.
+## Authentication and identity
 
-## Current cost evidence
+The app calls `supabase.auth.signInAnonymously()` and Supabase creates a real persisted anonymous Auth user. Requests carry that authenticated user's JWT; the verified JWT `sub` is the application identity used by the Edge Function. Anonymous Auth users therefore run as `authenticated`, not as unauthenticated database traffic. The single shared Supabase client retains `persistSession` and `autoRefreshToken`, owns refresh centrally, and refuses to replace an established identity after a transient startup, refresh, or network failure.
 
-Prices verified against OpenRouter on September 7, 2026, per one million tokens.
-Illustrations below use 2,000 input tokens and 900 output tokens for lightweight
-text, and 2,000 input + 1,400 output for diagnosis. These are calculations, not
-measurements of real app requests. Video tokenization has not been measured.
+The previous RevenueCat identity was a random UUID in Capacitor Preferences under `mg_rc_stable_id`. It survives relaunches and normal app updates, but differs from the Supabase user UUID. RevenueCat `logIn` and `logOut` were not previously used. For Premium purchase and restore, the app now securely identifies RevenueCat with the verified Supabase Auth UUID before StoreKit action. An interrupted identity transition records the previous ID and either commits after a verified `machine_vision` entitlement or rolls back. The server never accepts a client-supplied RevenueCat customer ID or Premium boolean: it derives the customer from the verified JWT subject and reads active entitlements through RevenueCat API v2.
 
-| Feature | Model in live code | Input | Output | Illustrative request cost | Conservative maximum | Current quota |
-| --- | --- | ---: | ---: | ---: | --- | --- |
-| Image diagnosis | google/gemini-3.7-flash | $0.75 | $3.75 | $0.00675 at stated token counts | Not bounded: media/prompt size and attempts matter | Shared 100/day, bypassable |
-| Chat, insight, voice modes | google/gemini-2.5-flash-lite | $0.10 | $0.40 | $0.00056 at stated token counts | Not bounded | Same counter |
-| Fallback | google/gemini-3.1-flash-lite | $0.25 | $1.50 | $0.00260 for 2,000 in + 1,400 out | Not bounded; additional attempted cost | Same counter, no cost accounting |
-| Emergency fallback | OPENROUTER_EMERGENCY_FREE_MODEL, default openrouter/free | Configuration-dependent | Configuration-dependent | Not verified | Not verified | Same counter |
-| Requested video, not deployed | google/gemini-3.8-flash | $0.75 | $3.75 | Not measured | Not measured | Not implemented |
+This preserves current Pro and lifetime identities until a user explicitly buys or restores Premium. Relaunch and an ordinary App Store update retain both identities. Uninstall or app-data deletion can lose the anonymous Supabase session and legacy local RevenueCat ID. A new device likewise creates a new anonymous app identity; Apple Restore Purchases is required to bind the receipt to that device's authenticated identity. Cross-device journal data is unavailable without a user-facing account system, which this release intentionally does not invent.
 
-Sources: [3.8 Flash](https://openrouter.ai/google/gemini-3.8-flash),
-[3.7 Flash](https://openrouter.ai/google/gemini-3.7-flash),
-[2.5 Flash-Lite](https://openrouter.ai/google/gemini-2.5-flash-lite),
-[3.1 Flash-Lite](https://openrouter.ai/google/gemini-3.1-flash-lite),
-[video input](https://openrouter.ai/docs/guides/overview/multimodal/videos).
-Provider prices can differ; 3.8 currently lists discounted and priority rates.
-Do not extrapolate a video request's cost from its duration without measuring
-media tokens, output/reasoning tokens, retries, and provider usage.
+## Live architecture
 
-**Can a heavy legitimate user exceed $1/week under current controls? Yes.**
-Even the illustrative diagnosis cost at 100 requests/day gives
-100 × 7 × $0.00675 = **$4.725/week**, before retries/fallbacks. This is not a
-measured typical workload or a worst-case ceiling. The requested $0.90 rolling
-weekly budget is not implemented, so no contrary guarantee is justified.
+`iOS → authenticated gemini-v3 Edge Function → OpenRouter → Gemini`. The deployed `gemini-v3` version is 27 with gateway JWT verification enabled. `REVENUECAT_SECRET_API_KEY` is a server-only Edge Function secret with customer-read access; its value is never sent to or stored by the app.
 
-## Findings requiring implementation
+Video authorization order is JWT verification, authenticated user resolution, server-derived RevenueCat customer lookup, active `machine_vision`, rolling budget, daily availability, media validation, then OpenRouter. An unauthorized request reaches no billable model. Usage admission uses a transaction-scoped advisory lock and service-role-only RPC; app clients cannot read, reset, or increment authoritative counters.
 
-- `user_daily_usage` contains user_id, date, request_count only. Authenticated
-  clients have an ALL policy for their own row, so they can reset the counter.
-- SELECT followed by UPSERT is not atomic admission control under concurrency.
-- Authentication failures/backend errors can bypass the current limiter.
-- Requests lack comprehensive prompt/media size bounds; fallback attempts have
-  no independent reservations, and the provider call has no bounded fetch timeout.
-- Supabase auth UUID and RevenueCat's persisted custom UUID are different.
-  Accepting an arbitrary client RevenueCat ID or premium boolean is not a secure
-  binding. An identity migration/verified binding must preserve existing Pro and
-  lifetime access and be tested for purchase, cancellation, restore, and reinstall.
-- No private RevenueCat credential exists in the September 8 secret-name audit.
-- `user_uploads` has public SELECT policies. Do not store raw video there.
-- A separate legacy gemini-gateway function remains active (version 54). Audit
-  any billable alternate endpoint before claiming a total per-user cost ceiling.
+Video is inline and transient. It is never stored in Supabase Storage, and the existing public `user_uploads` bucket is not used by this feature. The server accepts signature-valid MP4 or MOV up to 8 MB and approximately 20 seconds, limits output, validates structured JSON, and bounds provider calls with a timeout. The visual prompt separates observations from interpretations and excludes optimization, potency, harvest, yield, medical, sales, delivery, consumption, and illegal-use guidance.
 
-Required design: authenticated server-side entitlement lookup bound to the actual
-user; service-role-only atomic budget reservation before every billable attempt;
-conservative preflight bounds and provider price ceilings; reconciliation using
-actual usage while retaining reservations when a timeout leaves charge uncertain;
-daily video quota derived from measured short clips; private transient media.
-Use a precise rolling week or a conservatively longer daily-bucket window.
-Never refund an uncertain reservation merely because the client cancelled.
+## Model routing and cost controls
 
-Security advisors returned 13 warnings: 12 anonymous-access-policy notices and
-one disabled leaked-password-protection notice. Anonymous sessions are intended
-in this no-login app; inspect ownership rather than disabling them wholesale.
-Performance advisors returned 102 notices: 3 missing foreign-key indexes,
-32 RLS auth-call initialization notices, and 67 overlapping permissive-policy
-notices. These were audited, not remediated in this checkpoint.
-See [Supabase advisors](https://supabase.com/docs/guides/database/database-advisors)
-and [RLS evaluation](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select).
+Prices were verified on OpenRouter on September 8, 2026 and are per one million tokens. Provider pricing can change.
 
-## Implemented locally in this checkpoint
+| Feature | Model | Input | Output | Typical estimated cost | Conservative reservation | Availability control | Exclusive weekly maximum |
+| --- | --- | ---: | ---: | ---: | ---: | --- | ---: |
+| Premium video | `google/gemini-3.8-flash` | $0.75 | $3.75 | $0.00411 measured average | $0.060 | Up to 5/day, internal | 31 attempts / $1.86 reserved |
+| Image diagnosis | `google/gemini-3.7-flash` | $0.75 | $3.75 | $0.00675 estimate | $0.025 | Shared request/budget admission | 76 attempts / $1.90 reserved |
+| Chat, insight, voice | `google/gemini-2.5-flash-lite` | $0.10 | $0.40 | $0.00056 estimate | $0.005 | Shared request/budget admission | 380 attempts / $1.90 reserved |
+| Modality-compatible fallback | `google/gemini-3.1-flash-lite` | $0.25 | $1.50 | $0.00260 estimate | $0.015 | Separate fallback reservation | 126 attempts / $1.89 reserved |
+| Emergency fallback | `openrouter/free` only | $0 | $0 | $0 provider price | $0.020 accounting reservation | Separate fallback reservation | 95 attempts / $1.90 reserved |
 
-- Pure, tested Premium catalog mappings, entitlement check, strict package/product
-  association filtering, and localized numeric annual-savings calculation.
-- Observation-only result contract with bounded structural validation. Unknown
-  fields are projected out; this does not guarantee semantic content safety.
-- `npm run test:premium` runs these tests. Neither module is wired into the app's
-  existing image/purchase flow yet. Existing app functionality is unchanged.
+Video media tokens cannot be inferred reliably from duration alone. Two representative real calls using 10-second and 20-second MP4 files returned 3,062 input and 1,578 output tokens combined. At $0.75 and $3.75 per million, total model cost was **$0.008214**, or **$0.004107 per video**. Both calls returned structured results from `google/gemini-3.8-flash` in about 9.7 and 10.4 seconds. The $0.060 preflight reservation is roughly 14.6 times that measured average.
 
-## Outstanding engineering work (not user manual steps)
+The rolling seven-day server budget is **$1.90 per authenticated user**. Five videos per calendar day is a separate upper bound; the rolling budget can make fewer available after other AI use or retries. At the measured average, 35 video calls cost about **$0.1437/week**. At the conservative reservation, 31 video attempts reserve $1.86 and the 32nd is denied because $1.92 would cross the cap. Image, chat, insight, voice, and each paid fallback draw from the same budget. Provider-reported cost and tokens are stored when returned; otherwise the conservative reservation becomes the estimate. A timed-out or failed attempt retains its reservation so retry cannot bypass accounting.
 
-Premium card/paywall, record/device picker, cancellation/progress/retry/result UI,
-server authorization and identity binding, video_visual_analysis model route,
-cost reservations and RLS migration, measured daily quota, provider failure tests,
-Playwright video states, native Sandbox testing, and version 1.6.4 (165) release
-validation. A server secret alone does not finish this list.
+The application never advertises the daily count or dollar budget. When admission is unavailable it shows a neutral message explaining that more analyses become available later.
 
-## Checkpoint validation, September 8
+Sources: [Gemini 3.8 Flash](https://openrouter.ai/google/gemini-3.8-flash), [Gemini 3.7 Flash](https://openrouter.ai/google/gemini-3.7-flash), [Gemini 2.5 Flash-Lite](https://openrouter.ai/google/gemini-2.5-flash-lite), [Gemini 3.1 Flash-Lite](https://openrouter.ai/google/gemini-3.1-flash-lite), and [OpenRouter video inputs](https://openrouter.ai/docs/guides/overview/multimodal/videos).
 
-Plain `npm ci` initially failed because picomatch lock entries were inconsistent.
-The lockfile was repaired without changing declared dependencies; plain `npm ci`
-then passed. TypeScript passed; reliability tests 5/5 and Premium foundation tests
-21/21 passed; all 300 strain profiles validated; production web build passed.
-The iOS workflow now includes the new test command. `npx cap sync ios` completed
-asset/plugin sync but skipped CocoaPods and Xcode, which are unavailable on this
-Windows machine. No Podfile.lock is present locally. Native compilation and
-StoreKit compatibility remain unverified. Playwright was not run for this
-checkpoint because no UI changes were implemented.
+## Database implementation
 
-The dependency audit still reports 25 vulnerabilities (1 low, 5 moderate, 16 high,
-3 critical); this checkpoint did not apply broad breaking dependency upgrades or
-establish runtime exploitability. Build warnings include outdated Browserslist
-data and a 565 kB main JS chunk. These findings must not be described as a clean
-security/native release validation.
+`user_daily_usage` now tracks `request_count`, `video_request_count`, `estimated_cost_usd`, `reserved_cost_usd`, `input_tokens`, and `output_tokens`. The app-facing ALL policy and direct grants were removed. Only service role can execute `reserve_ai_usage` and `finalize_ai_usage`. Admission serializes each user's concurrent requests with `pg_advisory_xact_lock`, sums the current day plus six prior days, enforces the rolling budget, and records reservations before model calls.
+
+Live transactional verification allowed video reservations one through five, denied six with `daily_video_limit`, allowed 31 isolated $0.06 reservations, and denied the 32nd with `weekly_cost_limit`. The transaction was rolled back, leaving no test usage rows.
+
+Supabase advisors continue to report 12 pre-existing security warnings (11 intentional anonymous-auth policy notices and disabled leaked-password protection) and 101 performance notices (3 unindexed foreign keys, 31 RLS initialization-plan notices, and 67 overlapping-policy notices) across the wider application. The Premium migrations add no public counter policy, no broken migration, and no production-data deletion.
+
+## Validation boundaries
+
+Automated TypeScript, reliability, catalog, result-schema, routing, media-validation, authorization-order, atomic-limit, build, and Capacitor sync checks run on Windows. Live API checks verified inactive Premium denial, active entitlement gating, unchanged insight routing, and both representative Gemini 3.8 video calls. Playwright covers responsive web UI and scroll behavior. Native camera, system picker, StoreKit payment, receipt transfer, signing, and TestFlight require the final Codemagic and iPhone smoke test.

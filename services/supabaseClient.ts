@@ -59,17 +59,27 @@ export const ensureProfileExists = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { data: null, error: 'No user' };
 
-  // Insert with ignoreDuplicates: safe if the row already exists.
-  const { data, error } = await supabase
+  // Do not combine ignoreDuplicates with a representation response: PostgREST
+  // can correctly insert nothing for an existing row and then answer 406 when
+  // asked to coerce that empty response into one object.
+  const { error: insertError } = await supabase
     .from('profiles')
     .upsert(
       { id: user.id },
       { onConflict: 'id', ignoreDuplicates: true }
-    )
-    .select()
-    .maybeSingle();
+    );
 
-  if (error) console.warn('ensureProfileExists: upsert error (non-fatal):', error);
+  if (insertError) {
+    console.warn('ensureProfileExists: upsert error (non-fatal):', insertError);
+    return { data: null, error: insertError };
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (error) console.warn('ensureProfileExists: lookup error (non-fatal):', error);
   return { data, error };
 };
 

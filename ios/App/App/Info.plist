@@ -46,11 +46,11 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>We need access to your camera to take photos of your plants for analysis.</string>
+	<string>MasterGrowbot uses the camera when you choose to capture plant photos or short plant videos for visual analysis.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>We need access to your microphone for voice commands and chat.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>We need access to your photo library to upload plant photos for analysis.</string>
+	<string>MasterGrowbot uses photos or short plant videos you select for visual plant analysis.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>We need access to save photos to your library.</string>
 </dict>

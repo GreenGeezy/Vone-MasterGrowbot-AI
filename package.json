@@ -1,7 +1,7 @@
 {
   "name": "mastergrowbot-ai",
   "private": true,
-  "version": "1.6.3",
+  "version": "1.6.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,7 @@
     "validate:strains": "node scripts/validate-strains.mjs",
     "typecheck": "tsc --noEmit",
     "test:reliability": "node --test scripts/auth-session.test.mjs",
-    "test:premium": "node --test scripts/premium-catalog.test.mjs scripts/video-visual-result.test.mjs"
+    "test:premium": "node --test scripts/premium-catalog.test.mjs scripts/video-visual-result.test.mjs scripts/premium-backend.test.mjs"
   },
   "dependencies": {
     "@capacitor-community/in-app-review": "^6.0.0",

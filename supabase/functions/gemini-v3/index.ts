@@ -1,319 +1,202 @@
 /// <reference lib="deno.ns" />
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  buildMessages,
+  type ChatMessage,
+  modelListForMode,
+  MODEL_ROUTING,
+  parseVideoResult,
+  RequestValidationError,
+  validateRequestBody,
+  VIDEO_RESPONSE_FORMAT,
+} from "./core.ts";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const REVENUECAT_PROJECT = "projf176df92";
+const MACHINE_VISION_ENTITLEMENT_ID = "entl05530ace9d";
 const REFERER = "https://mastergrowbot.com";
 const TITLE = "MasterGrowbot AI";
-
-const SYSTEM_MESSAGE =
-  "You are MasterGrowbot AI, a legal cannabis cultivation assistant. Provide practical, careful, structured plant-health guidance. Do not claim certainty from images. Recommend human verification for severe or high-risk issues.";
+const WEEKLY_BUDGET_USD = 1.90;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Expose-Headers": "x-mastergrowbot-model",
 };
 
 class FunctionError extends Error {
-  status: number;
-
-  constructor(message: string, status = 500) {
-    super(message);
-    this.status = status;
-  }
+  constructor(message: string, public status = 500, public code = "server_error") { super(message); }
 }
-
-type ChatMessage = {
-  role: "system" | "user" | "assistant";
-  content:
-    | string
-    | Array<
-      | { type: "text"; text: string }
-      | { type: "image_url"; image_url: { url: string } }
-    >;
-};
-
-type OpenRouterChoice = {
-  message?: {
-    content?: string | Array<{ type?: string; text?: string }>;
-  };
-};
 
 type OpenRouterResponse = {
-  choices?: OpenRouterChoice[];
+  choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>;
   error?: { message?: string; code?: string | number };
+  usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
 };
 
-function jsonResponse(payload: Record<string, unknown>, status = 200) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+type UsageReservation = { allowed: boolean; reason: string | null; weekly_cost_usd: number; video_requests_today: number };
+
+function jsonResponse(payload: Record<string, unknown>, status = 200, headers: Record<string, string> = {}) {
+  return new Response(JSON.stringify(payload), { status, headers: { ...corsHeaders, ...headers, "Content-Type": "application/json" } });
 }
 
-function isImageMimeType(mimeType?: string) {
-  return !mimeType || mimeType.toLowerCase().startsWith("image/");
-}
-
-function toImageDataUrl(image: string, mimeType = "image/jpeg") {
-  if (image.startsWith("data:")) return image;
-  return `data:${mimeType};base64,${image}`;
+function statusOf(error: unknown) {
+  if (error instanceof FunctionError || error instanceof RequestValidationError) return error.status;
+  if (error && typeof error === "object" && typeof (error as { status?: unknown }).status === "number") return (error as { status: number }).status;
+  return 500;
 }
 
 function extractText(payload: OpenRouterResponse) {
   const content = payload.choices?.[0]?.message?.content;
   if (typeof content === "string") return content.trim();
-  if (Array.isArray(content)) {
-    return content
-      .map((part) => part.type === "text" || part.text ? part.text ?? "" : "")
-      .join("")
-      .trim();
-  }
+  if (Array.isArray(content)) return content.map((part) => part.text ?? "").join("").trim();
   return "";
 }
 
-function sanitizeHistory(history: unknown): ChatMessage[] {
-  if (!Array.isArray(history)) return [];
-
-  const mapped = history
-    .filter((message) =>
-      message &&
-      typeof message === "object" &&
-      typeof (message as { content?: unknown }).content === "string"
-    )
-    .map((message) => {
-      const role = (message as { role?: string }).role === "assistant" ? "assistant" : "user";
-      return {
-        role,
-        content: (message as { content: string }).content,
-      } satisfies ChatMessage;
-    });
-
-  while (mapped.length > 0 && mapped[0].role !== "user") mapped.shift();
-  return mapped;
+function serverClient() {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) throw new FunctionError("Usage service is unavailable", 503, "usage_unavailable");
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-function modelListForMode(mode: string) {
-  const diagnosisModel =
-    Deno.env.get("OPENROUTER_MODEL_DIAGNOSIS") || "google/gemini-3.1-flash-lite";
-  const insightModel =
-    Deno.env.get("OPENROUTER_MODEL_INSIGHT") || "google/gemini-2.5-flash-lite";
-  const fallbackModel =
-    Deno.env.get("OPENROUTER_FALLBACK_MODEL") || "google/gemini-3.1-flash-lite";
-  const emergencyModel =
-    Deno.env.get("OPENROUTER_EMERGENCY_FREE_MODEL") || "openrouter/free";
-
-  const primary = mode === "diagnosis" ? diagnosisModel : insightModel;
-  return Array.from(new Set([primary, fallbackModel, emergencyModel].filter(Boolean)));
+async function authenticatedUser(req: Request) {
+  const authHeader = req.headers.get("Authorization");
+  const url = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!authHeader || !url || !anonKey) throw new FunctionError("Authentication required", 401, "authentication_required");
+  const client = createClient(url, anonKey, { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: { user }, error } = await client.auth.getUser();
+  if (error || !user?.id) throw new FunctionError("Your session could not be verified. Please reopen the app and try again.", 401, "invalid_session");
+  return user;
 }
 
-function buildMessages(body: Record<string, unknown>): ChatMessage[] {
-  const mode = String(body.mode || "");
-  const prompt = typeof body.prompt === "string" ? body.prompt : "";
-  const image = typeof body.image === "string" ? body.image : "";
-  const fileData = typeof body.fileData === "string" ? body.fileData : "";
-  const mimeType = typeof body.mimeType === "string" ? body.mimeType : "image/jpeg";
-
-  const messages: ChatMessage[] = [{ role: "system", content: SYSTEM_MESSAGE }];
-
-  if (mode === "chat") {
-    messages.push(...sanitizeHistory(body.history));
-  }
-
-  const imagePayload = image || (fileData && isImageMimeType(mimeType) ? fileData : "");
-  if ((mode === "diagnosis" || mode === "chat") && imagePayload) {
-    messages.push({
-      role: "user",
-      content: [
-        { type: "text", text: prompt || "Analyze this plant image." },
-        { type: "image_url", image_url: { url: toImageDataUrl(imagePayload, mimeType) } },
-      ],
-    });
-    return messages;
-  }
-
-  if (fileData && !isImageMimeType(mimeType)) {
-    messages.push({
-      role: "user",
-      content: `${prompt}\n\nAttached file data:\n${fileData}`,
-    });
-    return messages;
-  }
-
-  messages.push({ role: "user", content: prompt });
-  return messages;
-}
-
-function bearerTokenHasSubject(authHeader: string): boolean {
+async function verifyMachineVision(customerId: string) {
+  const secret = Deno.env.get("REVENUECAT_SECRET_API_KEY");
+  if (!secret) throw new FunctionError("Premium verification is temporarily unavailable", 503, "premium_verification_unavailable");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const token = authHeader.replace(/^Bearer\s+/i, "");
-    const payload = token.split(".")[1];
-    if (!payload) return false;
-
-    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const decoded = JSON.parse(atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")));
-    return typeof decoded?.sub === "string" && decoded.sub.length > 0;
-  } catch {
-    return false;
-  }
-}
-
-async function enforceRateLimit(req: Request) {
-  try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader || !bearerTokenHasSubject(authHeader)) return;
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-    if (!supabaseUrl || !supabaseAnonKey) return;
-
-    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
+    const response = await fetch(`https://api.revenuecat.com/v2/projects/${REVENUECAT_PROJECT}/customers/${encodeURIComponent(customerId)}/active_entitlements`, {
+      headers: { Authorization: `Bearer ${secret}`, Accept: "application/json" }, signal: controller.signal,
     });
-
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    if (authError) {
-      console.warn("Rate limiter auth check skipped:", authError.message);
-      return;
-    }
-    if (!user) return;
-
-    const limit = 100;
-    const today = new Date().toISOString().split("T")[0];
-    const { data: usage, error: usageError } = await supabaseClient
-      .from("user_daily_usage")
-      .select("request_count")
-      .eq("user_id", user.id)
-      .eq("date", today)
-      .maybeSingle();
-
-    if (!usageError && usage && usage.request_count >= limit) {
-      throw new FunctionError(`Daily limit reached (${limit} requests). Please try again tomorrow.`, 429);
-    }
-
-    const { error: upsertError } = await supabaseClient
-      .from("user_daily_usage")
-      .upsert(
-        {
-          user_id: user.id,
-          date: today,
-          request_count: (usage?.request_count ?? 0) + 1,
-        },
-        { onConflict: "user_id, date" },
-      );
-
-    if (upsertError) console.warn("Rate limit update skipped:", upsertError.message);
+    if (response.status === 404) throw new FunctionError("MasterGrowbot AI Premium is required for video analysis", 403, "premium_required");
+    if (response.status === 401 || response.status === 403) throw new FunctionError("Premium verification is temporarily unavailable", 503, "premium_verification_unavailable");
+    if (!response.ok) throw new FunctionError("Premium verification is temporarily unavailable", 503, "premium_verification_unavailable");
+    const payload = await response.json().catch(() => null) as { items?: Array<{ entitlement_id?: string; expires_at?: number | null }> } | null;
+    const active = payload?.items?.some((item) => item.entitlement_id === MACHINE_VISION_ENTITLEMENT_ID && (item.expires_at == null || item.expires_at > Date.now()));
+    if (!active) throw new FunctionError("MasterGrowbot AI Premium is required for video analysis", 403, "premium_required");
   } catch (error) {
     if (error instanceof FunctionError) throw error;
-    console.warn("Rate limiter failed open.");
-  }
+    throw new FunctionError("Premium verification timed out. Please try again.", 503, "premium_verification_unavailable");
+  } finally { clearTimeout(timer); }
 }
 
-async function callOpenRouter(
-  apiKey: string,
-  model: string,
-  messages: ChatMessage[],
-  maxTokens: number,
-) {
-  const response = await fetch(OPENROUTER_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": REFERER,
-      "X-Title": TITLE,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.4,
-      max_tokens: maxTokens,
-    }),
+function reservationFor(model: string) {
+  if (model === MODEL_ROUTING.video_visual_analysis) return 0.06;
+  if (model === MODEL_ROUTING.diagnosis) return 0.025;
+  if (model === MODEL_ROUTING.insight) return 0.005;
+  if (model === MODEL_ROUTING.fallback) return 0.015;
+  return 0.02;
+}
+
+async function reserveUsage(admin: ReturnType<typeof serverClient>, userId: string, mode: string, model: string, countRequest: boolean) {
+  const amount = reservationFor(model);
+  const { data, error } = await admin.rpc("reserve_ai_usage", {
+    p_user_id: userId, p_mode: countRequest ? mode : "fallback", p_reserved_cost_usd: amount, p_count_request: countRequest,
   });
-
-  const payload = await response.json().catch(() => ({})) as OpenRouterResponse;
-  console.log("OpenRouter response", { model, status: response.status });
-
-  if (!response.ok) {
-    const upstreamMessage = payload.error?.message || `OpenRouter request failed with ${response.status}`;
-    throw new FunctionError(upstreamMessage, response.status);
+  if (error) throw new FunctionError("Usage limits are temporarily unavailable", 503, "usage_unavailable");
+  const admission = (data?.[0] ?? null) as UsageReservation | null;
+  if (!admission?.allowed) {
+    if (admission?.reason === "daily_video_limit") throw new FunctionError("You've reached today's Premium video analysis limit. More analyses will be available tomorrow.", 429, "daily_video_limit");
+    if (admission?.reason === "weekly_cost_limit") throw new FunctionError("You've reached this week's AI usage limit. More analyses will become available as your weekly window resets.", 429, "weekly_cost_limit");
+    throw new FunctionError("You've reached today's AI request limit. Please try again tomorrow.", 429, "daily_request_limit");
   }
-
-  const text = extractText(payload);
-  if (!text) throw new FunctionError("OpenRouter returned no content", 502);
-  return text;
+  return { amount, admission };
 }
 
-async function generateWithFallback(body: Record<string, unknown>) {
+async function finalizeUsage(admin: ReturnType<typeof serverClient>, userId: string, reserved: number, payload?: OpenRouterResponse) {
+  const actual = typeof payload?.usage?.cost === "number" && Number.isFinite(payload.usage.cost) ? Math.max(0, payload.usage.cost) : reserved;
+  const { error } = await admin.rpc("finalize_ai_usage", {
+    p_user_id: userId, p_reserved_cost_usd: reserved, p_actual_or_estimated_cost_usd: actual,
+    p_input_tokens: Math.max(0, payload?.usage?.prompt_tokens ?? 0), p_output_tokens: Math.max(0, payload?.usage?.completion_tokens ?? 0),
+  });
+  if (error) console.error("Usage finalization failed", { reserved });
+}
+
+async function callOpenRouter(apiKey: string, model: string, messages: ChatMessage[], maxTokens: number, video: boolean) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), video ? 90000 : 65000);
+  try {
+    const response = await fetch(OPENROUTER_URL, {
+      method: "POST", signal: controller.signal,
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "HTTP-Referer": REFERER, "X-Title": TITLE },
+      body: JSON.stringify({ model, messages, temperature: video ? 0.2 : 0.4, max_tokens: maxTokens, ...(video ? { response_format: VIDEO_RESPONSE_FORMAT } : {}) }),
+    });
+    const payload = await response.json().catch(() => ({})) as OpenRouterResponse;
+    if (!response.ok) throw Object.assign(new FunctionError(payload.error?.message || `OpenRouter request failed with ${response.status}`, response.status, "provider_error"), { usagePayload: payload });
+    const text = extractText(payload);
+    if (!text) throw Object.assign(new FunctionError("OpenRouter returned no content", 502, "malformed_provider_response"), { usagePayload: payload });
+    return { text, payload };
+  } catch (error) {
+    if (error instanceof FunctionError) throw error;
+    throw new FunctionError("AI analysis timed out. Please try again.", 504, "provider_timeout");
+  } finally { clearTimeout(timer); }
+}
+
+async function generate(body: Record<string, unknown>, admin: ReturnType<typeof serverClient>, userId: string, primaryReservation: number) {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
-  if (!apiKey) throw new FunctionError("Missing OPENROUTER_API_KEY environment variable", 500);
-
-  const mode = String(body.mode || "insight");
-  const maxTokens = mode === "diagnosis" ? 1400 : 900;
+  if (!apiKey) throw new FunctionError("AI service is unavailable", 503, "provider_unavailable");
+  const mode = String(body.mode);
+  const video = mode === "video_visual_analysis";
+  // Only a zero-cost emergency route is allowed under the hard weekly budget.
+  const configuredEmergency = Deno.env.get("OPENROUTER_EMERGENCY_FREE_MODEL");
+  const emergencyModel = configuredEmergency === "openrouter/free" ? configuredEmergency : "openrouter/free";
+  const models = modelListForMode(mode, emergencyModel);
   const messages = buildMessages(body);
-  const models = modelListForMode(mode);
-
+  const maxTokens = mode === "diagnosis" ? 1400 : video ? 1100 : 900;
   let lastError: unknown;
   for (const [index, model] of models.entries()) {
+    const reserved = index === 0 ? primaryReservation : (await reserveUsage(admin, userId, mode, model, false)).amount;
     try {
-      console.log("OpenRouter attempt", { mode, model, attempt: index + 1 });
-      return await callOpenRouter(apiKey, model, messages, maxTokens);
+      const generated = await callOpenRouter(apiKey, model, messages, maxTokens, video);
+      await finalizeUsage(admin, userId, reserved, generated.payload);
+      return { result: video ? parseVideoResult(generated.text) : generated.text, model };
     } catch (error) {
       lastError = error;
-      const status = error instanceof FunctionError ? error.status : 500;
-      console.warn("OpenRouter attempt failed", { mode, model, status, attempt: index + 1 });
-      if (status === 401 || status === 402) break;
+      await finalizeUsage(admin, userId, reserved, (error as { usagePayload?: OpenRouterResponse })?.usagePayload);
+      if ([400, 401, 402, 403, 422].includes(statusOf(error))) break;
     }
   }
-
-  if (lastError instanceof FunctionError) throw lastError;
-  throw new FunctionError("OpenRouter request failed", 500);
+  throw lastError || new FunctionError("All model attempts failed", 502, "provider_error");
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    await enforceRateLimit(req);
-
+    const user = await authenticatedUser(req);
     let body: Record<string, unknown>;
-    try {
-      body = await req.json();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Invalid JSON body";
-      return jsonResponse({ error: "Invalid JSON body", details: message }, 400);
-    }
-
+    try { body = await req.json(); } catch { return jsonResponse({ error: "Invalid JSON body", code: "invalid_json" }, 400); }
     const mode = typeof body.mode === "string" ? body.mode : "";
-    const prompt = typeof body.prompt === "string" ? body.prompt : "";
-    const image = typeof body.image === "string" ? body.image : "";
-    const fileData = typeof body.fileData === "string" ? body.fileData : "";
-
-    if (mode === "wakeup") {
-      return jsonResponse({ message: "Backend awake", result: "Ready" });
+    if (mode === "wakeup") return jsonResponse({ message: "Backend awake", result: "Ready" });
+    if (!["diagnosis", "insight", "chat", "voice", "video_visual_analysis"].includes(mode)) throw new FunctionError(`Invalid mode '${mode}' for gemini-v3`, 400, "invalid_mode");
+    if (mode === "video_visual_analysis") await verifyMachineVision(user.id);
+    const admin = serverClient();
+    const primaryModel = modelListForMode(mode)[0];
+    const reservation = await reserveUsage(admin, user.id, mode, primaryModel, true);
+    try { validateRequestBody(body); } catch (error) {
+      await finalizeUsage(admin, user.id, reservation.amount);
+      throw error;
     }
-
-    if (!prompt && !image && !fileData) {
-      return jsonResponse({ error: "Missing required fields: prompt or image" }, 400);
-    }
-
-    if (!["diagnosis", "insight", "chat", "voice"].includes(mode)) {
-      return jsonResponse({ error: `Invalid mode '${mode}' for gemini-v3` }, 400);
-    }
-
     const normalizedBody = { ...body, mode: mode === "voice" ? "chat" : mode };
-    const result = await generateWithFallback(normalizedBody);
-    return jsonResponse({ result });
+    const generated = await generate(normalizedBody, admin, user.id, reservation.amount);
+    return jsonResponse({ result: generated.result }, 200, { "X-MasterGrowbot-Model": generated.model });
   } catch (error) {
-    const status = error instanceof FunctionError ? error.status : 500;
+    const status = statusOf(error);
     const message = error instanceof Error ? error.message : "Unknown error occurred";
-    console.error("gemini-v3 execution error", { status });
-
-    return jsonResponse({
-      error: message,
-      details: message,
-    }, status >= 400 && status < 600 ? status : 500);
+    const code = error instanceof FunctionError ? error.code : error instanceof RequestValidationError ? "invalid_request" : "server_error";
+    console.error("gemini-v3 execution error", { status, code });
+    return jsonResponse({ error: message, details: message, code }, status >= 400 && status < 600 ? status : 500);
   }
 });

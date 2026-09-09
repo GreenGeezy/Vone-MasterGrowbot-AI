@@ -1,149 +1,78 @@
-# Premium video submission preparation — NOT READY TO SUBMIT
+# MasterGrowbot AI Premium — App Store release checklist
 
-This is a preparation checklist, not evidence that the video feature is implemented.
-The current app remains 1.6.3 (164). The requested 1.6.4 (165) release is blocked.
+## Manual steps required
 
-## Required now
+1. In App Store Connect, complete the name, description, localization, and App Review screenshot for all three Premium subscriptions. Confirm that they remain above every Pro product in the existing **MasterGrowbot Subscriptions** group, use $12.99/week, $49.99/month, and **$199.00/year** in the US storefront, and have no introductory offer.
+2. Add all three Premium subscriptions to the 1.6.4 app-version submission. Do not submit them separately before the matching binary is available.
+3. Update the public privacy policy and App Privacy answers if needed to disclose that a user-selected video, which can contain audio, is sent through Supabase and OpenRouter to the selected AI provider for visual analysis. MasterGrowbot does not save the raw video, but provider processing practices must be described accurately.
+4. Run the **MasterGrowbot iOS App Store** (`ios-app-store`) Codemagic workflow from branch `ios`. Test build 165 in Sandbox/TestFlight before submitting it for review.
 
-Add a dedicated RevenueCat server credential with customer/entitlement read access
-to Supabase project `vofwdhlwsahwxecewyek`, Edge Functions → Secrets, named
-`REVENUECAT_SECRET_API_KEY`. Do not put the credential in the app, Git, or chat.
-The September 8 secret-name readback did not contain it. Dashboard OAuth approval
-for the CLI is separate from this deployed-function credential.
+## Products to add to version 1.6.4
 
-Adding this secret is necessary for the proposed private-key implementation but
-does not complete the feature: secure customer identity binding, video UI/backend,
-cost reservations, measurements, and native tests remain engineering work.
+| Plan | Product ID | Apple ID | Duration | US target |
+| --- | --- | ---: | --- | ---: |
+| Premium Weekly | `mastergrowbot_premium_weekly_v1` | 6809541369 | 1 week | $12.99 |
+| Premium Monthly | `mastergrowbot_premium_monthly_v1` | 6809542736 | 1 month | $49.99 |
+| Premium Yearly | `mastergrowbot_premium_yearly_v1` | 6809543789 | 1 year | $199.00 |
 
-## Verified RevenueCat catalog
+These products are higher service levels in the same Apple subscription group as Pro. They replace the current tier through StoreKit; they are not separately billed add-ons. Apple controls upgrade, proration, and introductory-trial billing. The app never cancels a plan, ends a trial, or charges a base plan itself.
 
-Project: `projf176df92`. iOS app: `app521ff67c60`, `com.mastergrowbot.ai`.
-Entitlements: `pro` (`entle87d63b32e`) and `machine_vision` (`entl05530ace9d`).
-The latter's display name is now **MasterGrowbot AI Premium**; identifier unchanged.
+## Exact App Review screenshot
 
-| Product | Apple product ID | RevenueCat product | pro | machine_vision | premium_upgrade package |
-| --- | --- | --- | --- | --- | --- |
-| Weekly | mastergrowbot_premium_weekly_v1 | prod2f42a4283e | Yes | Yes | weekly / pkge230ac7e64c |
-| Monthly | mastergrowbot_premium_monthly_v1 | prodb6a111db06 | Yes | Yes | monthly / pkge5e33513da4 |
-| Yearly | mastergrowbot_premium_yearly_v1 | prod9a6f8b846b | Yes | Yes | annual / pkgedded595011 |
+On an actual iPhone running build 165:
 
-Offering `premium_upgrade` is `ofrng4a696d2461`, not current/default. The existing
-default `ofrngd4a3a17923` remains current. Pro retains all nine previous products,
-including lifetime, plus the three Premium products. Premium has exactly those
-three products. No Apple products, prices, subscription ranks, or trial offers
-were changed by this work. RevenueCat returned null duration/trial metadata;
-that is not verification of Apple price, rank, or introductory-offer settings.
+1. Use a Sandbox account with Pro access but without Premium.
+2. Open **Plant Health** and scroll past Growing Environment.
+3. Tap **Video Plant Analysis** on the MasterGrowbot AI Premium card.
+4. Capture the Premium paywall with the title, feature summary, all three localized recurring prices, annual value badge, **Upgrade with Apple**, renewal disclosure, **Restore Purchases**, **Terms**, and **Privacy** visible. If the device cannot show the complete scrollable page at once, capture the purchase choices and required subscription disclosure in the same image.
+5. Use the actual app screen, not a mockup. Repeat with each plan selected if App Store Connect requires a product-specific screenshot.
 
-User-specified US prices are $12.99/week, $49.99/month, and **$199.00/year**.
-The eventual purchase UI must use StoreKit localized prices. Products are combined
-higher-tier subscriptions in the same Apple group, not independent add-ons.
-Never charge a base plan separately or promise that an introductory trial ends
-immediately. Apple confirms applicable billing terms on its payment sheet.
+For public App Store screenshots, use one screenshot of the Plant Health Premium card and optionally one real video-result screen based on a plant video you own. Do not imply that video is part of the Pro trial, promise a diagnosis or outcome, show private locations, or display credentials.
 
-## Screenshot to capture after implementation
+## App Review Notes
 
-On an actual iPhone running the completed build, open **Plant Health → Analyze
-Video → MasterGrowbot AI Premium** as a Pro subscriber without Premium. Capture
-the actual upgrade screen with its full localized recurring price, Everything in
-Pro + Advanced Video Plant Analysis, renewal explanation, Restore Purchases,
-Terms, and Privacy. Supply that screenshot to the App Review screenshot field
-for each of the three new subscriptions. Do not use a design mockup as proof of
-implemented functionality.
-
-For public App Store screenshots, show the actual Plant Health Premium card and
-optionally an actual observation result from a plant video you own. Visible copy:
-**Video plant observations — Premium subscription required.** Do not imply that
-video is included in the normal Pro trial. Do not show credentials or private
-locations in screenshots. Do not submit these subscriptions automatically.
-
-## Draft App Review Notes — use only once these statements are verified
-
-> MasterGrowbot AI is intended only for lawful use where permitted by applicable
-> local laws. The app does not sell or deliver cannabis and does not provide
-> consumption functionality. This update adds general visual observations from
-> user-supplied plant videos, including visible discoloration, damage, viewing
-> limitations, and areas that merit closer visual inspection. It does not provide
-> medical claims or controlled-substance cultivation optimization instructions.
+> MasterGrowbot AI is intended only for lawful use where permitted by applicable local laws. It does not sell or deliver cannabis, provide consumption functionality, or provide medical claims. Version 1.6.4 adds general visual observations from user-supplied plant videos. Results separate visible evidence from possible interpretations and use uncertainty and confidence language; they do not provide controlled-substance cultivation optimization instructions.
 >
-> No account registration or login is required; the app maintains an anonymous
-> session. To review the feature, open Plant Health, select Analyze Video, and
-> open MasterGrowbot AI Premium. Premium includes Pro access and video analysis.
-> The new products are higher-tier auto-renewable subscriptions in the existing
-> MasterGrowbot Subscriptions group. Existing Pro products retain their trial;
-> Premium products have no introductory trial. Apple controls upgrade billing.
+> No email, password, or social login is required. The app creates and persists an anonymous authenticated Supabase session. To review Premium, open Plant Health, scroll below Growing Environment, and tap Video Plant Analysis. MasterGrowbot AI Premium includes Pro plus video visual analysis. Its three products are higher tiers in the existing MasterGrowbot Subscriptions group and have no introductory offer. Existing Pro products retain their introductory offers. StoreKit controls upgrade billing and shows the applicable terms before purchase.
 >
-> Restore Purchases is available on the subscription screen. After a Sandbox
-> Premium purchase or restore, record or choose a short plant video and start
-> analysis. Results describe visible evidence with uncertainty and confidence,
-> not a guaranteed diagnosis. Camera access is requested when recording; media
-> selection uses the system picker. See the final release's media limits and
-> privacy description for actual processing and retention behavior.
+> After a Sandbox Premium purchase, choose Record Video or Choose Video, select an MP4 or MOV no longer than 20 seconds and 8 MB, and tap Analyze. The app sends the media transiently to its authenticated Supabase Edge Function, which verifies the Premium entitlement before inference. The app does not upload video to public storage or retain the raw video. Saved journal entries contain only the resulting written observations. A chosen video can contain audio, but the analysis prompt uses visual evidence only. Users are advised not to record private conversations.
+>
+> Restore Purchases, Terms, and Privacy are at the bottom of the Premium subscription screen. The base Pro paywall also includes Restore Purchases.
 
-The navigation, video picker, Premium Restore location, and data-retention
-statements above still require implementation and validation. Replace this draft
-with verified behavior before submission. Existing Pro Restore Purchases is at
-the bottom of the current Pro paywall.
+## Media permissions and privacy
 
-## Subscriptions to include with the completed app-version submission
+- Recording uses the native iOS file capture interface and the camera usage description: “MasterGrowbot uses the camera to photograph plants and record short plant videos for visual health analysis.”
+- Choosing an existing video uses the system file picker. The app does not request broad Photos-library access for this flow.
+- MP4 and MOV are accepted, with a 20-second and 8 MB client/server limit. One analysis runs at a time and can be cancelled or retried.
+- Raw video is sent inline over the authenticated request and is not written to Supabase Storage. It exists only in app memory and during request processing. The existing public `user_uploads` bucket is not used for video.
+- App Privacy and the public privacy policy must still reflect third-party processor handling. Do not claim that OpenRouter or its model provider retains nothing unless the configured provider terms support that statement.
 
-- `mastergrowbot_premium_weekly_v1` — Apple ID 6809541369.
-- `mastergrowbot_premium_monthly_v1` — Apple ID 6809542736.
-- `mastergrowbot_premium_yearly_v1` — Apple ID 6809543789.
+## Codemagic workflow
 
-Verify all are in the existing subscription group at a higher service level than
-Pro, use the intended prices, and have no introductory offers. Prepare for
-Submission/Missing Metadata alone does not prove a code failure. Complete
-localizations and review screenshots and allow metadata propagation before
-testing. Apple subscription ranking was not changed or verified through the CLI.
+1. Push or confirm the final commit on branch `ios`.
+2. In Codemagic, open **MasterGrowbot iOS App Store**.
+3. Verify the `ios-config` group contains `VITE_SUPABASE_ANON_KEY` and `VITE_REVENUECAT_IOS_KEY`.
+4. Run the workflow for `ios` at the final commit. It uses Node 20.11.1, Xcode 26.6, runs typecheck and both test suites, builds, syncs Capacitor/CocoaPods, signs the App Store IPA, and uploads it to TestFlight.
+5. Confirm TestFlight reports version **1.6.4 (165)**. If build 165 already exists, increment only the iOS build number, commit it, and rerun.
 
-## Privacy and permissions review still required
+## Five-minute iPhone smoke test
 
-The finished privacy policy and App Privacy answers must accurately describe
-video/photos sent to Supabase, OpenRouter, and the selected model provider,
-purpose, identity linkage, and retention. Do not claim zero retention by providers
-merely because the app does not retain raw video. Assess the actual processor
-settings and Apple's current collection definitions. Raw video must never enter
-the existing public-readable `user_uploads` bucket. Camera usage text must explain
-short plant-video capture. Broad Photos access should not be requested if the
-system picker suffices. Audio handling must match the final implementation.
+1. Launch as an existing subscriber; confirm there is no indefinite connection screen.
+2. Run one image analysis and confirm the existing result UI still works.
+3. Open the Premium card; confirm cadence matching and localized price, then complete a Sandbox Premium purchase.
+4. Record or select a short plant video; confirm a structured Gemini 3.8 result appears and can be saved to the journal.
+5. Force-close and reopen; confirm Premium and the journal entry persist, then use Restore Purchases and confirm Premium stays unlocked.
 
-## Five-minute release smoke test (after completion; not a substitute for full tests)
+Release blockers are: paid access fails on launch; the wrong Premium product or price appears or purchase fails; image analysis regresses; video authorization or inference fails; Premium or journal access is lost after relaunch or restore.
 
-Use an existing Sandbox subscriber, a prepared 10-second plant video, and a saved
-journal entry. Purchase/network latency may take this beyond five minutes.
+## Quick customer scenarios
 
-1. 0:00–0:30: launch an existing subscriber; confirm access without a connection loop.
-2. 0:30–1:10: run an existing image analysis and inspect its result.
-3. 1:10–2:00: open Premium; verify matching cadence, localized full price, then Sandbox purchase.
-4. 2:00–3:30: record or select a short video; receive a structured visual assessment.
-5. 3:30–4:10: close/reopen; confirm Premium and the saved journal entry persist.
-6. 4:10–5:00: Restore Purchases; verify Premium remains unlocked.
+- New user → weekly Pro trial → image analysis → Premium card → weekly Premium upgrade.
+- Monthly Pro subscriber → Premium → monthly Premium upgrade.
+- Yearly Pro subscriber → Premium → annual localized price corresponding to the $199.00 US tier.
+- Premium subscriber → image analysis → video analysis → save journal observation → close and reopen.
+- Returning Premium subscriber → Restore Purchases → `machine_vision` unlocks.
 
-Five absolute blockers: existing paid launch/image regression; wrong product or
-price/failed purchase; video authorization or inference failure; cost cap bypass;
-lost entitlement/journal after reopen or restore. Verify the cost blocker in
-server tests, not by this smoke test. Confirm the exact provider model from
-server evidence, not from a plausible response in the UI.
+Also test cancellation, unknown or lifetime cadence, offline loading, a 21-second file, a file over 8 MB, invalid media, retry, and the friendly usage-availability message. Playwright validates web-renderable layout only; StoreKit, capture, system picker, signing, and TestFlight behavior require the iPhone build.
 
-## Required customer scenarios
-
-A. New customer → weekly Pro trial → image → Premium → weekly Premium purchase.
-B. Monthly Pro → Premium → monthly combined product.
-C. Yearly Pro → Premium → localized US annual tier of $199.00, not $199.99.
-D. Premium → image → video → journal → close/reopen with data and access intact.
-E. Returning Premium → Restore Purchases → machine_vision unlocks.
-
-Also test cancelled purchases, unknown/lifetime cadence, timeouts, interrupted
-uploads, retries, oversize/long/invalid media, quota errors, and concurrent calls.
-
-## Codemagic
-
-The existing workflow is **ios-app-store**, displayed as **MasterGrowbot iOS App
-Store**, branch **ios**. This checkpoint is not the requested 1.6.4 (165) build.
-Do not submit it as the video release. Xcode is currently `latest`; a fixed
-Apple-supported stable toolchain still needs verification for the final build.
-
-Current Apple references: [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/),
-[submit an in-app purchase](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-in-app-purchase/),
-and [App Privacy details](https://developer.apple.com/app-store/app-privacy-details/).
-Submission preparation does not guarantee App Review approval.
+References: [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/), [submit an in-app purchase](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-in-app-purchase/), and [App Privacy details](https://developer.apple.com/app-store/app-privacy-details/).

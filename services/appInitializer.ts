@@ -1,6 +1,6 @@
-import { supabase, initializeSupabaseSession } from './supabaseClient';
+import { supabase, ensureProfileExists, initializeSupabaseSession } from './supabaseClient';
 import { Capacitor } from '@capacitor/core';
-import { Preferences } from '@capacitor/preferences';
+import { getStableRevenueCatId, recoverPendingRevenueCatBinding } from './revenueCatIdentity';
 
 export interface AppInitState {
   user: any | null;
@@ -9,8 +9,6 @@ export interface AppInitState {
   isReady: boolean;
   isReturningSubscriber: boolean;
 }
-
-const STABLE_ID_KEY = 'mg_rc_stable_id';
 
 export async function withTimeout<T>(
   promise: PromiseLike<T>,
@@ -38,16 +36,6 @@ export async function withTimeout<T>(
  * CRITICAL: RevenueCat appUserID must NEVER change once set,
  * otherwise purchases become orphaned.
  */
-async function getStableAnonymousId(): Promise<string> {
-  const { value } = await Preferences.get({ key: STABLE_ID_KEY });
-  if (value) {
-    return value;
-  }
-  const stableId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  await Preferences.set({ key: STABLE_ID_KEY, value: stableId });
-  return stableId;
-}
-
 /**
  * Global App Initializer
  *
@@ -80,7 +68,7 @@ async function checkSubscriptions(): Promise<boolean> {
 
       if (apiKey) {
         // Use STABLE ID — never changes, even if Supabase anonymous user changes
-        const stableAppUserId = await withTimeout(getStableAnonymousId(), 3000, 'Subscription identity');
+        const stableAppUserId = await withTimeout(getStableRevenueCatId(), 3000, 'Subscription identity');
 
         const { isConfigured } = await withTimeout(Purchases.isConfigured(), 3000, "Subscription configuration check");
         if (!isConfigured) await withTimeout(
@@ -90,10 +78,15 @@ async function checkSubscriptions(): Promise<boolean> {
         );
 
         // Check active access only; expired purchase history must not unlock the app.
-        const { customerInfo } = await withTimeout(
+        const { customerInfo: fetchedCustomerInfo } = await withTimeout(
           Purchases.getCustomerInfo(),
           5000,
           '[AppInitializer] RevenueCat customer info'
+        );
+        const customerInfo = await withTimeout(
+          recoverPendingRevenueCatBinding(Purchases, fetchedCustomerInfo),
+          5000,
+          '[AppInitializer] Subscription identity recovery'
         );
         const hasActiveProEntitlement = Boolean(customerInfo?.entitlements?.active?.pro);
         const hasActiveSubscriptions = (customerInfo?.activeSubscriptions || []).some(id => ["weekly_pro_v2", "monthly_pro_v2", "yearly_pro_v2", "mastergrowbot_pro_weekly_v3", "mastergrowbot_pro_yearly_v3", "com.mastergrowbot.ai.sub.weekly", "com.mastergrowbot.ai.sub.monthly"].includes(id));
@@ -138,10 +131,7 @@ async function runInitialization(): Promise<AppInitState> {
     if (existing.error) throw existing.error;
     profile = existing.data;
     if (!profile) {
-      const created = await withTimeout(
-        supabase.from('profiles').upsert({ id: session.user.id }, { onConflict: 'id', ignoreDuplicates: true }).select().maybeSingle(),
-        4000, 'Profile initialization'
-      );
+      const created = await withTimeout(ensureProfileExists(), 4000, 'Profile initialization');
       if (created.error) throw created.error;
       profile = created.data;
     }
