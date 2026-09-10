@@ -59,7 +59,7 @@ const GetStartedTutorial: React.FC<GetStartedTutorialProps> = ({ onComplete }) =
             title: "Invite a Second Look",
             subtitle: "Your plant check-in, your way.",
             icon: <Share2 size={64} className="text-emerald-600" />,
-            desc: "After an analysis, tap Share Analysis to preview your card, edit your caption, and choose where to share. Your original photo or video stays out of the card.",
+            desc: "After an analysis, tap Share Analysis to preview your card, edit your caption, and choose where to share. Choose whether to include your photo or a video frame. Review before sharing.",
             action: "Explore My Dashboard",
             color: "bg-emerald-50"
         }

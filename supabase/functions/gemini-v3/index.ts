@@ -180,6 +180,11 @@ Deno.serve(async (req) => {
     try { body = await req.json(); } catch { return jsonResponse({ error: "Invalid JSON body", code: "invalid_json" }, 400); }
     const mode = typeof body.mode === "string" ? body.mode : "";
     if (mode === "wakeup") return jsonResponse({ message: "Backend awake", result: "Ready" });
+    // Same JWT-derived identity and entitlement check as video, without media or usage charges.
+    if (mode === "premium_access") {
+      await verifyMachineVision(user.id);
+      return jsonResponse({ premium: true });
+    }
     if (!["diagnosis", "insight", "chat", "voice", "video_visual_analysis"].includes(mode)) throw new FunctionError(`Invalid mode '${mode}' for gemini-v3`, 400, "invalid_mode");
     if (mode === "video_visual_analysis") await verifyMachineVision(user.id);
     const admin = serverClient();

@@ -19,11 +19,13 @@ import {
   RevenueCatBinding,
   rollbackPremiumRevenueCatBinding,
 } from '../services/revenueCatIdentity';
+import { checkVideoAccess } from '../services/videoAnalysisService';
 import { isPurchaseCancelled, premiumStatusMessage, purchaseErrorMessage, refreshPremiumCustomer } from '../services/premiumPurchaseStatus';
 
 interface PremiumPaywallProps {
   onClose: () => void;
   onUnlocked: () => void;
+  requireRestore?: boolean;
 }
 
 const labelFor = (pkg: PurchasesPackage) =>
@@ -32,7 +34,7 @@ const labelFor = (pkg: PurchasesPackage) =>
 const periodFor = (pkg: PurchasesPackage) =>
   pkg.identifier === 'weekly' ? 'week' : pkg.identifier === 'monthly' ? 'month' : 'year';
 
-const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) => {
+const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, requireRestore = false }) => {
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +43,8 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const operation = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const statusPanel = useRef<HTMLDivElement>(null);
   const unlocked = useRef(onUnlocked);
   unlocked.current = onUnlocked;
@@ -52,6 +56,18 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
     invalidateCustomerInfoCache: () => withTimeout(Purchases.invalidateCustomerInfoCache(), 5000, 'Refresh subscription'),
     getCustomerInfo: () => withTimeout(Purchases.getCustomerInfo(), 8000, 'Subscription status'),
   }, initial);
+
+  const confirmAccess = async (info: any): Promise<boolean> => {
+    if (!hasPremiumAccess(info)) return false;
+    if (!await checkVideoAccess()) {
+      setPending(false);
+      setNotice('Premium is not linked to your current app session. Use Restore Purchases to verify your store account, or choose a plan if you do not have Premium.');
+      return false;
+    }
+    await completePremiumRevenueCatBinding(info);
+    if (mounted.current) unlocked.current();
+    return true;
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -69,18 +85,13 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
       }
 
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
-      await initializeSubscriptions();
+      if (!(await Purchases.isConfigured()).isConfigured) await initializeSubscriptions();
       const awaitingVerification = await hasPendingPremiumPurchase();
       setPending(awaitingVerification);
       const [offerings, { customerInfo }] = await Promise.all([
         withTimeout(Purchases.getOfferings(), 8000, 'Premium plans'),
         withTimeout(Purchases.getCustomerInfo(), 8000, 'Subscription status'),
       ]);
-      if (hasPremiumAccess(customerInfo)) {
-        await completePremiumRevenueCatBinding(customerInfo);
-        unlocked.current();
-        return;
-      }
       const offering = offerings.all[PREMIUM_OFFERING];
       const verified = validatedPremiumPackages((offering?.availablePackages || []) as any) as PurchasesPackage[];
       if (verified.length !== 3) throw new Error('Premium plans are not available from the App Store yet. Please try again shortly.');
@@ -88,6 +99,14 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
       setPackages(verified);
       setSelected(cadence && verified.some(pkg => pkg.identifier === cadence) ? cadence : null);
       if (awaitingVerification) setNotice(premiumStatusMessage(customerInfo));
+      if (requireRestore) setNotice('Your video is ready. Restore Premium or choose a plan to continue.');
+      setLoading(false);
+      if (!requireRestore && hasPremiumAccess(customerInfo)) {
+        operation.current = true; setBusy(true);
+        try { await confirmAccess(customerInfo); }
+        catch { setNotice('Could not verify Premium access. Check your connection and use Check status or Restore Purchases.'); setPending(true); }
+        finally { operation.current = false; setBusy(false); }
+      }
     } catch (cause: any) {
       setError(cause?.message || 'Could not load Premium plans.');
     } finally {
@@ -103,10 +122,14 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
     let remove: (() => Promise<unknown>) | undefined;
     import('@revenuecat/purchases-capacitor').then(async ({ Purchases }) => {
       const id = await Purchases.addCustomerInfoUpdateListener(info => {
-        if (!disposed && !operation.current && hasPremiumAccess(info)) {
-          completePremiumRevenueCatBinding(info).then(() => {
-            if (!disposed) unlocked.current();
-          }).catch(() => { /* Check status retries preference persistence. */ });
+        if (!disposed && !operation.current && !requireRestore && hasPremiumAccess(info)) {
+          operation.current = true;
+          checkVideoAccess().then(async allowed => {
+            if (allowed && !disposed) {
+              await completePremiumRevenueCatBinding(info);
+              if (!disposed) unlocked.current();
+            }
+          }).catch(() => {}).finally(() => { operation.current = false; });
         }
       });
       remove = () => Purchases.removeCustomerInfoUpdateListener({ listenerToRemove: id });
@@ -142,9 +165,8 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
       // Apple owns the payment sheet's lifetime. A JS timeout cannot cancel it.
       const result = await Purchases.purchasePackage({ aPackage: pkg });
       const customerInfo = await refresh(Purchases, result.customerInfo);
-      if (hasPremiumAccess(customerInfo)) {
-        await completePremiumRevenueCatBinding(customerInfo);
-        unlocked.current();
+      if (await confirmAccess(customerInfo)) {
+        return;
       } else {
         setPending(true);
         setNotice(premiumStatusMessage(customerInfo));
@@ -179,9 +201,8 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
       storeStarted = true;
       const restored = await Purchases.restorePurchases();
       const customerInfo = await refresh(Purchases, restored.customerInfo);
-      if (hasPremiumAccess(customerInfo)) {
-        await completePremiumRevenueCatBinding(customerInfo);
-        unlocked.current();
+      if (await confirmAccess(customerInfo)) {
+        return;
       } else {
         // A returned receipt may still be processing. Keep this identity so
         // delayed updates and the backend agree about the receipt's owner.
@@ -206,10 +227,8 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
     try {
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
       const customerInfo = await refresh(Purchases);
-      if (hasPremiumAccess(customerInfo)) {
-        await completePremiumRevenueCatBinding(customerInfo);
-        unlocked.current();
-      } else setNotice(premiumStatusMessage(customerInfo, true));
+      if (await confirmAccess(customerInfo)) return;
+      else setNotice(premiumStatusMessage(customerInfo, true));
     } catch (cause) { setError(purchaseErrorMessage(cause)); }
     finally { operation.current = false; setBusy(false); }
   };
@@ -220,7 +239,7 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked }) 
 
   return (
     <div className="fixed inset-0 z-[120] bg-slate-950 text-white flex flex-col overflow-hidden" data-testid="premium-paywall">
-      <div className="flex items-center px-5 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-3">
+      <div className="flex items-center px-5 pt-[max(3rem,env(safe-area-inset-top,0px))] pb-3">
         <button onClick={onClose} disabled={busy} aria-label="Close Premium" className="p-3 rounded-full bg-white/10 disabled:opacity-40"><ArrowLeft size={20} /></button>
         <span className="ml-auto text-[10px] font-black tracking-[0.2em] text-emerald-300">MASTERGROWBOT AI PREMIUM</span>
       </div>

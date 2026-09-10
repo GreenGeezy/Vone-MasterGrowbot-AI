@@ -48,13 +48,30 @@ async function fileToBase64(file: File) {
   return btoa(binary);
 }
 
-async function edgeError(error: any): Promise<Error> {
+export class VideoAccessError extends Error {
+  constructor(message: string, public code: string) { super(message); this.name = 'VideoAccessError'; }
+}
+
+export async function edgeError(error: any): Promise<Error> {
   try {
     const response = error?.context as Response | undefined;
     const payload = response ? await response.clone().json() : null;
-    if (payload?.error) return new Error(payload.error);
+    if (payload?.error) return new VideoAccessError(payload.error, payload.code || 'unknown');
   } catch { /* use the SDK message */ }
   return new Error(error?.message || 'Video analysis could not be completed.');
+}
+
+export async function checkVideoAccess(): Promise<boolean> {
+  const { data, error } = await supabase.functions.invoke('gemini-v3', {
+    body: { mode: 'premium_access' }, timeout: 12000,
+  });
+  if (error) {
+    const cause = await edgeError(error);
+    if (cause instanceof VideoAccessError && cause.code === 'premium_required') return false;
+    throw cause;
+  }
+  if (data?.premium !== true) throw new Error('Premium verification is unavailable. Please try again.');
+  return true;
 }
 
 export async function analyzePlantVideo(file: File, signal: AbortSignal): Promise<VideoVisualResult> {

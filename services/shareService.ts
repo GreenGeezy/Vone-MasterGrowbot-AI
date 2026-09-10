@@ -1,7 +1,10 @@
 import { Capacitor } from '@capacitor/core';
+import { captionWithCTA } from './analysisShareCard';
 import { Share } from '@capacitor/share';
 
 export const APP_STORE_URL = 'https://apps.apple.com/app/id6752221060';
+export const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.mastergrowbot.app';
+const shareText = (caption: string) => `${captionWithCTA(caption)}\n\niOS: ${APP_STORE_URL}\nAndroid: ${PLAY_STORE_URL}`;
 export type ShareOutcome = 'shared' | 'cancelled' | 'unavailable';
 
 export function isShareCancelled(error: unknown): boolean {
@@ -10,7 +13,7 @@ export function isShareCancelled(error: unknown): boolean {
 }
 
 export async function copyAnalysisCaption(caption: string): Promise<boolean> {
-  try { await navigator.clipboard.writeText(`${caption}\n\n${APP_STORE_URL}`); return true; }
+  try { await navigator.clipboard.writeText(shareText(caption)); return true; }
   catch { return false; }
 }
 
@@ -33,13 +36,13 @@ export async function shareAnalysisCard(caption: string, png: Blob | null): Prom
         cleanup = () => Filesystem.deleteFile({ directory: Directory.Cache, path });
         files = [uri];
       }
-      await Share.share({ title: 'My plant check-in • MasterGrowbot AI', text: caption, url: APP_STORE_URL, files, dialogTitle: 'Share Analysis' });
+      await Share.share({ title: 'My plant check-in • MasterGrowbot AI', text: shareText(caption), url: APP_STORE_URL, files, dialogTitle: 'Share Analysis' });
       return 'shared';
     }
     if (!navigator.share) return 'unavailable';
     const file = png ? new File([png], 'mastergrowbot-plant-check-in.png', { type: 'image/png' }) : null;
     const files = file && navigator.canShare?.({ files: [file] }) ? [file] : undefined;
-    await navigator.share({ title: 'My plant check-in • MasterGrowbot AI', text: caption, url: APP_STORE_URL, ...(files ? { files } : {}) });
+    await navigator.share({ title: 'My plant check-in • MasterGrowbot AI', text: shareText(caption), url: APP_STORE_URL, ...(files ? { files } : {}) });
     return 'shared';
   } catch (error) {
     return isShareCancelled(error) ? 'cancelled' : 'unavailable';

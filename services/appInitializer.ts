@@ -47,6 +47,7 @@ export async function withTimeout<T>(
  */
 let initialization: Promise<AppInitState> | null = null;
 let subscriptions: Promise<boolean> | null = null;
+let offeringsWarmed = false;
 
 export function initializeSubscriptions(): Promise<boolean> {
   if (!subscriptions) {
@@ -77,6 +78,10 @@ async function checkSubscriptions(): Promise<boolean> {
           '[AppInitializer] RevenueCat configure'
         );
 
+        if (!offeringsWarmed) {
+          offeringsWarmed = true;
+          void Purchases.getOfferings().catch(() => { offeringsWarmed = false; });
+        }
         // Check active access only; expired purchase history must not unlock the app.
         const { customerInfo: fetchedCustomerInfo } = await withTimeout(
           Purchases.getCustomerInfo(),

@@ -1,6 +1,12 @@
 # MasterGrowbot AI Premium — App Store release checklist
 
-## 1.6.5 (166) purchase recovery and sharing update
+## 1.6.6 (167) video access and visual sharing update
+
+The video button now opens Premium immediately and verifies access using the same JWT-derived server identity as inference. A `premium_required` response returns to purchase/restore while preserving the selected video. The backend adds a no-charge `premium_access` check in gemini-v3 version 28. Cached SDK entitlements alone do not open recording. See [release-1.6.6.md](release-1.6.6.md).
+
+Share cards now optionally include the actual analyzed photo or a locally decoded video frame, with a preview toggle before sharing. Captions carry both verified store links and a qualified free-trial invitation; Premium video has no introductory offer.
+
+## Previous 1.6.5 configuration repair
 
 On September 9, 2026, RevenueCat **Project settings → General → Sandbox testing access** was found set to **Nobody**. Apple had recorded an active Premium weekly Sandbox subscription, but both customer and subscription entitlement lists were empty. Changing this setting to **Anybody** restored both `machine_vision` and `pro` on the existing transaction, verified through RevenueCat API v2. No promotional entitlement or client-side access bypass was used. Restore behavior remains **Transfer to new App User ID**.
 
@@ -13,11 +19,11 @@ Version 1.6.5 adds branded, locally rendered photo/video analysis share cards wi
 ## Manual steps required
 
 1. In App Store Connect, complete the name, description, localization, and App Review screenshot for all three Premium subscriptions. Confirm that they remain above every Pro product in the existing **MasterGrowbot Subscriptions** group, use $12.99/week, $49.99/month, and **$199.00/year** in the US storefront, and have no introductory offer.
-2. Add all three Premium subscriptions to the 1.6.5 app-version submission. Do not submit them separately before the matching binary is available.
+2. Add all three Premium subscriptions to the 1.6.6 app-version submission. Do not submit them separately before the matching binary is available.
 3. Update the public privacy policy and App Privacy answers if needed to disclose that a user-selected video, which can contain audio, is sent through Supabase and OpenRouter to the selected AI provider for visual analysis. MasterGrowbot does not save the raw video, but provider processing practices must be described accurately.
-4. Run the **MasterGrowbot iOS App Store** (`ios-app-store`) Codemagic workflow from branch `ios`. Test build 166 in Sandbox/TestFlight before submitting it for review.
+4. Run the **MasterGrowbot iOS App Store** (`ios-app-store`) Codemagic workflow from branch `ios`. Test build 167 in Sandbox/TestFlight before submitting it for review.
 
-## Products to add to version 1.6.5
+## Products to add to version 1.6.6
 
 | Plan | Product ID | Apple ID | Duration | US target |
 | --- | --- | ---: | --- | ---: |

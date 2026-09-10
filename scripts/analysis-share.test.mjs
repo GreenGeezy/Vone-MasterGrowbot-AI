@@ -14,6 +14,7 @@ let shareError;
 const shares = [];
 const files = new Set();
 const service = compile(await readFile(new URL('../services/shareService.ts', import.meta.url), 'utf8'), {
+  './analysisShareCard': artwork,
   '@capacitor/core': { Capacitor: { isNativePlatform: () => native } },
   '@capacitor/share': { Share: { share: async options => { shares.push(options); if (shareError) throw shareError; } } },
   '@capacitor/filesystem': { Directory: { Cache: 'CACHE' }, Filesystem: {
@@ -50,7 +51,10 @@ test('browser denial and unavailable sharing never report success', async () => 
     let copied;
     globalThis.navigator.clipboard = { writeText: async text => { copied = text; } };
     assert.equal(await service.copyAnalysisCaption('Report'), true);
-    assert.ok(copied.endsWith(service.APP_STORE_URL));
+    assert.ok(copied.includes(service.APP_STORE_URL));
+    assert.ok(copied.includes(service.PLAY_STORE_URL));
+    assert.ok(copied.includes(artwork.SHARE_CTA));
+    assert.ok(copied.includes(artwork.TRIAL_TERMS));
   } finally {
     if (previous) Object.defineProperty(globalThis, 'navigator', previous);
     else delete globalThis.navigator;
@@ -69,4 +73,10 @@ test('native PNG uses local cache and cleans up after completion or cancellation
     assert.equal(await service.shareAnalysisCard('Report', new Blob(['png'])), 'cancelled');
     assert.equal(files.size, 0);
   } finally { globalThis.FileReader = previous; shareError = undefined; }
+});
+
+test('edited caption retains both-store invitation and honest trial terms exactly once', () => {
+  const caption = artwork.captionWithCTA('My own words');
+  assert.ok(caption.includes(artwork.SHARE_CTA));
+  assert.equal(artwork.captionWithCTA(caption), caption);
 });

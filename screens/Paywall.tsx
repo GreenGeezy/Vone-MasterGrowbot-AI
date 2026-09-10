@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
   Check, Star, ArrowRight, Lock, RotateCcw, Sparkles
 } from 'lucide-react';
@@ -90,6 +90,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const purchaseOperation = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [trialEligibleProductIds, setTrialEligibleProductIds] = useState<string[]>([]);
   const [testimonialIndex, setTestimonialIndex] = useState(0);
@@ -119,15 +120,9 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       }
 
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
-      await initializeSubscriptions();
+      if (!(await Purchases.isConfigured()).isConfigured) await initializeSubscriptions();
       await waitForPurchasesConfiguration(Purchases);
-      await withTimeout(Purchases.invalidateCustomerInfoCache(), 3000, "Subscription refresh");
-
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('App Store connection timed out')), 8000)
-      );
-      const offeringsPromise = Purchases.getOfferings();
-      const offerings = await Promise.race([offeringsPromise, timeoutPromise]) as any;
+      const offerings = await withTimeout(Purchases.getOfferings(), 8000, 'Store plans');
 
       if (offerings.current?.availablePackages?.length > 0) {
         const pkgs = offerings.current.availablePackages;
@@ -163,7 +158,8 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
   useEffect(() => { loadProducts(); }, [loadProducts]);
 
   const handleStartTrial = async () => {
-    if (!selectedPkgIdentifier) return;
+    if (!selectedPkgIdentifier || purchaseOperation.current) return;
+    purchaseOperation.current = true;
     setIsPurchasing(true);
     setError(null);
     try {
@@ -185,7 +181,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       }
 
       await withTimeout(Purchases.invalidateCustomerInfoCache(), 3000, "Subscription refresh");
-      await withTimeout(Purchases.syncPurchases(), 8000, "Purchase synchronization");
 
       const { customerInfo: freshInfo } = await withTimeout(Purchases.getCustomerInfo(), 8000, "Subscription verification");
       if (hasActivePaidAccess(freshInfo)) {
@@ -197,7 +192,6 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         setError(`Activating your subscription... (${attempt}/3)`);
         await new Promise(r => setTimeout(r, 2000));
         await withTimeout(Purchases.invalidateCustomerInfoCache(), 3000, "Subscription refresh");
-        await withTimeout(Purchases.syncPurchases(), 8000, "Purchase synchronization");
         const { customerInfo: retryInfo } = await withTimeout(Purchases.getCustomerInfo(), 8000, "Subscription verification");
         if (hasActivePaidAccess(retryInfo)) {
           setError(null);
@@ -213,22 +207,24 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         setError(e.message || 'Purchase failed. Please try again.');
       }
     } finally {
+      purchaseOperation.current = false;
       setIsPurchasing(false);
     }
   };
 
   const handleRestore = async () => {
+    if (purchaseOperation.current) return;
+    purchaseOperation.current = true;
     setIsPurchasing(true);
     setError(null);
     try {
       if (Capacitor.isNativePlatform()) {
         const { Purchases } = await import('@revenuecat/purchases-capacitor');
-        await withTimeout(Purchases.restorePurchases(), 20000, "Restore purchases");
+        const restored = await Purchases.restorePurchases();
+        if (hasActivePaidAccess(restored.customerInfo)) { onPurchase(); return; }
         await withTimeout(Purchases.invalidateCustomerInfoCache(), 3000, "Subscription refresh");
-        await withTimeout(Purchases.syncPurchases(), 8000, "Purchase synchronization");
         const { customerInfo } = await withTimeout(Purchases.getCustomerInfo(), 8000, "Subscription verification");
         if (hasActivePaidAccess(customerInfo)) {
-          alert('Success! Your subscription has been restored.');
           onPurchase();
         } else {
           alert('No active subscription found to restore.');
@@ -237,6 +233,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     } catch (e) {
       alert('Failed to restore purchases. Please try again.');
     } finally {
+      purchaseOperation.current = false;
       setIsPurchasing(false);
     }
   };

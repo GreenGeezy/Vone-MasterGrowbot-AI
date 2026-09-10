@@ -6,15 +6,14 @@ import Growbot from '../components/Growbot';
 import { STRAIN_DATABASE } from '../data/strains';
 import { matchesStrainSearch } from '../utils/strainSearch';
 import AnalysisShareDialog from '../components/AnalysisShareDialog';
+import { videoShareFrame } from '../services/shareMedia';
 import type { AnalysisShareSummary } from '../services/analysisShareCard';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 // InAppReview dynamically imported below — static import crashes on web
 import { formatMetricDisplay, formatDiagnosisReport } from '../utils/diagnosisFormatter';
-import { analyzePlantVideo, validateVideo } from '../services/videoAnalysisService';
+import { analyzePlantVideo, validateVideo, VideoAccessError } from '../services/videoAnalysisService';
 import { VideoVisualResult } from '../services/videoVisualResult';
-import { hasPremiumAccess } from '../services/premiumCatalog';
-import { initializeSubscriptions, withTimeout } from '../services/appInitializer';
 import PremiumPaywall from './PremiumPaywall';
 
 /**
@@ -96,7 +95,8 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ExtendedDiagnosisResult | null>(null);
   const [shareSummary, setShareSummary] = useState<AnalysisShareSummary | null>(null);
-  const [premiumActive, setPremiumActive] = useState(false);
+  const [requireRestore, setRequireRestore] = useState(false);
+  const [videoThumbnail, setVideoThumbnail] = useState<string | null>(null);
   const [showPremiumPaywall, setShowPremiumPaywall] = useState(false);
   const [showVideoFlow, setShowVideoFlow] = useState(false);
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -147,29 +147,20 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     }
   }, [loading]);
 
-  useEffect(() => {
-    let active = true;
-    if (!Capacitor.isNativePlatform()) return () => { active = false; };
-    initializeSubscriptions().then(async () => {
-      const { Purchases } = await import('@revenuecat/purchases-capacitor');
-      const { customerInfo } = await withTimeout(Purchases.getCustomerInfo(), 6000, 'Premium status');
-      if (active) setPremiumActive(hasPremiumAccess(customerInfo));
-    }).catch(() => { /* The paywall retries when the user asks for Premium. */ });
-    return () => { active = false; videoAbortRef.current?.abort(); };
-  }, []);
-
+  useEffect(() => () => { videoAbortRef.current?.abort(); }, []);
   useEffect(() => () => { if (videoUrl) URL.revokeObjectURL(videoUrl); }, [videoUrl]);
 
   const openVideo = () => {
     setVideoError(null);
-    if (premiumActive) setShowVideoFlow(true);
-    else setShowPremiumPaywall(true);
+    setRequireRestore(false);
+    setShowPremiumPaywall(true);
   };
 
   const selectVideo = async (file?: File) => {
     if (!file) return;
     setVideoError(null);
     setVideoResult(null);
+    setVideoThumbnail(null);
     try {
       const { duration } = await validateVideo(file);
       if (videoUrl) URL.revokeObjectURL(videoUrl);
@@ -193,7 +184,11 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     try {
       setVideoResult(await analyzePlantVideo(videoFile, controller.signal));
     } catch (cause: any) {
-      if (cause?.name !== 'AbortError') setVideoError(cause?.message || 'Video analysis failed. Please try again.');
+      if (cause instanceof VideoAccessError && cause.code === 'premium_required') {
+        setRequireRestore(true);
+        setShowVideoFlow(false);
+        setShowPremiumPaywall(true);
+      } else if (cause?.name !== 'AbortError') setVideoError(cause?.message || 'Video analysis failed. Please try again.');
     } finally {
       if (videoAbortRef.current === controller) videoAbortRef.current = null;
       setVideoLoading(false);
@@ -279,7 +274,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
 
   const handleShare = () => {
     if (!result) return;
-    setShareSummary({ kind: 'photo', headline: result.diagnosis, score: result.healthScore });
+    setShareSummary({ kind: 'photo', headline: result.diagnosis, score: result.healthScore, imageUrl: image || undefined });
   };
 
   const handleSave = () => {
@@ -448,13 +443,21 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   // 4. Initial View (Main)
   return (
     <div className="bg-gray-50 min-h-full w-full pb-[calc(7rem+env(safe-area-inset-bottom,0px))]">
-      <div className="bg-white px-6 pt-12 pb-8 rounded-b-[3rem] shadow-sm mb-6">
-        <div className="flex justify-between items-center mb-4">{onBack && <button onClick={onBack}><ChevronRight className="rotate-180 text-gray-400" /></button>}<Growbot size="lg" mood="happy" /><div className="w-6" /></div>
-        <h1 className="text-3xl font-black text-gray-900 mb-2 tracking-tight">Analyze Your Plant's Health with AI</h1>
-        <p className="text-sm text-gray-500 font-medium">Scan or upload a photo for instant report on plant health and actions to take to save your grow from pests, diseases, and fix deficiencies.</p>
+      <div className="bg-white px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-4 rounded-b-3xl shadow-sm mb-4">
+        <div className="flex justify-between items-center mb-4">{onBack && <button onClick={onBack}><ChevronRight className="rotate-180 text-gray-400" /></button>}<Growbot size="sm" mood="happy" /><div className="w-6" /></div>
+        <h1 className="text-3xl font-black text-gray-900 mb-2 tracking-tight">Plant Health</h1>
+        <p className="text-sm text-gray-500 font-medium">Choose a photo for an AI visual check-in.</p>
       </div>
 
-      <div className="px-6 space-y-6 max-w-md mx-auto">
+      <div className="px-5 space-y-4 max-w-md mx-auto">
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={handleStartCamera} className="bg-emerald-600 text-white min-h-[64px] rounded-2xl font-bold flex items-center justify-center gap-2"><CameraIcon size={22} /> Take Pic</button>
+          <button onClick={handleGalleryUpload} className="bg-white text-slate-800 border border-slate-200 min-h-[64px] rounded-2xl font-bold flex items-center justify-center gap-2"><Upload size={20} /> Analyze Image</button>
+        </div>
+        <button onClick={openVideo} data-testid="premium-video-card" className="w-full text-left flex items-center gap-3 rounded-2xl bg-slate-950 p-4 text-white shadow-md active:scale-[0.99]">
+          <span className="rounded-xl bg-emerald-400/15 p-3 text-emerald-300"><Film size={24} /></span>
+          <span className="flex-1"><span className="block text-[10px] tracking-widest font-black text-emerald-300">PREMIUM</span><span className="block text-base font-black">Analyze Video</span><span className="block text-xs text-slate-300">See more angles · View plans</span></span><ChevronRight size={20} />
+        </button>
         <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 space-y-5">
           <div className="relative">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Genetics</label>
@@ -545,33 +548,17 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
           </div>
         </div>
 
-        <button onClick={openVideo} data-testid="premium-video-card" className="w-full text-left relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-900 p-5 text-white shadow-xl shadow-emerald-100 active:scale-[0.99] transition-transform">
-          <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full bg-emerald-400/20 blur-2xl" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <span className="flex items-center gap-1.5 text-[9px] font-black tracking-[0.18em] text-emerald-300"><Crown size={13} /> MASTERGROWBOT AI PREMIUM</span>
-              <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-[9px] font-black">PREMIUM</span>
-            </div>
-            <div className="flex items-end justify-between gap-4">
-              <div><h2 className="text-xl font-black">Video Plant Analysis</h2><p className="mt-1 text-xs leading-relaxed text-slate-300">Capture more visual context than a single photo. Record or upload a short plant video for advanced visual observations.</p></div>
-              <div className="shrink-0 rounded-2xl bg-emerald-400 p-3 text-slate-950"><Film size={23} /></div>
-            </div>
-            <div className="mt-4 inline-flex items-center gap-2 text-xs font-black text-emerald-300">Analyze Video <ChevronRight size={15} /></div>
-          </div>
-        </button>
 
-        <button onClick={handleStartCamera} className="w-full bg-gray-900 text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-gray-200 flex items-center justify-center gap-3 active:scale-95 transition-transform"><CameraIcon size={24} className="text-green-400" /> Scan with Camera</button>
-        <button onClick={handleGalleryUpload} className="w-full bg-white text-gray-600 py-4 rounded-[2rem] font-bold border border-gray-200 flex items-center justify-center gap-2"><Upload size={18} /> Upload from Gallery</button>
       </div>
 
       <input ref={recordVideoRef} className="hidden" type="file" accept="video/mp4,video/quicktime,.mov" capture="environment" onChange={event => { void selectVideo(event.target.files?.[0]); event.currentTarget.value = ''; }} />
       <input ref={chooseVideoRef} className="hidden" type="file" accept="video/mp4,video/quicktime,.mov" onChange={event => { void selectVideo(event.target.files?.[0]); event.currentTarget.value = ''; }} />
 
-      {showPremiumPaywall && <PremiumPaywall onClose={() => setShowPremiumPaywall(false)} onUnlocked={() => { setPremiumActive(true); setShowPremiumPaywall(false); setShowVideoFlow(true); }} />}
+      {showPremiumPaywall && <PremiumPaywall requireRestore={requireRestore} onClose={() => setShowPremiumPaywall(false)} onUnlocked={() => { setShowPremiumPaywall(false); setShowVideoFlow(true); }} />}
 
       {showVideoFlow && (
         <div className="fixed inset-0 z-[110] bg-slate-950 text-white flex flex-col" data-testid="video-workflow">
-          <div className="flex items-center justify-between px-5 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-4 border-b border-white/10">
+          <div className="flex items-center justify-between px-5 pt-[max(3rem,env(safe-area-inset-top,0px))] pb-4 border-b border-white/10">
             <div><p className="text-[9px] font-black tracking-[0.18em] text-emerald-300">MASTERGROWBOT AI PREMIUM</p><h2 className="text-xl font-black">Video Plant Analysis</h2></div>
             <button onClick={closeVideoFlow} aria-label="Close video analysis" className="rounded-full bg-white/10 p-2"><X size={20} /></button>
           </div>
@@ -608,7 +595,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
                 ].map(([title, items]) => <div key={title as string} className="rounded-2xl bg-white/[0.06] border border-white/10 p-4"><h4 className="text-xs font-black text-slate-200 mb-3">{title as string}</h4><ul className="space-y-2">{(items as string[]).map(item => <li key={item} className="text-xs text-slate-300 flex gap-2"><span className="text-emerald-400">•</span>{item}</li>)}</ul></div>)}
                 <div className="grid grid-cols-1 gap-3"><div className="rounded-2xl bg-white/[0.06] p-4"><p className="text-[10px] font-black text-slate-400">ENVIRONMENTAL CONTEXT</p><p className="text-xs mt-2 text-slate-200">{videoResult.environmentSummary}</p></div><div className="rounded-2xl bg-white/[0.06] p-4"><p className="text-[10px] font-black text-slate-400">MEDIA QUALITY / LIMITATIONS</p><p className="text-xs mt-2 text-slate-200">{videoResult.mediaQuality}</p></div><div className="rounded-2xl bg-emerald-400/10 border border-emerald-400/20 p-4"><p className="text-[10px] font-black text-emerald-300">SUGGESTED NEXT VISUAL CHECK</p><p className="text-xs mt-2 text-slate-200">{videoResult.recommendedVerification}</p></div></div>
                 <div className="grid grid-cols-2 gap-3"><button onClick={saveVideoObservation} className="rounded-xl bg-white/10 py-3 font-bold text-sm"><Save size={16} className="inline mr-1" /> Save</button><button onClick={() => { setVideoResult(null); setVideoFile(null); setVideoUrl(null); }} className="rounded-xl bg-emerald-400 text-slate-950 py-3 font-black text-sm"><RefreshCw size={16} className="inline mr-1" /> New Video</button></div>
-                <button onClick={() => setShareSummary({ kind: 'video', headline: videoResult.healthLabel, score: videoResult.healthScore })} className="w-full rounded-xl bg-emerald-400/15 border border-emerald-400/30 py-4 font-bold text-sm text-emerald-200"><Share2 size={16} className="inline mr-2" /> Share Analysis</button>
+                <button onClick={async () => { const frame = videoThumbnail || (videoFile ? await videoShareFrame(videoFile) : null); setVideoThumbnail(frame); setShareSummary({ kind: 'video', headline: videoResult.healthLabel, score: videoResult.healthScore, imageUrl: frame || undefined }); }} className="w-full rounded-xl bg-emerald-400/15 border border-emerald-400/30 py-4 font-bold text-sm text-emerald-200"><Share2 size={16} className="inline mr-2" /> Share Analysis</button>
               </div>
             )}
             {videoError && <div role="alert" className="max-w-md mx-auto mt-5 rounded-2xl bg-red-500/15 border border-red-400/30 p-4 text-sm text-red-100"><p>{videoError}</p><div className="flex gap-3 mt-3"><button onClick={runVideoAnalysis} disabled={!videoFile || videoLoading} className="font-black text-white disabled:opacity-40">Retry</button><button onClick={() => { setVideoError(null); setVideoFile(null); setVideoUrl(null); }} className="font-bold text-slate-300">Choose another</button></div></div>}
