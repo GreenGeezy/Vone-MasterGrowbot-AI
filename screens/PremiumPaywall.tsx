@@ -247,13 +247,13 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
       <div className="flex-1 overflow-y-auto px-5 pb-6">
         <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-emerald-500/25 to-cyan-400/10 border border-emerald-300/20 p-6 mt-2">
           <Sparkles className="text-emerald-300 mb-4" />
-          <h1 className="text-3xl font-black leading-tight">Bring your plant<br />into focus.</h1>
-          <p className="text-sm text-slate-300 mt-3 leading-relaxed">Pro membership is included. Upgrade to one Premium subscription with photo and video analysis.</p>
-          <p className="text-sm font-semibold text-emerald-200 mt-3">The price shown is your total Premium subscription price, including Pro—not an extra Pro fee. Apple confirms any adjustment and when your plan changes.</p>
+          <h1 className="text-3xl font-black leading-tight">See more of your grow.<br />Catch visible concerns earlier.</h1>
+          <p className="text-sm text-slate-300 mt-3 leading-relaxed">Review leaves, canopy, and the surrounding grow space from multiple angles in one short video. Every Premium plan includes all Pro features.</p>
+          <p className="text-sm font-semibold text-emerald-200 mt-3">The displayed price is your total Premium subscription price and includes Pro. Apple confirms any billing adjustment and when your plan changes.</p>
         </div>
 
         <div className="grid grid-cols-2 gap-3 my-5">
-          {['Record or upload video', 'Up to 20 seconds', 'Visible-sign observations', 'Private transient processing'].map(item => (
+          {['Check multiple angles', 'Spot visible stress patterns', 'Review canopy and grow space', 'Save clear next steps'].map(item => (
             <div key={item} className="rounded-2xl bg-white/[0.06] border border-white/10 p-3 flex gap-2 text-xs font-semibold text-slate-200">
               <Check size={15} className="text-emerald-400 shrink-0" /> {item}
             </div>

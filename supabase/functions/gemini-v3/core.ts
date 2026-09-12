@@ -25,12 +25,18 @@ export type ChatMessage = {
 const SYSTEM_MESSAGE =
   "You are MasterGrowbot AI, a legal cannabis cultivation assistant. Provide practical, careful, structured plant-health guidance. Do not claim certainty from images. Clearly distinguish visible signs from possible causes, state uncertainty, and recommend human verification for severe or high-risk issues.";
 
-const VIDEO_SYSTEM_MESSAGE = `You review a user-supplied plant video and return general visual observations only.
-Describe visible evidence, uncertainty, viewing limitations, and areas that merit closer visual inspection.
+const VIDEO_SYSTEM_MESSAGE = `You create a cannabis-focused video plant health report for lawful adult cultivators.
+Describe visible evidence across leaves, stems, flowers when present, canopy, containers, and the wider grow space.
 Distinguish visible observations from possible interpretations. Use phrases such as "appears consistent with",
-"may indicate", and "cannot confirm from this video alone". Do not provide controlled-substance cultivation
-optimization, potency, harvest timing, medical claims, guaranteed diagnosis, treatment recipes, feeding targets,
-yield advice, sales, delivery, purchase, consumption, intoxication, or content involving minors or illegal activity.`;
+"may indicate", and "cannot confirm from this video alone". If the video is indirect, blurry, color-cast, or
+incomplete, reduce confidence and make the limitation prominent instead of presenting a precise-looking conclusion.
+Provide practical observation-led care and quality checks that can be saved as journal tasks: closer inspection,
+comparison with recent watering/environment/feeding records, sanitation checks, removal or isolation for confirmed
+damaged material only when appropriate, and collecting missing visual or sensor evidence. Include grow-wide checks
+for canopy consistency, spacing, visible airflow obstructions, cleanliness, and patterns affecting multiple plants.
+Never invent measurements. Do not provide potency advice, harvest timing, exact feeding recipes or targets,
+controlled-substance yield optimization, medical claims, guaranteed diagnosis, sales, delivery, purchase,
+consumption, intoxication, or content involving minors or illegal activity.`;
 
 export const VIDEO_RESPONSE_FORMAT = {
   type: "json_schema",
@@ -40,9 +46,10 @@ export const VIDEO_RESPONSE_FORMAT = {
     schema: {
       type: "object",
       additionalProperties: false,
-      required: ["visualSummary", "visibleSigns", "possibleInterpretations", "severity", "confidence", "healthScore", "healthLabel", "environmentSummary", "areasToInspect", "recommendedVerification", "mediaQuality"],
+      required: ["visualSummary", "growthStage", "visibleSigns", "possibleInterpretations", "severity", "confidence", "healthScore", "healthLabel", "environmentSummary", "areasToInspect", "priorityAction", "careRecommendations", "growOverview", "growWideChecks", "recommendedVerification", "mediaQuality"],
       properties: {
         visualSummary: { type: "string" },
+        growthStage: { type: "string" },
         visibleSigns: { type: "array", maxItems: 8, items: { type: "string" } },
         possibleInterpretations: { type: "array", maxItems: 8, items: { type: "string" } },
         severity: { type: "string", enum: ["low", "medium", "high", "uncertain"] },
@@ -51,6 +58,10 @@ export const VIDEO_RESPONSE_FORMAT = {
         healthLabel: { type: "string", enum: ["Needs a closer look", "Visible concerns", "Mixed visual condition", "No obvious concern visible"] },
         environmentSummary: { type: "string" },
         areasToInspect: { type: "array", maxItems: 8, items: { type: "string" } },
+        priorityAction: { type: "string" },
+        careRecommendations: { type: "array", minItems: 2, maxItems: 6, items: { type: "string" } },
+        growOverview: { type: "string" },
+        growWideChecks: { type: "array", minItems: 1, maxItems: 6, items: { type: "string" } },
         recommendedVerification: { type: "string" },
         mediaQuality: { type: "string" },
       },
@@ -163,10 +174,16 @@ export function buildMessages(body: Record<string, unknown>): ChatMessage[] {
 
   if (mode === "video_visual_analysis") {
     const { dataUrl } = toVideoDataUrl(fileData, mimeType);
+    const strain = typeof body.strain === "string" ? body.strain.trim().replace(/[\r\n]/g, " ").slice(0, 80) : "";
+    const growMethod = ["Indoor", "Outdoor", "Greenhouse"].includes(String(body.growMethod)) ? String(body.growMethod) : "";
+    const context = [
+      strain ? `User-selected cultivar: ${strain}.` : "",
+      growMethod ? `User-selected grow setting: ${growMethod}.` : "",
+    ].filter(Boolean).join(" ");
     messages.push({
       role: "user",
       content: [
-        { type: "text", text: "Describe only the visible plant evidence in the required JSON structure. Separate observations from possible interpretations." },
+        { type: "text", text: `Create the required structured video plant health report. Separate visible evidence from possible interpretations. Use the supplied context only to organize the report; do not treat it as visual proof. ${context}` },
         { type: "video_url", video_url: { url: dataUrl } },
       ],
     });
@@ -244,10 +261,11 @@ export function parseVideoResult(value: string) {
   try { parsed = JSON.parse(value); } catch { throw new RequestValidationError("The video model returned malformed JSON"); }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new RequestValidationError("The video model returned an invalid result");
   const result = parsed as Record<string, unknown>;
-  const requiredStrings = ["visualSummary", "healthLabel", "environmentSummary", "recommendedVerification", "mediaQuality"];
-  const requiredLists = ["visibleSigns", "possibleInterpretations", "areasToInspect"];
+  const requiredStrings = ["visualSummary", "growthStage", "healthLabel", "environmentSummary", "priorityAction", "growOverview", "recommendedVerification", "mediaQuality"];
+  const requiredLists = ["visibleSigns", "possibleInterpretations", "areasToInspect", "careRecommendations", "growWideChecks"];
   if (requiredStrings.some((key) => typeof result[key] !== "string" || !(result[key] as string).trim())) throw new RequestValidationError("The video model omitted a required observation");
   if (requiredLists.some((key) => !Array.isArray(result[key]) || (result[key] as unknown[]).length > 8 || (result[key] as unknown[]).some((item) => typeof item !== "string"))) throw new RequestValidationError("The video model returned invalid observation lists");
+  if ((result.careRecommendations as unknown[]).length < 2 || (result.growWideChecks as unknown[]).length < 1) throw new RequestValidationError("The video model omitted required follow-up checks");
   if (!["low", "medium", "high", "uncertain"].includes(String(result.severity))) throw new RequestValidationError("The video model returned an invalid severity");
   for (const key of ["confidence", "healthScore"]) {
     if (typeof result[key] !== "number" || !Number.isFinite(result[key]) || (result[key] as number) < 0 || (result[key] as number) > 100) throw new RequestValidationError(`The video model returned an invalid ${key}`);

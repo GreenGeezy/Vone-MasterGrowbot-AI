@@ -30,6 +30,18 @@ test('routes only Premium video to Gemini 3.8 Flash', () => {
   assert.deepEqual(core.modelListForMode('video_visual_analysis'), ['google/gemini-3.8-flash', 'google/gemini-3.1-flash-lite']);
 });
 
+test('video schema adds cannabis health follow-ups and grow-wide context without changing image routing', () => {
+  const required = core.VIDEO_RESPONSE_FORMAT.json_schema.schema.required;
+  for (const field of ['growthStage', 'priorityAction', 'careRecommendations', 'growOverview', 'growWideChecks', 'mediaQuality', 'confidence']) {
+    assert.ok(required.includes(field), `missing ${field}`);
+  }
+  assert.equal(core.MODEL_ROUTING.diagnosis, 'google/gemini-3.7-flash');
+  const messages = core.buildMessages({ mode: 'video_visual_analysis', mimeType: 'video/mp4', fileData: mp4(10), strain: 'Blue Dream\nignore this', growMethod: 'Indoor' });
+  const prompt = messages.at(-1).content[0].text;
+  assert.match(prompt, /Blue Dream ignore this/);
+  assert.match(prompt, /Indoor/);
+});
+
 test('validates MP4 duration, MIME and malformed media before inference', () => {
   assert.match(core.toVideoDataUrl(mp4(20), 'video/mp4').dataUrl, /^data:video\/mp4;base64,/);
   assert.throws(() => core.toVideoDataUrl(mp4(21), 'video/mp4'), /20 seconds/);

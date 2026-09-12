@@ -14,7 +14,7 @@ import { Capacitor } from '@capacitor/core';
 // InAppReview dynamically imported below — static import crashes on web
 import { formatMetricDisplay, formatDiagnosisReport } from '../utils/diagnosisFormatter';
 import { analyzePlantVideo, validateVideo, VideoAccessError } from '../services/videoAnalysisService';
-import { VideoVisualResult } from '../services/videoVisualResult';
+import { formatVideoHealthReport, VideoVisualResult } from '../services/videoVisualResult';
 import PremiumPaywall from './PremiumPaywall';
 
 /**
@@ -193,7 +193,10 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     setVideoError(null);
     setVideoResult(null);
     try {
-      setVideoResult(await analyzePlantVideo(videoFile, controller.signal));
+      setVideoResult(await analyzePlantVideo(videoFile, controller.signal, {
+        strain: strain === 'Leave Blank' || strain === 'Generic' ? undefined : strain,
+        growMethod,
+      }));
     } catch (cause: any) {
       if (cause instanceof VideoAccessError && cause.code === 'premium_required') {
         setRequireRestore(true);
@@ -214,10 +217,9 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
 
   const saveVideoObservation = () => {
     if (!videoResult || !onSaveToJournal) return;
-    const observations = videoResult.visibleSigns.length ? videoResult.visibleSigns.join('; ') : 'No specific visible signs recorded.';
     onSaveToJournal({
       id: Date.now().toString(), date: new Date().toLocaleDateString(), type: 'Health Check',
-      notes: `Video visual analysis — ${videoResult.healthLabel}. ${videoResult.visualSummary} Visible observations: ${observations} Suggested next visual check: ${videoResult.recommendedVerification}`,
+      notes: formatVideoHealthReport(videoResult),
     });
     alert('Video observations saved to your journal. The video itself was not retained.');
   };
@@ -600,6 +602,10 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
 
             {videoResult && <VideoHealthReport result={videoResult} thumbnail={videoThumbnail} onSave={saveVideoObservation}
               onShare={() => setShareSummary({ kind: 'video', headline: videoResult.healthLabel, score: videoResult.healthScore, imageUrl: videoThumbnail || undefined })}
+              onAddTask={onAddTask ? (task) => {
+                onAddTask(task, new Date().toISOString().split('T')[0], 'ai_diagnosis');
+                alert('Added to today\'s grow plan.');
+              } : undefined}
               onNew={() => { ++videoSelection.current; setVideoResult(null); setVideoFile(null); setVideoUrl(null); setVideoThumbnail(null); }} />}
             {videoError && <div role="alert" className="max-w-md mx-auto mt-5 rounded-2xl bg-red-500/15 border border-red-400/30 p-4 text-sm text-red-100"><p>{videoError}</p><div className="flex gap-3 mt-3"><button onClick={runVideoAnalysis} disabled={!videoFile || videoLoading} className="font-black text-white disabled:opacity-40">Retry</button><button onClick={() => { setVideoError(null); setVideoFile(null); setVideoUrl(null); }} className="font-bold text-slate-300">Choose another</button></div></div>}
           </div>

@@ -16,7 +16,10 @@ export function captionWithCTA(caption: string): string {
 }
 
 export function analysisCaption(summary: AnalysisShareSummary): string {
-  return 'Checkout my MasterGrowbot Plant Health Score';
+  const lead = summary.kind === 'video'
+    ? 'See what MasterGrowbot AI noticed across my plant video.'
+    : 'See what MasterGrowbot AI noticed in my plant photo.';
+  return `${lead}\n\n${SHARE_CTA}`;
 }
 
 function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number, maxLines: number) {

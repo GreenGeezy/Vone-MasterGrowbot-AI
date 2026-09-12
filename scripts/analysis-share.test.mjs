@@ -25,9 +25,17 @@ const service = compile(await readFile(new URL('../services/shareService.ts', im
 test('caption has honest AI context, correct tier and bounded content', () => {
   const caption = artwork.analysisCaption({ kind: 'video', headline: 'A'.repeat(1000), score: 50, privateLocation: 'private-location', topAction: 'private-advice' });
   assert.ok(caption.length < 700);
-  assert.equal(caption, 'Checkout my MasterGrowbot Plant Health Score');
+  assert.equal(caption, `See what MasterGrowbot AI noticed across my plant video.\n\n${artwork.SHARE_CTA}`);
   assert.doesNotMatch(caption, /diagnosis|limitations/);
   assert.doesNotMatch(caption, /private-location|private-advice/);
+});
+test('photo and video captions carry distinct store calls to action', () => {
+  const photo = artwork.analysisCaption({ kind: 'photo', headline: 'Healthy', score: 80 });
+  const video = artwork.analysisCaption({ kind: 'video', headline: 'Healthy', score: 80 });
+  assert.match(photo, /plant photo/);
+  assert.match(video, /plant video/);
+  assert.ok(photo.includes(artwork.SHARE_CTA));
+  assert.ok(video.includes(artwork.SHARE_CTA));
 });
 test('native caption share carries the real store link and cancellation is neutral', async () => {
   native = true;

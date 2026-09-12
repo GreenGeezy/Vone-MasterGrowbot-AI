@@ -4,12 +4,17 @@ import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 const source = await readFile(new URL('../services/videoVisualResult.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { parseVideoVisualResult: parse } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const { parseVideoVisualResult: parse, formatVideoHealthReport: format } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const result = {
   visualSummary: 'Several lower leaves appear yellow.', severity: 'uncertain', confidence: 45, healthScore: 58,
+  growthStage: 'Vegetative stage appears likely; verify from plant records.',
   healthLabel: 'Mixed visual condition',
   visibleSigns: ['Yellowing at lower leaf edges.'], possibleInterpretations: ['Color cast may contribute.'],
   areasToInspect: ['Lower leaves'], environmentSummary: 'Purple lighting limits color assessment.',
+  priorityAction: 'Inspect lower leaves in neutral light and compare the pattern with recent records.',
+  careRecommendations: ['Photograph affected leaves in neutral light.', 'Review recent watering and feeding records before changing care.'],
+  growOverview: 'Only part of the canopy is visible, so grow-wide consistency cannot be confirmed.',
+  growWideChecks: ['Compare lower-leaf color across all plants in the space.'],
   mediaQuality: 'The camera moves quickly.', recommendedVerification: 'Capture a stable close-up in neutral light.',
 };
 test('accepts structured observations and plain JSON', () => {
@@ -40,4 +45,12 @@ test('rejects oversized, blank or unstructured observation lists', () => {
 });
 test('allows no visible signs when other required assessments describe limitations', () => {
   assert.deepEqual(parse({ ...result, visibleSigns: [] }).visibleSigns, []);
+});
+test('requires a useful journal-ready care plan and grow-wide check', () => {
+  assert.throws(() => parse({ ...result, careRecommendations: [] }));
+  assert.throws(() => parse({ ...result, growWideChecks: [] }));
+  const journal = format(result);
+  assert.match(journal, /Priority action:/);
+  assert.match(journal, /Care recommendations:/);
+  assert.match(journal, /Grow-wide checks:/);
 });

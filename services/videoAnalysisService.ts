@@ -74,12 +74,17 @@ export async function checkVideoAccess(): Promise<boolean> {
   return true;
 }
 
-export async function analyzePlantVideo(file: File, signal: AbortSignal): Promise<VideoVisualResult> {
+export interface VideoAnalysisContext {
+  strain?: string;
+  growMethod?: 'Indoor' | 'Outdoor' | 'Greenhouse';
+}
+
+export async function analyzePlantVideo(file: File, signal: AbortSignal, context: VideoAnalysisContext = {}): Promise<VideoVisualResult> {
   const { mimeType } = await validateVideo(file);
   const fileData = await fileToBase64(file);
   if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
   const { data, error } = await supabase.functions.invoke('gemini-v3', {
-    body: { mode: 'video_visual_analysis', mimeType, fileData },
+    body: { mode: 'video_visual_analysis', mimeType, fileData, strain: context.strain, growMethod: context.growMethod },
     signal,
     timeout: 100000,
   });
