@@ -19,6 +19,7 @@ import { getPendingTasksForToday, toggleTaskCompletion, addNewTask, updateTaskPr
 import ErrorBoundary from './components/ErrorBoundary';
 import { wakeUpBackend } from './services/geminiService';
 import { initializeApp, initializeSubscriptions, withTimeout } from './services/appInitializer';
+import { cachedProfile, mergeProfilePreferences } from './services/profilePreferences';
 
 // --- LocalStorage Keys for State Persistence ---
 const LS_ONBOARDING_STATUS = 'mg_onboarding_status';
@@ -143,7 +144,7 @@ const App: React.FC = () => {
           if (init.isReturningSubscriber) {
             setHasVerifiedPaidAccess(true);
 
-            const profileSource = init.profile || savedProfileData || {};
+            const profileSource = mergeProfilePreferences(init.profile, cachedProfile() || savedProfileData);
             const profileData = {
               ...profileSource,
               experience: profileSource.experience || 'Novice',
@@ -293,8 +294,8 @@ const App: React.FC = () => {
   const handleUpdateProfile = (updates: Partial<UserProfile>) => {
     if (!userProfile) return;
     const updated = { ...userProfile, ...updates };
-    setUserProfile(updated);
     localStorage.setItem(LS_PROFILE, JSON.stringify(updated));
+    setUserProfile(updated);
   };
 
   const handleToggleTask = async (taskId: string) => {
@@ -415,7 +416,7 @@ const App: React.FC = () => {
       setIsReturningSubscriber(init.isReturningSubscriber);
       if (init.isReturningSubscriber) {
         setHasVerifiedPaidAccess(true);
-        const profileSource: any = init.profile || userProfile || {};
+        const profileSource = mergeProfilePreferences(init.profile, cachedProfile() || userProfile);
         const profileData: UserProfile = {
           ...profileSource,
           experience: profileSource.experience || 'Novice',

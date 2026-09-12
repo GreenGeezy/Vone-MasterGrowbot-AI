@@ -5,6 +5,7 @@ import { Plant, UserProfile } from '../types';
 import Growbot from '../components/Growbot';
 import { STRAIN_DATABASE } from '../data/strains';
 import { matchesStrainSearch } from '../utils/strainSearch';
+import VideoHealthReport from '../components/VideoHealthReport';
 import AnalysisShareDialog from '../components/AnalysisShareDialog';
 import { videoShareFrame } from '../services/shareMedia';
 import type { AnalysisShareSummary } from '../services/analysisShareCard';
@@ -107,6 +108,8 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   const [videoError, setVideoError] = useState<string | null>(null);
   const recordVideoRef = useRef<HTMLInputElement>(null);
   const chooseVideoRef = useRef<HTMLInputElement>(null);
+  const videoSelection = useRef(0);
+  const [preparingVideo, setPreparingVideo] = useState(false);
   const videoAbortRef = useRef<AbortController | null>(null);
 
   // LOCAL STATE OVERRIDES (Initialized from Global Defaults)
@@ -147,7 +150,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     }
   }, [loading]);
 
-  useEffect(() => () => { videoAbortRef.current?.abort(); }, []);
+  useEffect(() => () => { ++videoSelection.current; videoAbortRef.current?.abort(); }, []);
   useEffect(() => () => { if (videoUrl) URL.revokeObjectURL(videoUrl); }, [videoUrl]);
 
   const openVideo = () => {
@@ -158,24 +161,32 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
 
   const selectVideo = async (file?: File) => {
     if (!file) return;
+    const selection = ++videoSelection.current;
+    setPreparingVideo(true);
+    setVideoFile(null);
+    setVideoUrl(null);
     setVideoError(null);
     setVideoResult(null);
     setVideoThumbnail(null);
     try {
       const { duration } = await validateVideo(file);
+      if (selection !== videoSelection.current) return;
       if (videoUrl) URL.revokeObjectURL(videoUrl);
       setVideoFile(file);
       setVideoDurationSeconds(duration);
       setVideoUrl(URL.createObjectURL(file));
+      const frame = await videoShareFrame(file);
+      if (selection === videoSelection.current) setVideoThumbnail(frame);
     } catch (cause: any) {
+      if (selection !== videoSelection.current) return;
       setVideoFile(null);
       setVideoDurationSeconds(null);
       setVideoError(cause?.message || 'Choose another video.');
-    }
+    } finally { if (selection === videoSelection.current) setPreparingVideo(false); }
   };
 
   const runVideoAnalysis = async () => {
-    if (!videoFile || videoLoading) return;
+    if (!videoFile || videoLoading || preparingVideo) return;
     const controller = new AbortController();
     videoAbortRef.current = controller;
     setVideoLoading(true);
@@ -557,13 +568,13 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
       {showPremiumPaywall && <PremiumPaywall requireRestore={requireRestore} onClose={() => setShowPremiumPaywall(false)} onUnlocked={() => { setShowPremiumPaywall(false); setShowVideoFlow(true); }} />}
 
       {showVideoFlow && (
-        <div className="fixed inset-0 z-[110] bg-slate-950 text-white flex flex-col" data-testid="video-workflow">
+        <div className={`fixed inset-0 z-[110] flex flex-col ${videoResult ? "bg-gray-50 text-slate-900" : "bg-slate-950 text-white"}`} data-testid="video-workflow">
           <div className="flex items-center justify-between px-5 pt-[max(3rem,env(safe-area-inset-top,0px))] pb-4 border-b border-white/10">
             <div><p className="text-[9px] font-black tracking-[0.18em] text-emerald-300">MASTERGROWBOT AI PREMIUM</p><h2 className="text-xl font-black">Video Plant Analysis</h2></div>
-            <button onClick={closeVideoFlow} aria-label="Close video analysis" className="rounded-full bg-white/10 p-2"><X size={20} /></button>
+            <button onClick={closeVideoFlow} aria-label="Close video analysis" className="rounded-full bg-slate-500/10 p-3"><X size={20} /></button>
           </div>
           <div className="flex-1 overflow-y-auto p-5 pb-10">
-            {!videoFile && !videoResult && (
+            {!videoFile && !videoResult && !preparingVideo && (
               <div className="max-w-md mx-auto">
                 <div className="rounded-[2rem] border border-emerald-400/20 bg-emerald-400/10 p-5 mb-5"><Eye className="text-emerald-300 mb-3" /><p className="text-sm text-slate-200 leading-relaxed">Move slowly around the plant. Keep the leaves in focus and include affected areas from more than one angle.</p><p className="text-xs text-slate-400 mt-2">Maximum 20 seconds and 8 MB. Analysis uses visual evidence only; avoid recording private conversations.</p></div>
                 <div className="grid grid-cols-2 gap-3">
@@ -573,31 +584,23 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
               </div>
             )}
 
+            {preparingVideo && <p role="status" className="text-sm text-center py-4">Preparing video preview…</p>}
             {videoFile && !videoResult && (
               <div className="max-w-md mx-auto">
-                {videoUrl && <video src={videoUrl} controls={!videoLoading} muted playsInline className="w-full aspect-video object-contain bg-black rounded-[2rem] border border-white/10" />}
+                {videoUrl && <video src={videoUrl} poster={videoThumbnail || undefined} preload="metadata" controls={!videoLoading} muted playsInline className="w-full aspect-video object-contain bg-black rounded-[2rem] border border-white/10" />}
+                {!preparingVideo && !videoThumbnail && <p className="text-xs text-slate-400 mt-2">Preview unavailable. Tap play to review your video before analysis.</p>}
                 <div className="flex justify-between text-xs text-slate-400 mt-3"><span className="truncate mr-3">{videoFile.name}</span><span>{videoDurationSeconds?.toFixed(1)}s · {(videoFile.size / 1024 / 1024).toFixed(1)} MB</span></div>
                 {videoLoading ? (
                   <div className="mt-6 rounded-2xl bg-white/[0.06] border border-white/10 p-5 text-center"><div className="h-10 w-10 mx-auto border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" /><h3 className="font-black mt-4">Reviewing visible plant evidence…</h3><p className="text-xs text-slate-400 mt-2">This can take up to 90 seconds.</p><button onClick={() => videoAbortRef.current?.abort()} className="mt-4 text-sm font-bold text-slate-300">Cancel</button></div>
                 ) : (
-                  <div className="grid grid-cols-3 gap-3 mt-6"><button onClick={() => { setVideoFile(null); setVideoUrl(null); }} className="rounded-xl bg-white/10 py-3 text-xs font-bold">Choose Again</button><button onClick={() => recordVideoRef.current?.click()} className="rounded-xl bg-white/10 py-3 text-xs font-bold">Record Again</button><button onClick={runVideoAnalysis} className="rounded-xl bg-emerald-400 text-slate-950 py-3 text-xs font-black">Analyze</button></div>
+                  <div className="grid grid-cols-3 gap-3 mt-6"><button onClick={() => { setVideoFile(null); setVideoUrl(null); }} className="rounded-xl bg-white/10 py-3 text-xs font-bold">Choose Again</button><button onClick={() => recordVideoRef.current?.click()} className="rounded-xl bg-white/10 py-3 text-xs font-bold">Record Again</button><button onClick={runVideoAnalysis} disabled={preparingVideo} className="rounded-xl bg-emerald-400 text-slate-950 py-3 text-xs font-black">Analyze</button></div>
                 )}
               </div>
             )}
 
-            {videoResult && (
-              <div className="max-w-md mx-auto space-y-4" data-testid="video-result">
-                <div className="rounded-[2rem] bg-gradient-to-br from-emerald-500/20 to-cyan-400/10 border border-emerald-300/20 p-5"><p className="text-[10px] font-black text-emerald-300 tracking-widest">OVERALL VISUAL CONDITION</p><div className="flex items-end justify-between mt-2"><h3 className="text-2xl font-black">{videoResult.healthLabel}</h3><span className="text-sm font-black text-emerald-300">{videoResult.confidence}% confidence</span></div><p className="text-sm text-slate-300 mt-3 leading-relaxed">{videoResult.visualSummary}</p></div>
-                {[
-                  ['Key Visible Observations', videoResult.visibleSigns],
-                  ['Possible Interpretations', videoResult.possibleInterpretations],
-                  ['Areas to Inspect More Closely', videoResult.areasToInspect],
-                ].map(([title, items]) => <div key={title as string} className="rounded-2xl bg-white/[0.06] border border-white/10 p-4"><h4 className="text-xs font-black text-slate-200 mb-3">{title as string}</h4><ul className="space-y-2">{(items as string[]).map(item => <li key={item} className="text-xs text-slate-300 flex gap-2"><span className="text-emerald-400">•</span>{item}</li>)}</ul></div>)}
-                <div className="grid grid-cols-1 gap-3"><div className="rounded-2xl bg-white/[0.06] p-4"><p className="text-[10px] font-black text-slate-400">ENVIRONMENTAL CONTEXT</p><p className="text-xs mt-2 text-slate-200">{videoResult.environmentSummary}</p></div><div className="rounded-2xl bg-white/[0.06] p-4"><p className="text-[10px] font-black text-slate-400">MEDIA QUALITY / LIMITATIONS</p><p className="text-xs mt-2 text-slate-200">{videoResult.mediaQuality}</p></div><div className="rounded-2xl bg-emerald-400/10 border border-emerald-400/20 p-4"><p className="text-[10px] font-black text-emerald-300">SUGGESTED NEXT VISUAL CHECK</p><p className="text-xs mt-2 text-slate-200">{videoResult.recommendedVerification}</p></div></div>
-                <div className="grid grid-cols-2 gap-3"><button onClick={saveVideoObservation} className="rounded-xl bg-white/10 py-3 font-bold text-sm"><Save size={16} className="inline mr-1" /> Save</button><button onClick={() => { setVideoResult(null); setVideoFile(null); setVideoUrl(null); }} className="rounded-xl bg-emerald-400 text-slate-950 py-3 font-black text-sm"><RefreshCw size={16} className="inline mr-1" /> New Video</button></div>
-                <button onClick={async () => { const frame = videoThumbnail || (videoFile ? await videoShareFrame(videoFile) : null); setVideoThumbnail(frame); setShareSummary({ kind: 'video', headline: videoResult.healthLabel, score: videoResult.healthScore, imageUrl: frame || undefined }); }} className="w-full rounded-xl bg-emerald-400/15 border border-emerald-400/30 py-4 font-bold text-sm text-emerald-200"><Share2 size={16} className="inline mr-2" /> Share Analysis</button>
-              </div>
-            )}
+            {videoResult && <VideoHealthReport result={videoResult} thumbnail={videoThumbnail} onSave={saveVideoObservation}
+              onShare={() => setShareSummary({ kind: 'video', headline: videoResult.healthLabel, score: videoResult.healthScore, imageUrl: videoThumbnail || undefined })}
+              onNew={() => { ++videoSelection.current; setVideoResult(null); setVideoFile(null); setVideoUrl(null); setVideoThumbnail(null); }} />}
             {videoError && <div role="alert" className="max-w-md mx-auto mt-5 rounded-2xl bg-red-500/15 border border-red-400/30 p-4 text-sm text-red-100"><p>{videoError}</p><div className="flex gap-3 mt-3"><button onClick={runVideoAnalysis} disabled={!videoFile || videoLoading} className="font-black text-white disabled:opacity-40">Retry</button><button onClick={() => { setVideoError(null); setVideoFile(null); setVideoUrl(null); }} className="font-bold text-slate-300">Choose another</button></div></div>}
           </div>
         </div>

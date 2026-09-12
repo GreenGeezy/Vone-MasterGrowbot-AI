@@ -25,8 +25,8 @@ const service = compile(await readFile(new URL('../services/shareService.ts', im
 test('caption has honest AI context, correct tier and bounded content', () => {
   const caption = artwork.analysisCaption({ kind: 'video', headline: 'A'.repeat(1000), score: 50, privateLocation: 'private-location', topAction: 'private-advice' });
   assert.ok(caption.length < 700);
-  assert.match(caption, /Premium video analysis/);
-  assert.match(caption, /not a confirmed diagnosis/);
+  assert.equal(caption, 'Checkout my MasterGrowbot Plant Health Score');
+  assert.doesNotMatch(caption, /diagnosis|limitations/);
   assert.doesNotMatch(caption, /private-location|private-advice/);
 });
 test('native caption share carries the real store link and cancellation is neutral', async () => {

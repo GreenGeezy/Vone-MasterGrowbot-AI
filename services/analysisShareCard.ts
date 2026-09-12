@@ -8,7 +8,7 @@ export interface AnalysisShareSummary {
 }
 
 export const SHARE_CTA = 'Download MasterGrowbot AI on the App Store or Google Play and try it free.';
-export const TRIAL_TERMS = 'Free trial for eligible new subscribers. Premium video sold separately.';
+export const TRIAL_TERMS = 'Pro trial for eligible new subscribers. Premium includes Pro; no Premium trial.';
 
 export function captionWithCTA(caption: string): string {
   const body = caption.replace(SHARE_CTA, '').replace(TRIAL_TERMS, '').trim().slice(0, 700);
@@ -16,7 +16,7 @@ export function captionWithCTA(caption: string): string {
 }
 
 export function analysisCaption(summary: AnalysisShareSummary): string {
-  return `My plant check-in 🌿\n${summary.headline.slice(0, 220)}\n\nChecked with MasterGrowbot AI ${summary.kind === 'video' ? 'Premium video analysis' : 'photo analysis'}.\nAI observations, not a confirmed diagnosis.\n\nWhat do you notice?`;
+  return 'Checkout my MasterGrowbot Plant Health Score';
 }
 
 function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number, maxLines: number) {
@@ -69,13 +69,13 @@ export async function createAnalysisShareCard(summary: AnalysisShareSummary): Pr
   }
   const score = Number.isFinite(summary.score) ? Math.max(0, Math.min(100, Math.round(summary.score))) : null;
   ctx.fillStyle = '#5ce5ac'; ctx.font = 'bold 66px system-ui, sans-serif'; ctx.fillText(score === null ? '—' : String(score), 80, 865);
-  ctx.fillStyle = '#b0c6bf'; ctx.font = '26px system-ui, sans-serif'; ctx.fillText('/ 100  AI visual score', 230, 853);
+  ctx.fillStyle = '#b0c6bf'; ctx.font = '26px system-ui, sans-serif'; ctx.fillText('/ 100  Plant score · AI estimate', 230, 853);
   ctx.fillStyle = '#edf6f1'; ctx.font = 'bold 36px system-ui, sans-serif'; wrapText(ctx, summary.headline, 80, 931, 910, 46, 3);
-  ctx.fillStyle = '#b0c6bf'; ctx.font = '23px system-ui, sans-serif'; ctx.fillText('AI observations • Not a confirmed diagnosis', 80, 1077);
+
   ctx.fillStyle = '#5ce5ac'; ctx.fillRect(80, 1110, 920, 145);
   ctx.fillStyle = '#092c27'; ctx.font = 'bold 36px system-ui, sans-serif'; ctx.fillText('Download MasterGrowbot AI', 110, 1163);
   ctx.font = '30px system-ui, sans-serif'; ctx.fillText('App Store + Google Play · Try it free*', 110, 1211);
   ctx.fillStyle = '#b0c6bf'; ctx.font = '20px system-ui, sans-serif';
-  ctx.fillText('*Free trial for eligible new subscribers. Premium video sold separately.', 80, 1298);
+  ctx.fillText('*Pro trial for eligible new subscribers. Premium includes Pro; no Premium trial.', 80, 1298);
   return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Card could not be created')), 'image/png'));
 }

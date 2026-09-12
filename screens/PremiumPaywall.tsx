@@ -248,7 +248,8 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
         <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-emerald-500/25 to-cyan-400/10 border border-emerald-300/20 p-6 mt-2">
           <Sparkles className="text-emerald-300 mb-4" />
           <h1 className="text-3xl font-black leading-tight">Bring your plant<br />into focus.</h1>
-          <p className="text-sm text-slate-300 mt-3 leading-relaxed">Everything in Pro, plus Premium Video Plant Analysis for broader visual context across multiple angles.</p>
+          <p className="text-sm text-slate-300 mt-3 leading-relaxed">Pro membership is included. Upgrade to one Premium subscription with photo and video analysis.</p>
+          <p className="text-sm font-semibold text-emerald-200 mt-3">The price shown is your total Premium subscription price, including Pro—not an extra Pro fee. Apple confirms any adjustment and when your plan changes.</p>
         </div>
 
         <div className="grid grid-cols-2 gap-3 my-5">
@@ -266,7 +267,7 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2"><span className="font-black">{labelFor(pkg)}</span>{pkg.identifier === 'annual' && savings && <span className="rounded-full bg-emerald-400 text-slate-950 px-2 py-0.5 text-[10px] font-black">SAVE {savings}% VS MONTHLY</span>}</div>
-                    <p className="text-sm text-slate-300 mt-1">{pkg.product.priceString} per {periodFor(pkg)}</p>
+                    <p className="text-sm text-slate-300 mt-1">{pkg.product.priceString} total per {periodFor(pkg)} · Pro included</p>
                   </div>
                   <div className={`h-6 w-6 rounded-full border-2 flex items-center justify-center ${selected === pkg.identifier ? 'bg-emerald-400 border-emerald-400' : 'border-slate-500'}`}>{selected === pkg.identifier && <Check size={15} className="text-slate-950" />}</div>
                 </div>
@@ -289,7 +290,7 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
       </div>
 
       <div className="border-t border-white/10 bg-slate-950/95 px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
-        {!pending && selectedPackage && <p className="mb-2 text-center text-sm font-semibold text-slate-200">{selectedPackage.product.priceString} per {periodFor(selectedPackage)} • {labelFor(selectedPackage)} subscription</p>}
+        {!pending && selectedPackage && <p className="mb-2 text-center text-sm font-semibold text-slate-200">{selectedPackage.product.priceString} total per {periodFor(selectedPackage)} • Pro included</p>}
         <button onClick={pending ? checkStatus : purchase} disabled={busy || loading || (!pending && !selected)} className="w-full rounded-2xl bg-emerald-400 text-slate-950 py-4 font-black disabled:opacity-50 flex justify-center items-center gap-2">
           {busy ? 'Waiting for Apple…' : pending ? 'Check status' : <><Film size={19} /> Unlock video analysis</>}
         </button>

@@ -34,6 +34,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
 
     const [isEditingName, setIsEditingName] = useState(false);
     const [tempName, setTempName] = useState('');
+    const [avatarStatus, setAvatarStatus] = useState('');
 
     // --- AUTO-SYNC EMAIL (DISABLED: Auth Removed) ---
     /*
@@ -59,18 +60,21 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
     const handleCameraAction = async (source: CameraSource) => {
         try {
             const image = await CapacitorCamera.getPhoto({
-                quality: 90,
+                quality: 75,
+                width: 512,
+                height: 512,
                 allowEditing: true,
-                resultType: CameraResultType.Uri,
+                resultType: CameraResultType.DataUrl,
                 source: source
             });
 
-            if (image.webPath) {
-                onUpdateProfile({ avatarUri: image.webPath });
+            if (image.dataUrl) {
+                onUpdateProfile({ avatarUri: image.dataUrl });
+                setAvatarStatus('Avatar saved on this device.');
                 setShowAvatarMenu(false);
             }
         } catch (error) {
-            console.error("Camera Error:", error);
+            if (!/cancel/i.test(String((error as Error)?.message))) setAvatarStatus('Could not save your avatar. Try a smaller image or a built-in avatar.');
         }
     };
 
@@ -207,10 +211,10 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 )}
 
                 <div className="relative inline-block mb-4">
-                    <button onClick={() => setShowAvatarMenu(true)} className="relative group">
+                    <button onClick={() => setShowAvatarMenu(true)} aria-label="Change avatar" className="relative group">
                         <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gray-200">
                             {userProfile.avatarUri ? (
-                                <img src={userProfile.avatarUri} className="w-full h-full object-cover" alt="Profile" />
+                                <img src={userProfile.avatarUri} className="w-full h-full object-cover" alt="Profile" onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = '/assets/avatars/the_bot.png'; }} />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center bg-green-100 text-green-600">
                                     <User size={40} />
@@ -224,6 +228,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 </div>
 
                 {/* Name Editing Section */}
+                <p role="status" className="text-xs text-emerald-700 mb-2">{avatarStatus}</p>
                 <div className="flex items-center justify-center gap-2 mb-1">
                     {isEditingName ? (
                         <div className="flex items-center gap-2">
@@ -339,7 +344,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 </div>
 
                 <div className="text-center pb-8 opacity-40">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 1.6.6</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 1.6.7</p>
                 </div>
             </div>
 
@@ -386,10 +391,13 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                                 const isSelected = userProfile.avatarUri === url;
                                 return (
                                     <button key={i} onClick={() => {
-                                        onUpdateProfile({ avatarUri: url });
-                                        setShowPresetGrid(false);
+                                        try {
+                                            onUpdateProfile({ avatarUri: url });
+                                            setAvatarStatus('Avatar saved on this device.');
+                                            setShowPresetGrid(false);
+                                        } catch { setAvatarStatus('Avatar could not be saved. Please try again.'); }
                                     }} className={`aspect-square rounded-2xl overflow-hidden border-4 transition-all relative group ${isSelected ? 'border-green-500 shadow-lg scale-95' : 'border-transparent hover:border-green-200'}`}>
-                                        <img src={url} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt={`Avatar ${i}`} onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/150')} />
+                                        <img src={url} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt={`Avatar ${i + 1}`} />
                                         {isSelected && (
                                             <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full p-1 shadow-md">
                                                 <Check size={12} strokeWidth={4} />

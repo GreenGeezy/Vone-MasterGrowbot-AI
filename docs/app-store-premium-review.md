@@ -1,6 +1,10 @@
 # MasterGrowbot AI Premium — App Store release checklist
 
-## 1.6.6 (167) video access and visual sharing update
+## Current build: 1.6.7 (168)
+
+See [release-1.6.7.md](release-1.6.7.md) for video preview, report layout, Premium price clarification, and avatar persistence. The existing Supabase function and photo analysis are unchanged.
+
+## Previous 1.6.6 (167) video access and visual sharing update
 
 The video button now opens Premium immediately and verifies access using the same JWT-derived server identity as inference. A `premium_required` response returns to purchase/restore while preserving the selected video. The backend adds a no-charge `premium_access` check in gemini-v3 version 28. Cached SDK entitlements alone do not open recording. See [release-1.6.6.md](release-1.6.6.md).
 
@@ -19,11 +23,11 @@ Version 1.6.5 adds branded, locally rendered photo/video analysis share cards wi
 ## Manual steps required
 
 1. In App Store Connect, complete the name, description, localization, and App Review screenshot for all three Premium subscriptions. Confirm that they remain above every Pro product in the existing **MasterGrowbot Subscriptions** group, use $12.99/week, $49.99/month, and **$199.00/year** in the US storefront, and have no introductory offer.
-2. Add all three Premium subscriptions to the 1.6.6 app-version submission. Do not submit them separately before the matching binary is available.
+2. Add all three Premium subscriptions to the 1.6.7 app-version submission. Do not submit them separately before the matching binary is available.
 3. Update the public privacy policy and App Privacy answers if needed to disclose that a user-selected video, which can contain audio, is sent through Supabase and OpenRouter to the selected AI provider for visual analysis. MasterGrowbot does not save the raw video, but provider processing practices must be described accurately.
-4. Run the **MasterGrowbot iOS App Store** (`ios-app-store`) Codemagic workflow from branch `ios`. Test build 167 in Sandbox/TestFlight before submitting it for review.
+4. Run the **MasterGrowbot iOS App Store** (`ios-app-store`) Codemagic workflow from branch `ios`. Test build 168 in Sandbox/TestFlight before submitting it for review.
 
-## Products to add to version 1.6.6
+## Products to add to version 1.6.7
 
 | Plan | Product ID | Apple ID | Duration | US target |
 | --- | --- | ---: | --- | ---: |
