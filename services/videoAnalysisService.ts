@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { requestEdge } from './edgeRequest';
 import { parseVideoVisualResult, VideoVisualResult } from './videoVisualResult';
 
 export const VIDEO_MAX_BYTES = 8 * 1024 * 1024;
@@ -10,9 +10,19 @@ export async function videoDuration(file: File): Promise<number> {
   try {
     return await new Promise<number>((resolve, reject) => {
       const media = document.createElement('video');
+      const finish = (error?: Error) => {
+        clearTimeout(timer);
+        media.onloadedmetadata = null;
+        media.onerror = null;
+        const duration = media.duration;
+        media.removeAttribute('src');
+        media.load();
+        if (error) reject(error); else resolve(duration);
+      };
+      const timer = setTimeout(() => finish(new Error('This video took too long to open. Please choose it again.')), 10000);
       media.preload = 'metadata';
-      media.onloadedmetadata = () => resolve(media.duration);
-      media.onerror = () => reject(new Error('This video could not be read. Choose an MP4 or MOV video.'));
+      media.onloadedmetadata = () => finish();
+      media.onerror = () => finish(new Error('This video could not be read. Choose an MP4 or MOV video.'));
       media.src = url;
     });
   } finally {
@@ -62,10 +72,9 @@ export async function edgeError(error: any): Promise<Error> {
 }
 
 export async function checkVideoAccess(): Promise<boolean> {
-  const { data, error } = await supabase.functions.invoke('gemini-v3', {
-    body: { mode: 'premium_access' }, timeout: 12000,
-  });
-  if (error) {
+  let data;
+  try { data = await requestEdge({ mode: 'premium_access' }, 20000); }
+  catch (error) {
     const cause = await edgeError(error);
     if (cause instanceof VideoAccessError && cause.code === 'premium_required') return false;
     throw cause;
@@ -83,11 +92,12 @@ export async function analyzePlantVideo(file: File, signal: AbortSignal, context
   const { mimeType } = await validateVideo(file);
   const fileData = await fileToBase64(file);
   if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
-  const { data, error } = await supabase.functions.invoke('gemini-v3', {
-    body: { mode: 'video_visual_analysis', mimeType, fileData, strain: context.strain, growMethod: context.growMethod },
-    signal,
-    timeout: 100000,
-  });
-  if (error) throw await edgeError(error);
+  let data;
+  try {
+    data = await requestEdge({ mode: 'video_visual_analysis', mimeType, fileData, strain: context.strain, growMethod: context.growMethod }, 110000, signal);
+  } catch (error) {
+    if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+    throw await edgeError(error);
+  }
   return parseVideoVisualResult(data?.result);
 }

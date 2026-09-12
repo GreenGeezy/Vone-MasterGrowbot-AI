@@ -1,7 +1,7 @@
 {
   "name": "mastergrowbot-ai",
   "private": true,
-  "version": "1.6.9",
+  "version": "1.6.10",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "validate:strains": "node scripts/validate-strains.mjs",
     "typecheck": "tsc --noEmit",
-    "test:reliability": "node --test scripts/auth-session.test.mjs scripts/profile-preferences.test.mjs",
+    "test:reliability": "node --test scripts/edge-request.test.mjs scripts/auth-session.test.mjs scripts/profile-preferences.test.mjs",
     "test:premium": "node --test scripts/premium-catalog.test.mjs scripts/video-visual-result.test.mjs scripts/premium-backend.test.mjs scripts/premium-recovery.test.mjs scripts/premium-access.test.mjs",
     "test:sharing": "node --test scripts/analysis-share.test.mjs"
   },

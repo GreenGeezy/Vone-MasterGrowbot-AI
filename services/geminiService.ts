@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { requestEdge } from './edgeRequest';
 import { DiagnosisResult, UserProfile } from '../types';
 import { CONFIG } from './config';
 
@@ -34,7 +35,8 @@ export async function diagnosePlant(
   }
 ): Promise<ExtendedDiagnosisResult> {
 
-  const cleanImage = cleanBase64(base64Image);
+  // Preserve the data URL: PNG/WebP bytes must not be declared as JPEG.
+  const cleanImage = base64Image;
   const experienceLevel = context.userProfile?.experience || 'Novice';
   const method = context.growMethod || 'Indoor';
   const strain = context.strain || 'Unknown';
@@ -101,57 +103,12 @@ export async function diagnosePlant(
     }
   `;
 
-  // Retry Logic for Cold Starts (Edge Function Wake-up)
-  const MAX_RETRIES = 5;
-  let attempt = 0;
-  let delay = 2000;
-  let data, error;
-
-  while (attempt < MAX_RETRIES) {
-    attempt++;
-    // --- STRICT USER REQUIREMENT: GEMINI 3 V3 FUNCTION ---
-    // --- STRICT USER REQUIREMENT: GEMINI 3 V3 FUNCTION ---
-    // Custom 60s Timeout for "Thinking" Models
-    const invokePromise = supabase.functions.invoke('gemini-v3', {
-      body: {
-        model: CONFIG.MODELS.DIAGNOSIS,
-        mode: 'diagnosis',
-        image: cleanImage,
-        prompt: systemContext + prompt
-      }
-    });
-
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Request Timed Out (60s)")), 60000)
-    );
-
-    try {
-      const response = await Promise.race([invokePromise, timeoutPromise]) as any;
-      data = response.data;
-      error = response.error;
-    } catch (e: any) {
-      error = e;
-    }
-
-    if (!error) break; // Success!
-
-
-
-    console.warn(`[Gemini Diagnosis] Attempt ${attempt} failed:`, error);
-    // If 404/500 from V3, it implies model issue or crash.
-    // But we retry just in case of network blip.
-
-    if (attempt === MAX_RETRIES) break; // Give up after max retries
-
-    await new Promise(resolve => setTimeout(resolve, delay));
-    delay *= 2;
-  }
-
-  if (error) {
-    const errorDetails = error.message || error.details || JSON.stringify(error);
-    console.error("Gemini Connection Error:", errorDetails);
-    throw new Error(`AI Doctor Connection Failed: ${errorDetails}`);
-  }
+  const data = await requestEdge({
+    model: CONFIG.MODELS.DIAGNOSIS,
+    mode: 'diagnosis',
+    image: cleanImage,
+    prompt: systemContext + prompt,
+  }, 110000);
 
   try {
     const rawText = data.result || "";

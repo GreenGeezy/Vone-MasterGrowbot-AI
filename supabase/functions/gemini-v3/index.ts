@@ -125,9 +125,9 @@ async function finalizeUsage(admin: ReturnType<typeof serverClient>, userId: str
   if (error) console.error("Usage finalization failed", { reserved });
 }
 
-async function callOpenRouter(apiKey: string, model: string, messages: ChatMessage[], maxTokens: number, video: boolean) {
+async function callOpenRouter(apiKey: string, model: string, messages: ChatMessage[], maxTokens: number, video: boolean, timeoutMs: number) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), video ? 90000 : 65000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(OPENROUTER_URL, {
       method: "POST", signal: controller.signal,
@@ -159,16 +159,22 @@ async function generate(body: Record<string, unknown>, admin: ReturnType<typeof 
   // could truncate valid JSON before the closing brace on detailed responses.
   const maxTokens = mode === "diagnosis" ? 1400 : video ? 2000 : 900;
   let lastError: unknown;
+  const deadline = Date.now() + 85000;
   for (const [index, model] of models.entries()) {
+    if (Date.now() >= deadline) break;
     const reserved = index === 0 ? primaryReservation : (await reserveUsage(admin, userId, mode, model, false)).amount;
+    let usagePayload: OpenRouterResponse | undefined;
     try {
-      const generated = await callOpenRouter(apiKey, model, messages, maxTokens, video);
-      await finalizeUsage(admin, userId, reserved, generated.payload);
+      const generated = await callOpenRouter(apiKey, model, messages, maxTokens, video, Math.max(1, Math.min(45000, deadline - Date.now())));
+      usagePayload = generated.payload;
       return { result: video ? parseVideoResult(generated.text) : generated.text, model };
     } catch (error) {
       lastError = error;
-      await finalizeUsage(admin, userId, reserved, (error as { usagePayload?: OpenRouterResponse })?.usagePayload);
+      usagePayload ??= (error as { usagePayload?: OpenRouterResponse })?.usagePayload;
       if ([400, 401, 402, 403, 422].includes(statusOf(error))) break;
+    } finally {
+      // A malformed response still incurred usage; settle exactly once even if parsing fails.
+      await finalizeUsage(admin, userId, reserved, usagePayload);
     }
   }
   throw lastError || new FunctionError("All model attempts failed", 502, "provider_error");
@@ -189,13 +195,10 @@ Deno.serve(async (req) => {
     }
     if (!["diagnosis", "insight", "chat", "voice", "video_visual_analysis"].includes(mode)) throw new FunctionError(`Invalid mode '${mode}' for gemini-v3`, 400, "invalid_mode");
     if (mode === "video_visual_analysis") await verifyMachineVision(user.id);
+    validateRequestBody(body);
     const admin = serverClient();
     const primaryModel = modelListForMode(mode)[0];
     const reservation = await reserveUsage(admin, user.id, mode, primaryModel, true);
-    try { validateRequestBody(body); } catch (error) {
-      await finalizeUsage(admin, user.id, reservation.amount);
-      throw error;
-    }
     const normalizedBody = { ...body, mode: mode === "voice" ? "chat" : mode };
     const generated = await generate(normalizedBody, admin, user.id, reservation.amount);
     return jsonResponse({ result: generated.result }, 200, { "X-MasterGrowbot-Model": generated.model });

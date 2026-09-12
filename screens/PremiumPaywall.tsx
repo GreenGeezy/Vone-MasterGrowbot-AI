@@ -41,6 +41,7 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [verificationFailed, setVerificationFailed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const operation = useRef(false);
   const mounted = useRef(true);
@@ -58,8 +59,12 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
   }, initial);
 
   const confirmAccess = async (info: any): Promise<boolean> => {
+    setVerificationFailed(false);
     if (!hasPremiumAccess(info)) return false;
-    if (!await checkVideoAccess()) {
+    let allowed;
+    try { allowed = await checkVideoAccess(); }
+    catch (cause) { setVerificationFailed(true); throw cause; }
+    if (!allowed) {
       setPending(false);
       setNotice('Premium is not linked to your current app session. Use Restore Purchases to verify your store account, or choose a plan if you do not have Premium.');
       return false;
@@ -104,7 +109,7 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
       if (!requireRestore && hasPremiumAccess(customerInfo)) {
         operation.current = true; setBusy(true);
         try { await confirmAccess(customerInfo); }
-        catch { setNotice('Could not verify Premium access. Check your connection and use Check status or Restore Purchases.'); setPending(true); }
+        catch (cause: any) { setNotice(cause?.message || 'Could not verify Premium access. Please retry verification.'); }
         finally { operation.current = false; setBusy(false); }
       }
     } catch (cause: any) {
@@ -146,7 +151,7 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
   const selectedPackage = packages.find(pkg => pkg.identifier === selected);
 
   const purchase = async () => {
-    if (operation.current || pending) return;
+    if (operation.current || pending || verificationFailed) return;
     const pkg = packages.find(item => item.identifier === selected);
     if (!pkg) return;
     if (!Capacitor.isNativePlatform()) { setNotice('Purchases are available in the iOS app through Apple.'); return; }
@@ -263,7 +268,7 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
         {loading ? <div className="py-12 text-center text-sm text-slate-300">Loading localized App Store prices…</div> : (
           <div className="space-y-3" data-testid="premium-plans">
             {packages.map(pkg => (
-              <button key={pkg.identifier} disabled={busy || pending} aria-pressed={selected === pkg.identifier} onClick={() => setSelected(pkg.identifier)} className={`w-full text-left rounded-2xl p-4 border transition ${selected === pkg.identifier ? 'bg-emerald-400/15 border-emerald-400' : 'bg-white/[0.04] border-white/10'}`}>
+              <button key={pkg.identifier} disabled={busy} aria-pressed={selected === pkg.identifier} onClick={() => setSelected(pkg.identifier)} className={`w-full text-left rounded-2xl p-4 border transition ${selected === pkg.identifier ? 'bg-emerald-400/15 border-emerald-400' : 'bg-white/[0.04] border-white/10'}`}>
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2"><span className="font-black">{labelFor(pkg)}</span>{pkg.identifier === 'annual' && savings && <span className="rounded-full bg-emerald-400 text-slate-950 px-2 py-0.5 text-[10px] font-black">SAVE {savings}% VS MONTHLY</span>}</div>
@@ -291,8 +296,8 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
 
       <div className="border-t border-white/10 bg-slate-950/95 px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
         {!pending && selectedPackage && <p className="mb-2 text-center text-sm font-semibold text-slate-200">{selectedPackage.product.priceString} total per {periodFor(selectedPackage)} • Pro included</p>}
-        <button onClick={pending ? checkStatus : purchase} disabled={busy || loading || (!pending && !selected)} className="w-full rounded-2xl bg-emerald-400 text-slate-950 py-4 font-black disabled:opacity-50 flex justify-center items-center gap-2">
-          {busy ? 'Waiting for Apple…' : pending ? 'Check status' : <><Film size={19} /> Unlock video analysis</>}
+        <button onClick={pending || verificationFailed ? checkStatus : purchase} disabled={busy || loading || (!pending && !verificationFailed && !selected)} className="w-full rounded-2xl bg-emerald-400 text-slate-950 py-4 font-black disabled:opacity-50 flex justify-center items-center gap-2">
+          {busy ? 'Checking subscription…' : verificationFailed ? 'Retry verification' : pending ? 'Check status' : <><Film size={19} /> Unlock video analysis</>}
         </button>
         <p className="text-[10px] text-slate-400 text-center mt-2 leading-relaxed">Apple confirms your price and when the plan starts before purchase. Premium unlocks once your subscription is active. Auto-renews until canceled.</p>
         <div className="flex flex-wrap justify-center gap-x-3 mt-2 text-xs text-slate-300 font-bold">

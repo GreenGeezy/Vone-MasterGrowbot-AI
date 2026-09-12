@@ -38,7 +38,7 @@ test('client preserves structured access rejection and distinguishes service fai
   const source = await readFile(new URL('../services/videoAnalysisService.ts', import.meta.url), 'utf8');
   const exports = {}; let code = 'premium_required';
   new Function('require', 'exports', ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(
-    name => name.includes('supabase') ? { supabase: { functions: { invoke: async () => ({ error: { context: new Response(JSON.stringify({ error: 'Denied', code }), { status: 403 }) } }) } } } : {}, exports);
+    name => name.includes('edgeRequest') ? { requestEdge: async () => { throw { context: new Response(JSON.stringify({ error: 'Denied', code }), { status: 403 }) }; } } : {}, exports);
   assert.equal(await exports.checkVideoAccess(), false);
   code = 'premium_verification_unavailable';
   await assert.rejects(exports.checkVideoAccess(), error => error.code === code);

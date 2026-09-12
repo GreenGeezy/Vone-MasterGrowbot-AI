@@ -83,13 +83,13 @@ test('validates MP4 duration, MIME and malformed media before inference', () => 
   assert.throws(() => core.toVideoDataUrl('bm90LXZpZGVv', 'video/mp4'), /does not match/);
 });
 
-test('authorization and budget checks precede validation and OpenRouter', () => {
+test('authorization and validation precede quota reservation and OpenRouter', () => {
   const auth = indexSource.indexOf('authenticatedUser(req)');
   const entitlement = indexSource.indexOf('verifyMachineVision(user.id)');
   const reserve = indexSource.indexOf('reserveUsage(admin, user.id');
   const validate = indexSource.indexOf('validateRequestBody(body)');
   const generate = indexSource.indexOf('generate(normalizedBody');
-  assert.ok(auth >= 0 && auth < entitlement && entitlement < reserve && reserve < validate && validate < generate);
+  assert.ok(auth >= 0 && auth < entitlement && entitlement < validate && validate < reserve && reserve < generate);
   assert.doesNotMatch(indexSource, /body\.(revenueCatCustomerId|appUserId|isPremium|machineVision)/);
   assert.match(indexSource, /active_entitlements/);
   assert.match(indexSource, /REVENUECAT_SECRET_API_KEY/);

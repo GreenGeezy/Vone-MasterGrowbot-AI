@@ -127,7 +127,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   const [customStrainType, setCustomStrainType] = useState<'Indica' | 'Sativa' | 'Hybrid'>('Hybrid');
 
   const [loadingText, setLoadingText] = useState(LOADING_PHRASES[0]);
-  const [timeLeft, setTimeLeft] = useState(15);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // Loading Animation Loop
   useEffect(() => {
@@ -141,8 +141,8 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
         setLoadingText(LOADING_PHRASES[phraseIndex]);
       }, 4000);
 
-      setTimeLeft(15);
-      interval = setInterval(() => setTimeLeft(prev => prev > 0 ? prev - 1 : 0), 1000);
+      setElapsedSeconds(0);
+      interval = setInterval(() => setElapsedSeconds(prev => prev + 1), 1000);
 
       return () => {
         clearInterval(phraseInterval);
@@ -341,7 +341,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
         <Growbot size="lg" mood="thinking" className="mb-4 mx-auto" />
         <h2 className="text-2xl font-black uppercase tracking-widest text-green-400 mb-2">Analyzing Photo</h2>
         <p className="text-white/80 text-xs font-bold uppercase tracking-wider mb-6 min-h-[3rem] flex items-center justify-center">{loadingText}</p>
-        <div className="text-4xl font-mono text-white font-black">{timeLeft}s</div>
+        <div className="text-4xl font-mono text-white font-black">{elapsedSeconds}s elapsed</div>
       </div>
     </div>
   );

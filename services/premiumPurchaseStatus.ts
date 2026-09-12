@@ -15,6 +15,8 @@ export function isPurchaseCancelled(error: any): boolean {
 
 export function purchaseErrorMessage(error: any): string {
   switch (String(error?.code)) {
+    case 'invalid_session': case 'authentication_required': return 'Your app session could not be verified. Reopen the app, then retry verification. Your Apple subscription has not been changed.';
+    case 'premium_verification_unavailable': return 'Premium verification is temporarily unavailable. Retry verification shortly; you do not need to purchase again.';
     case '20': return 'Apple is waiting for payment approval. Premium will activate after approval. Check status later; do not purchase again.';
     case '10': case '35': return 'The subscription service could not be reached. Check your connection, then check status before trying another purchase.';
     case '5': case '11': case '17': case '23': return 'This plan is temporarily unavailable from the App Store. Please contact support if it continues.';
