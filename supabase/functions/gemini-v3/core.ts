@@ -11,6 +11,10 @@ export class RequestValidationError extends Error {
   status = 400;
 }
 
+export class ProviderResponseError extends Error {
+  status = 502;
+}
+
 export type ChatMessage = {
   role: "system" | "user" | "assistant";
   content:
@@ -27,12 +31,15 @@ const SYSTEM_MESSAGE =
 
 const VIDEO_SYSTEM_MESSAGE = `You create a cannabis-focused video plant health report for lawful adult cultivators.
 Describe visible evidence across leaves, stems, flowers when present, canopy, containers, and the wider grow space.
-Distinguish visible observations from possible interpretations. Use phrases such as "appears consistent with",
-"may indicate", and "cannot confirm from this video alone". If the video is indirect, blurry, color-cast, or
-incomplete, reduce confidence and make the limitation prominent instead of presenting a precise-looking conclusion.
-Provide practical observation-led care and quality checks that can be saved as journal tasks: closer inspection,
-comparison with recent watering/environment/feeding records, sanitation checks, removal or isolation for confirmed
-damaged material only when appropriate, and collecting missing visual or sensor evidence. Include grow-wide checks
+Distinguish visible observations from possible interpretations. Always give the best-supported working interpretation,
+even when confidence is limited, and connect each interpretation to the evidence that supports it. Rank likely causes
+instead of stopping at "needs a closer look", "could not determine", or similarly unhelpful conclusions. Use phrases
+such as "appears consistent with" and "may indicate" so an educated visual estimate is never presented as certainty.
+If the video is indirect, blurry, color-cast, or incomplete, lower confidence, explain the limitation, and still provide
+the most useful evidence-based assessment possible. Provide practical care and crop-quality checks that can be saved
+as journal tasks: targeted leaf and stem inspection, comparison with recent watering/environment/feeding records,
+sanitation and airflow checks, and collecting missing visual or sensor evidence. Tailor recommendations to the selected
+grow setting and cultivar when supplied, but do not invent cultivar traits or measurements. Include grow-wide checks
 for canopy consistency, spacing, visible airflow obstructions, cleanliness, and patterns affecting multiple plants.
 Never invent measurements. Do not provide potency advice, harvest timing, exact feeding recipes or targets,
 controlled-substance yield optimization, medical claims, guaranteed diagnosis, sales, delivery, purchase,
@@ -55,7 +62,7 @@ export const VIDEO_RESPONSE_FORMAT = {
         severity: { type: "string", enum: ["low", "medium", "high", "uncertain"] },
         confidence: { type: "number", minimum: 0, maximum: 100 },
         healthScore: { type: "number", minimum: 0, maximum: 100 },
-        healthLabel: { type: "string", enum: ["Needs a closer look", "Visible concerns", "Mixed visual condition", "No obvious concern visible"] },
+        healthLabel: { type: "string", enum: ["Likely healthy visual pattern", "Possible early stress pattern", "Likely visible stress", "Mixed visual condition"] },
         environmentSummary: { type: "string" },
         areasToInspect: { type: "array", maxItems: 8, items: { type: "string" } },
         priorityAction: { type: "string" },
@@ -258,17 +265,63 @@ export async function runModelFallback(
 
 export function parseVideoResult(value: string) {
   let parsed: unknown;
-  try { parsed = JSON.parse(value); } catch { throw new RequestValidationError("The video model returned malformed JSON"); }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new RequestValidationError("The video model returned an invalid result");
+  try { parsed = JSON.parse(extractJsonObject(value)); } catch { throw new ProviderResponseError("The video analysis response was incomplete. Please try again."); }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new ProviderResponseError("The video analysis response was incomplete. Please try again.");
   const result = parsed as Record<string, unknown>;
   const requiredStrings = ["visualSummary", "growthStage", "healthLabel", "environmentSummary", "priorityAction", "growOverview", "recommendedVerification", "mediaQuality"];
   const requiredLists = ["visibleSigns", "possibleInterpretations", "areasToInspect", "careRecommendations", "growWideChecks"];
-  if (requiredStrings.some((key) => typeof result[key] !== "string" || !(result[key] as string).trim())) throw new RequestValidationError("The video model omitted a required observation");
-  if (requiredLists.some((key) => !Array.isArray(result[key]) || (result[key] as unknown[]).length > 8 || (result[key] as unknown[]).some((item) => typeof item !== "string"))) throw new RequestValidationError("The video model returned invalid observation lists");
-  if ((result.careRecommendations as unknown[]).length < 2 || (result.growWideChecks as unknown[]).length < 1) throw new RequestValidationError("The video model omitted required follow-up checks");
-  if (!["low", "medium", "high", "uncertain"].includes(String(result.severity))) throw new RequestValidationError("The video model returned an invalid severity");
+  if (requiredStrings.some((key) => typeof result[key] !== "string" || !(result[key] as string).trim())) throw new ProviderResponseError("The video analysis response omitted a required observation. Please try again.");
+  if (requiredLists.some((key) => !Array.isArray(result[key]) || (result[key] as unknown[]).length > 8 || (result[key] as unknown[]).some((item) => typeof item !== "string" || !item.trim()))) throw new ProviderResponseError("The video analysis response contained invalid observation lists. Please try again.");
+  if ((result.careRecommendations as unknown[]).length < 2 || (result.growWideChecks as unknown[]).length < 1) throw new ProviderResponseError("The video analysis response omitted required follow-up checks. Please try again.");
+  if (!["low", "medium", "high", "uncertain"].includes(String(result.severity))) throw new ProviderResponseError("The video analysis response contained an invalid severity. Please try again.");
+  if (!["Likely healthy visual pattern", "Possible early stress pattern", "Likely visible stress", "Mixed visual condition"].includes(String(result.healthLabel))) throw new ProviderResponseError("The video analysis response contained an invalid health label. Please try again.");
   for (const key of ["confidence", "healthScore"]) {
-    if (typeof result[key] !== "number" || !Number.isFinite(result[key]) || (result[key] as number) < 0 || (result[key] as number) > 100) throw new RequestValidationError(`The video model returned an invalid ${key}`);
+    if (typeof result[key] !== "number" || !Number.isFinite(result[key]) || (result[key] as number) < 0 || (result[key] as number) > 100) throw new ProviderResponseError(`The video analysis response contained an invalid ${key}. Please try again.`);
   }
   return result;
+}
+
+/** Accept a JSON object returned directly, inside a Markdown fence, or after brief provider prose. */
+export function extractJsonObject(value: string) {
+  const source = value.trim();
+  if (!source) throw new RequestValidationError("The video analysis response was incomplete. Please try again.");
+  let decodedDirectly = false;
+  let direct: unknown;
+  try {
+    direct = JSON.parse(source);
+    decodedDirectly = true;
+  } catch { /* Continue with bounded object extraction. */ }
+  if (decodedDirectly) {
+    if (direct && typeof direct === "object" && !Array.isArray(direct)) return source;
+    throw new ProviderResponseError("The video analysis response was incomplete. Please try again.");
+  }
+
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') { inString = true; continue; }
+    if (character === "{") {
+      if (depth === 0) start = index;
+      depth += 1;
+    } else if (character === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        const candidate = source.slice(start, index + 1);
+        try {
+          const decoded = JSON.parse(candidate);
+          if (decoded && typeof decoded === "object" && !Array.isArray(decoded)) return candidate;
+        } catch { /* Ignore prose braces and continue searching. */ }
+      }
+    }
+  }
+  throw new ProviderResponseError("The video analysis response was incomplete. Please try again.");
 }

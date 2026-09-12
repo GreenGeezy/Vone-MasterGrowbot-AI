@@ -9,6 +9,8 @@ const migrationSource = await readFile(new URL('../supabase/migrations/202609081
 const identitySource = await readFile(new URL('../services/revenueCatIdentity.ts', import.meta.url), 'utf8');
 const supabaseSource = await readFile(new URL('../services/supabaseClient.ts', import.meta.url), 'utf8');
 const authSessionSource = await readFile(new URL('../services/authSession.ts', import.meta.url), 'utf8');
+const diagnoseSource = await readFile(new URL('../screens/Diagnose.tsx', import.meta.url), 'utf8');
+const videoContextSource = await readFile(new URL('../components/VideoAnalysisContext.tsx', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(coreSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const core = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 
@@ -40,6 +42,38 @@ test('video schema adds cannabis health follow-ups and grow-wide context without
   const prompt = messages.at(-1).content[0].text;
   assert.match(prompt, /Blue Dream ignore this/);
   assert.match(prompt, /Indoor/);
+  assert.match(coreSource, /best-supported working interpretation/);
+  assert.doesNotMatch(core.VIDEO_RESPONSE_FORMAT.json_schema.schema.properties.healthLabel.enum.join(' '), /Needs a closer look|could not determine/i);
+  assert.match(indexSource, /video \? 2000/);
+});
+
+test('video JSON parser accepts provider wrappers but rejects truncation', () => {
+  const report = {
+    visualSummary: 'Likely mild lower-leaf stress.', growthStage: 'Likely vegetative', visibleSigns: ['Lower-leaf yellowing'],
+    possibleInterpretations: ['Pattern appears consistent with mobile-nutrient stress.'], severity: 'medium', confidence: 72,
+    healthScore: 68, healthLabel: 'Possible early stress pattern', environmentSummary: 'Indoor canopy under artificial light.',
+    areasToInspect: ['Lower canopy'], priorityAction: 'Compare lower leaves with recent records.',
+    careRecommendations: ['Inspect leaf progression.', 'Review recent watering records.'], growOverview: 'Most visible foliage remains upright.',
+    growWideChecks: ['Compare the symptom across neighboring plants.'], recommendedVerification: 'Capture lower leaves in neutral light.',
+    mediaQuality: 'Adequate detail with mild color cast.',
+  };
+  assert.deepEqual(core.parseVideoResult(`\`\`\`json\n${JSON.stringify(report)}\n\`\`\``), report);
+  const withBrace = { ...report, visualSummary: 'A {small} spot is visible.' };
+  assert.deepEqual(core.parseVideoResult(`Report follows: ${JSON.stringify(withBrace)}`), withBrace);
+  assert.throws(() => core.parseVideoResult(JSON.stringify(report).slice(0, -8)), /incomplete/);
+  assert.throws(() => core.parseVideoResult(JSON.stringify([report])), /incomplete/);
+  assert.equal(new core.ProviderResponseError('invalid').status, 502);
+});
+
+test('video workflow collects grow setting, library strain and custom strain context', () => {
+  assert.match(diagnoseSource, /<VideoAnalysisContext/);
+  assert.match(videoContextSource, /data-testid="video-grow-method"/);
+  assert.match(videoContextSource, /\['Indoor', 'Outdoor', 'Greenhouse'\]/);
+  assert.match(videoContextSource, /data-testid="video-strain-select"/);
+  assert.match(videoContextSource, /STRAIN_DATABASE\.map/);
+  assert.match(videoContextSource, /Add a custom strain/);
+  assert.match(diagnoseSource, /strain: strain === 'Leave Blank' \|\| strain === 'Generic'/);
+  assert.match(diagnoseSource, /growMethod,/);
 });
 
 test('validates MP4 duration, MIME and malformed media before inference', () => {

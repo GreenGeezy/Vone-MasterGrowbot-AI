@@ -8,7 +8,7 @@ const { parseVideoVisualResult: parse, formatVideoHealthReport: format } = await
 const result = {
   visualSummary: 'Several lower leaves appear yellow.', severity: 'uncertain', confidence: 45, healthScore: 58,
   growthStage: 'Vegetative stage appears likely; verify from plant records.',
-  healthLabel: 'Mixed visual condition',
+  healthLabel: 'Possible early stress pattern',
   visibleSigns: ['Yellowing at lower leaf edges.'], possibleInterpretations: ['Color cast may contribute.'],
   areasToInspect: ['Lower leaves'], environmentSummary: 'Purple lighting limits color assessment.',
   priorityAction: 'Inspect lower leaves in neutral light and compare the pattern with recent records.',
@@ -17,9 +17,12 @@ const result = {
   growWideChecks: ['Compare lower-leaf color across all plants in the space.'],
   mediaQuality: 'The camera moves quickly.', recommendedVerification: 'Capture a stable close-up in neutral light.',
 };
-test('accepts structured observations and plain JSON', () => {
+test('accepts structured observations, plain JSON and provider-wrapped JSON', () => {
   assert.deepEqual(parse(result), result);
   assert.deepEqual(parse(JSON.stringify(result)), result);
+  assert.deepEqual(parse(`\`\`\`json\n${JSON.stringify(result)}\n\`\`\``), result);
+  const withBrace = { ...result, visualSummary: 'A {small} marked area is visible.' };
+  assert.deepEqual(parse(`Here is the report:\n${JSON.stringify(withBrace)}`), withBrace);
 });
 test('excludes unrelated cultivation fields from projected results', () => {
   assert.deepEqual(parse({ ...result, harvestWindow: 'unexpected', nutrientTargets: { ec: 2 }, arbitrary: true }), result);
@@ -29,8 +32,8 @@ test('rejects missing required observations', () => {
     const broken = { ...result }; delete broken[key]; assert.throws(() => parse(broken));
   }
 });
-test('rejects malformed JSON, primitives and oversized responses', () => {
-  for (const value of [null, [], false, 3, '{}', '{broken', 'x'.repeat(16001), '```json\n{}\n```']) assert.throws(() => parse(value));
+test('rejects malformed or truncated JSON, primitives and oversized responses', () => {
+  for (const value of [null, [], false, 3, '{}', JSON.stringify([result]), '{broken', JSON.stringify(result).slice(0, -8), 'x'.repeat(16001)]) assert.throws(() => parse(value));
 });
 test('rejects invalid confidence instead of displaying false precision', () => {
   for (const confidence of [-1, 101, NaN, Infinity, '90', null]) assert.throws(() => parse({ ...result, confidence }));

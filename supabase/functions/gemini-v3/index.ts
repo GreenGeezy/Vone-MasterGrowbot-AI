@@ -155,7 +155,9 @@ async function generate(body: Record<string, unknown>, admin: ReturnType<typeof 
   const emergencyModel = configuredEmergency === "openrouter/free" ? configuredEmergency : "openrouter/free";
   const models = modelListForMode(mode, emergencyModel);
   const messages = buildMessages(body);
-  const maxTokens = mode === "diagnosis" ? 1400 : video ? 1100 : 900;
+  // The structured video report contains several evidence and action sections. 1,100 tokens
+  // could truncate valid JSON before the closing brace on detailed responses.
+  const maxTokens = mode === "diagnosis" ? 1400 : video ? 2000 : 900;
   let lastError: unknown;
   for (const [index, model] of models.entries()) {
     const reserved = index === 0 ? primaryReservation : (await reserveUsage(admin, userId, mode, model, false)).amount;

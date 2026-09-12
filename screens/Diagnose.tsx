@@ -16,6 +16,7 @@ import { formatMetricDisplay, formatDiagnosisReport } from '../utils/diagnosisFo
 import { analyzePlantVideo, validateVideo, VideoAccessError } from '../services/videoAnalysisService';
 import { formatVideoHealthReport, VideoVisualResult } from '../services/videoVisualResult';
 import PremiumPaywall from './PremiumPaywall';
+import VideoAnalysisContext from '../components/VideoAnalysisContext';
 
 /**
  * Health Score Mapping help
@@ -209,10 +210,23 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     }
   };
 
-  const closeVideoFlow = () => {
+  const resetVideoSelection = () => {
+    ++videoSelection.current;
     videoAbortRef.current?.abort();
-    setShowVideoFlow(false);
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
+    setVideoResult(null);
+    setVideoFile(null);
+    setVideoUrl(null);
+    setVideoThumbnail(null);
+    setVideoDurationSeconds(null);
+    setVideoError(null);
+    setPreparingVideo(false);
     setVideoLoading(false);
+  };
+
+  const closeVideoFlow = () => {
+    resetVideoSelection();
+    setShowVideoFlow(false);
   };
 
   const saveVideoObservation = () => {
@@ -576,6 +590,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
             <button onClick={closeVideoFlow} aria-label="Close video analysis" className="rounded-full bg-slate-500/10 p-3"><X size={20} /></button>
           </div>
           <div className="flex-1 overflow-y-auto p-5 pb-10">
+            {!videoResult && <VideoAnalysisContext strain={strain} onStrainChange={setStrain} growMethod={growMethod} onGrowMethodChange={setGrowMethod} />}
             {!videoFile && !videoResult && !preparingVideo && (
               <div className="max-w-md mx-auto">
                 <div className="rounded-[2rem] border border-emerald-400/20 bg-emerald-400/10 p-5 mb-5"><Eye className="text-emerald-300 mb-3" /><p className="text-sm text-slate-200 leading-relaxed">Move slowly around the plant. Keep the leaves in focus and include affected areas from more than one angle.</p><p className="text-xs text-slate-400 mt-2">Maximum 20 seconds and 8 MB. Analysis uses visual evidence only; avoid recording private conversations.</p></div>
@@ -595,7 +610,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
                 {videoLoading ? (
                   <div className="mt-6 rounded-2xl bg-white/[0.06] border border-white/10 p-5 text-center"><div className="h-10 w-10 mx-auto border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" /><h3 className="font-black mt-4">Reviewing visible plant evidence…</h3><p className="text-xs text-slate-400 mt-2">This can take up to 90 seconds.</p><button onClick={() => videoAbortRef.current?.abort()} className="mt-4 text-sm font-bold text-slate-300">Cancel</button></div>
                 ) : (
-                  <div className="grid grid-cols-3 gap-3 mt-6"><button onClick={() => { setVideoFile(null); setVideoUrl(null); }} className="rounded-xl bg-white/10 py-3 text-xs font-bold">Choose Again</button><button onClick={() => recordVideoRef.current?.click()} className="rounded-xl bg-white/10 py-3 text-xs font-bold">Record Again</button><button onClick={runVideoAnalysis} disabled={preparingVideo} className="rounded-xl bg-emerald-400 text-slate-950 py-3 text-xs font-black">Analyze</button></div>
+                  <div className="grid grid-cols-3 gap-3 mt-6"><button onClick={resetVideoSelection} className="rounded-xl bg-white/10 py-3 text-xs font-bold">Choose Again</button><button onClick={() => recordVideoRef.current?.click()} className="rounded-xl bg-white/10 py-3 text-xs font-bold">Record Again</button><button onClick={runVideoAnalysis} disabled={preparingVideo || !strain.trim()} className="rounded-xl bg-emerald-400 text-slate-950 py-3 text-xs font-black disabled:opacity-40">Analyze</button></div>
                 )}
               </div>
             )}
@@ -606,8 +621,8 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
                 onAddTask(task, new Date().toISOString().split('T')[0], 'ai_diagnosis');
                 alert('Added to today\'s grow plan.');
               } : undefined}
-              onNew={() => { ++videoSelection.current; setVideoResult(null); setVideoFile(null); setVideoUrl(null); setVideoThumbnail(null); }} />}
-            {videoError && <div role="alert" className="max-w-md mx-auto mt-5 rounded-2xl bg-red-500/15 border border-red-400/30 p-4 text-sm text-red-100"><p>{videoError}</p><div className="flex gap-3 mt-3"><button onClick={runVideoAnalysis} disabled={!videoFile || videoLoading} className="font-black text-white disabled:opacity-40">Retry</button><button onClick={() => { setVideoError(null); setVideoFile(null); setVideoUrl(null); }} className="font-bold text-slate-300">Choose another</button></div></div>}
+              onNew={resetVideoSelection} />}
+            {videoError && <div role="alert" className="max-w-md mx-auto mt-5 rounded-2xl bg-red-500/15 border border-red-400/30 p-4 text-sm text-red-100"><p>{videoError}</p><div className="flex gap-3 mt-3"><button onClick={runVideoAnalysis} disabled={!videoFile || videoLoading} className="font-black text-white disabled:opacity-40">Retry</button><button onClick={resetVideoSelection} className="font-bold text-slate-300">Choose another</button></div></div>}
           </div>
         </div>
       )}
