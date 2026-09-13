@@ -4,12 +4,13 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// Show any crash visibly on screen instead of silent blank page
-window.addEventListener('error', (e) => {
-  document.body.innerHTML = `<div style="padding:20px;font-family:monospace;background:#fee;color:#900;white-space:pre-wrap;font-size:13px"><b>CRASH:</b> ${e.message}<br/><br/>${e.filename}:${e.lineno}<br/><br/>${e.error?.stack || ''}</div>`;
-});
-window.addEventListener('unhandledrejection', (e) => {
-  document.body.innerHTML = `<div style="padding:20px;font-family:monospace;background:#fee;color:#900;white-space:pre-wrap;font-size:13px"><b>UNHANDLED PROMISE REJECTION:</b><br/><br/>${e.reason?.stack || e.reason}</div>`;
+// Render errors are handled by ErrorBoundary. A rejected background operation
+// must never replace the React root or expose raw provider text as HTML.
+window.addEventListener('error', event => console.error('App error', event.error));
+window.addEventListener('unhandledrejection', event => {
+  event.preventDefault();
+  console.error('Background operation failed', event.reason);
+  window.dispatchEvent(new Event('app-operation-error'));
 });
 
 const rootElement = document.getElementById('root');

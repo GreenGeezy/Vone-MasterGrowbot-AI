@@ -1,3 +1,4 @@
+import { persistedTaskId, taskRequest } from './taskRequest';
 
 import { supabase, ensureProfileExists } from './supabaseClient';
 import { GrowTask, Plant, Strain } from '../types';
@@ -357,31 +358,12 @@ export const getPendingTasksForToday = async (): Promise<GrowTask[] | null> => {
   // yet resolved, bail out quietly rather than sending a request without a
   // user_id filter (which would 400 or leak rows under permissive RLS).
   const { data: { session } } = await supabase.auth.getSession();
-  const today = new Date().toISOString().split('T')[0];
-
   if (!session?.user?.id) return [];
-
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('*')
-    .eq('user_id', session.user.id)
-    .lte('due_date', today)
-    .eq('is_completed', false)
-    .order('due_date', { ascending: true });
-
-  if (error) return [];
-
-  return (data || []).map((t: any) => ({
-    id: t.id,
-    plantId: t.plant_id,
-    title: t.title,
-    isCompleted: t.is_completed,
-    completed: t.is_completed,
-    dueDate: t.due_date,
-    source: t.source,
-    createdAt: t.created_at,
-    type: t.type
-  }));
+  const { data, error } = await taskRequest(signal => supabase
+    .from('tasks').select('*').eq('user_id', session.user.id)
+    .order('due_date', { ascending: true }).abortSignal(signal));
+  if (error) throw error;
+  return (data || []).map(mapTaskRow);
 };
 
 export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCompleted' | 'createdAt'>): Promise<GrowTask | null> => {
@@ -423,61 +405,46 @@ export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCo
     return null;
   }
 
-  return {
-    id: data.id,
-    plantId: data.plant_id,
-    title: data.title,
-    isCompleted: data.is_completed,
-    completed: data.is_completed,
-    dueDate: data.due_date,
-    source: data.source,
-    createdAt: data.created_at,
-    type: data.type,
-    recurrence: data.recurrence,
-    notes: data.notes
-  };
+  return mapTaskRow(data);
 };
 
 export const toggleTaskCompletion = async (taskId: string, isCompleted: boolean): Promise<boolean> => {
-  // FIX (Step 3): Guard against optimistic local task IDs that never reached
-  // the server (e.g. offline, or before session resolved). Don't send bogus
-  // UUID-shaped requests that return 400.
-  if (!taskId || taskId.startsWith('local_') || /^\d+$/.test(taskId)) return true;
-
-  const { error } = await supabase
-    .from('tasks')
-    .update({ is_completed: Boolean(isCompleted) })
-    .eq('id', taskId);
-
-  if (error) console.error('toggleTaskCompletion error:', error);
-  return !error;
+  const id = persistedTaskId(taskId);
+  if (!id) return false;
+  const { data, error } = await taskRequest(signal => supabase.from('tasks')
+    .update({ is_completed: Boolean(isCompleted) }).eq('id', id).select('id').abortSignal(signal));
+  if (error) throw error;
+  return Boolean(data?.length);
 };
 
 export const updateTaskProperties = async (taskId: string, updates: any): Promise<boolean> => {
-  const { error } = await supabase.from('tasks').update(updates).eq('id', taskId);
-  if (error) {
-    console.error("Error updating task:", error);
-    return false;
-  }
-  return true;
+  const id = persistedTaskId(taskId);
+  if (!id) return false;
+  const payload: any = { title: updates.title, notes: updates.notes || null, recurrence: updates.recurrence === 'once' ? null : updates.recurrence || null };
+  if (updates.dueDate) payload.due_date = updates.dueDate;
+  const { data, error } = await taskRequest(signal => supabase.from('tasks').update(payload).eq('id', id).select('id').abortSignal(signal));
+  if (error) throw error;
+  return Boolean(data?.length);
 };
 
 export const deleteTask = async (taskId: string): Promise<boolean> => {
-  const { error } = await supabase.from('tasks').delete().eq('id', taskId);
-  if (error) {
-    console.error("Error deleting task:", error);
-    return false;
-  }
-  return true;
+  const id = persistedTaskId(taskId);
+  if (!id) return false;
+  const { data, error } = await taskRequest(signal => supabase.from('tasks').delete().eq('id', id).select('id').abortSignal(signal));
+  if (error) throw error;
+  return Boolean(data?.length);
 };
 
 export const deleteJournalEntry = async (entryId: string): Promise<boolean> => {
-  const { error } = await supabase.from('journal_logs').delete().eq('id', entryId);
-  if (error) {
-    console.error("Error deleting journal entry:", error);
-    return false;
+  const id = String(entryId);
+  if (id.startsWith('local_')) {
+    const entries = getLocal(STORAGE_KEYS.JOURNAL);
+    setLocal(STORAGE_KEYS.JOURNAL, entries.filter((entry: any) => String(entry.id) !== id));
+    return true;
   }
-  return true;
+  const { data, error } = await taskRequest(signal => supabase.from('journal_logs').delete().eq('id', id).select('id').abortSignal(signal));
+  if (error) throw error;
+  return Boolean(data?.length);
 };
 
 export const deletePlant = async (plantId: string): Promise<boolean> => {
@@ -490,9 +457,9 @@ export const deletePlant = async (plantId: string): Promise<boolean> => {
 
   try {
     const { error } = await supabase.from('plants').delete().eq('id', plantId);
-    if (error) console.warn("Supabase plant delete error:", error);
+    if (error) return false;
   } catch (e) {
-    console.warn("Plant deletion network error:", e);
+    console.warn("Plant deletion network error:", e); return false;
   }
   return true; // We always return true here to ensure UI clears it regardless of cloud sync status for this specific MVP architecture.
 };

@@ -1,41 +1,100 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { OnboardingStep, UserProfile, Plant, Task, AppScreen } from './types';
-import Splash from './screens/Splash';
-import Onboarding from './screens/Onboarding';
-import OnboardingSummary from './screens/OnboardingSummary';
-import Home from './screens/Home';
-import Diagnose from './screens/Diagnose';
-import StrainSearch from './screens/StrainSearch';
-import Journal from './screens/Journal';
-import Profile from './screens/Profile';
-import Paywall from './screens/Paywall';
-import PostPaymentAuth from './screens/PostPaymentAuth';
-import GetStartedTutorial from './screens/GetStartedTutorial';
-import BottomNav from './components/BottomNav';
-import { Capacitor } from '@capacitor/core';
-import { App as CapacitorApp } from '@capacitor/app';
-import { SplashScreen } from '@capacitor/splash-screen';
-import { getPendingTasksForToday, toggleTaskCompletion, addNewTask, updateTaskProperties, deleteTask, deleteJournalEntry, deletePlant, loadGrowData, createPlantRecord, saveAppJournalEntry, saveDiagnosisReport } from './services/dbService';
-import ErrorBoundary from './components/ErrorBoundary';
-import { wakeUpBackend } from './services/geminiService';
-import { initializeApp, initializeSubscriptions, withTimeout } from './services/appInitializer';
-import { cachedProfile, mergeProfilePreferences } from './services/profilePreferences';
+import React, { useState, useEffect, useRef } from "react";
+import { OnboardingStep, UserProfile, Plant, Task, AppScreen } from "./types";
+import Splash from "./screens/Splash";
+import Onboarding from "./screens/Onboarding";
+import OnboardingSummary from "./screens/OnboardingSummary";
+import Home from "./screens/Home";
+import Diagnose from "./screens/Diagnose";
+import StrainSearch from "./screens/StrainSearch";
+import Journal from "./screens/Journal";
+import Profile from "./screens/Profile";
+import Paywall from "./screens/Paywall";
+import PostPaymentAuth from "./screens/PostPaymentAuth";
+import GetStartedTutorial from "./screens/GetStartedTutorial";
+import BottomNav from "./components/BottomNav";
+import { Capacitor } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
+import { SplashScreen } from "@capacitor/splash-screen";
+import {
+  getPendingTasksForToday,
+  toggleTaskCompletion,
+  addNewTask,
+  updateTaskProperties,
+  deleteTask,
+  deleteJournalEntry,
+  deletePlant,
+  loadGrowData,
+  createPlantRecord,
+  saveAppJournalEntry,
+  saveDiagnosisReport,
+} from "./services/dbService";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { wakeUpBackend } from "./services/geminiService";
+import {
+  initializeApp,
+  initializeSubscriptions,
+  withTimeout,
+} from "./services/appInitializer";
+import {
+  cachedProfile,
+  mergeProfilePreferences,
+} from "./services/profilePreferences";
 
 // --- LocalStorage Keys for State Persistence ---
-const LS_ONBOARDING_STATUS = 'mg_onboarding_status';
-const LS_PROFILE = 'mastergrowbot_profile';
-const LS_LAST_VISIT = 'mastergrowbot_last_visit';
-const LS_STREAK = 'mastergrowbot_streak';
+const LS_ONBOARDING_STATUS = "mg_onboarding_status";
+const LS_PROFILE = "mastergrowbot_profile";
+const LS_LAST_VISIT = "mastergrowbot_last_visit";
+const LS_STREAK = "mastergrowbot_streak";
 
 const App: React.FC = () => {
+  const [journalPlantId, setJournalPlantId] = useState<string | undefined>();
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [busyActions, setBusyActions] = useState<string[]>([]);
+  const actionLocks = useRef(new Set<string>());
+  useEffect(() => {
+    const report = () =>
+      setActionError(
+        "An action could not finish. Your app is still available. Please retry the action."
+      );
+    window.addEventListener("app-operation-error", report);
+    return () => window.removeEventListener("app-operation-error", report);
+  }, []);
+  const runAction = async (
+    key: string,
+    action: () => Promise<void>
+  ): Promise<boolean> => {
+    if (actionLocks.current.has(key)) return false;
+    actionLocks.current.add(key);
+    setBusyActions([...actionLocks.current]);
+    setActionError(null);
+    try {
+      await action();
+      return true;
+    } catch (error) {
+      console.warn("Task/journal action failed", error);
+      setActionError(
+        "Could not save this change. Check your connection and try again."
+      );
+      return false;
+    } finally {
+      actionLocks.current.delete(key);
+      setBusyActions([...actionLocks.current]);
+    }
+  };
   // --- Global App Gate ---
   const [isAppReady, setIsAppReady] = useState(false);
   const [isReturningSubscriber, setIsReturningSubscriber] = useState(false);
-  const [hasVerifiedPaidAccess, setHasVerifiedPaidAccess] = useState(!Capacitor.isNativePlatform());
-  const [checkingSubscription, setCheckingSubscription] = useState(Capacitor.isNativePlatform());
+  const [hasVerifiedPaidAccess, setHasVerifiedPaidAccess] = useState(
+    !Capacitor.isNativePlatform()
+  );
+  const [checkingSubscription, setCheckingSubscription] = useState(
+    Capacitor.isNativePlatform()
+  );
 
   // --- App State ---
-  const [onboardingStatus, setOnboardingStatus] = useState(OnboardingStep.SPLASH);
+  const [onboardingStatus, setOnboardingStatus] = useState(
+    OnboardingStep.SPLASH
+  );
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [currentTab, setCurrentTab] = useState<AppScreen>(AppScreen.HOME);
   const [plants, setPlants] = useState<Plant[]>([]);
@@ -52,7 +111,9 @@ const App: React.FC = () => {
     let appUrlOpenHandle: any;
 
     const restoreLocalState = () => {
-      const savedOnboardingStatus = localStorage.getItem(LS_ONBOARDING_STATUS) as OnboardingStep | null;
+      const savedOnboardingStatus = localStorage.getItem(
+        LS_ONBOARDING_STATUS
+      ) as OnboardingStep | null;
       const savedProfile = localStorage.getItem(LS_PROFILE);
       let savedProfileData: any = null;
 
@@ -61,15 +122,23 @@ const App: React.FC = () => {
           savedProfileData = JSON.parse(savedProfile);
           setUserProfile(savedProfileData);
         } catch {
-          console.warn('[App] Ignoring unreadable cached profile');
+          console.warn("[App] Ignoring unreadable cached profile");
         }
       }
 
-      if (savedOnboardingStatus === OnboardingStep.SUMMARY && !savedProfileData) {
-        console.warn('[App] Cached onboarding summary is missing its profile; restarting onboarding safely');
+      if (
+        savedOnboardingStatus === OnboardingStep.SUMMARY &&
+        !savedProfileData
+      ) {
+        console.warn(
+          "[App] Cached onboarding summary is missing its profile; restarting onboarding safely"
+        );
         localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.SPLASH);
         setOnboardingStatus(OnboardingStep.SPLASH);
-        return { savedOnboardingStatus: OnboardingStep.SPLASH, savedProfileData };
+        return {
+          savedOnboardingStatus: OnboardingStep.SPLASH,
+          savedProfileData,
+        };
       }
 
       if (savedOnboardingStatus) {
@@ -85,44 +154,53 @@ const App: React.FC = () => {
       void withTimeout(
         CapacitorApp.getLaunchUrl(),
         2000,
-        '[App] launch URL check'
+        "[App] launch URL check"
       )
         .then((launchUrl) => {
-          if (launchUrl?.url && launchUrl.url.includes('code=')) {
+          if (launchUrl?.url && launchUrl.url.includes("code=")) {
             handleAuthDeepLink(launchUrl.url);
           }
         })
-        .catch((e) => console.warn('[App] Launch URL check skipped:', e));
+        .catch((e) => console.warn("[App] Launch URL check skipped:", e));
 
-      void CapacitorApp.addListener('appUrlOpen', async (data) => {
-        if (data.url.includes('code=')) {
+      void CapacitorApp.addListener("appUrlOpen", async (data) => {
+        if (data.url.includes("code=")) {
           handleAuthDeepLink(data.url);
         }
       })
         .then((handle) => {
           appUrlOpenHandle = handle;
         })
-        .catch((e) => console.warn('[App] Deep link listener setup failed:', e));
+        .catch((e) =>
+          console.warn("[App] Deep link listener setup failed:", e)
+        );
     };
 
     const boot = () => {
       // Hide native splash screen immediately; do not hold UI on the native bridge.
       if (Capacitor.isNativePlatform()) {
-        void SplashScreen.hide().catch((e) => console.warn('[App] Native splash hide failed:', e));
+        void SplashScreen.hide().catch((e) =>
+          console.warn("[App] Native splash hide failed:", e)
+        );
       }
 
       const { savedOnboardingStatus, savedProfileData } = restoreLocalState();
       setIsAppReady(true);
       setupDeepLinks();
 
-      void initializeSubscriptions().then((active) => {
-        if (!isMounted) return;
-        if (active) setHasVerifiedPaidAccess(true);
-      }).finally(() => {
-        if (isMounted) setCheckingSubscription(false);
-      });
+      void initializeSubscriptions()
+        .then((active) => {
+          if (!isMounted) return;
+          if (active) setHasVerifiedPaidAccess(true);
+        })
+        .finally(() => {
+          if (isMounted) setCheckingSubscription(false);
+        });
 
-      if (!Capacitor.isNativePlatform() && savedOnboardingStatus === OnboardingStep.COMPLETED) {
+      if (
+        !Capacitor.isNativePlatform() &&
+        savedOnboardingStatus === OnboardingStep.COMPLETED
+      ) {
         runLoadUserDataInBackground();
       }
 
@@ -131,7 +209,9 @@ const App: React.FC = () => {
           if (!isMounted) return;
 
           if (!init.isReady) {
-            console.warn('[App] Background initialization did not complete; safe UI remains available');
+            console.warn(
+              "[App] Background initialization did not complete; safe UI remains available"
+            );
             return;
           }
 
@@ -144,26 +224,35 @@ const App: React.FC = () => {
           if (init.isReturningSubscriber) {
             setHasVerifiedPaidAccess(true);
 
-            const profileSource = mergeProfilePreferences(init.profile, cachedProfile() || savedProfileData);
+            const profileSource = mergeProfilePreferences(
+              init.profile,
+              cachedProfile() || savedProfileData
+            );
             const profileData = {
               ...profileSource,
-              experience: profileSource.experience || 'Novice',
-              grow_mode: profileSource.grow_mode || 'Indoor',
-              goal: profileSource.goal || 'Maximize Yield',
-              space: profileSource.space || 'Medium',
+              experience: profileSource.experience || "Novice",
+              grow_mode: profileSource.grow_mode || "Indoor",
+              goal: profileSource.goal || "Maximize Yield",
+              space: profileSource.space || "Medium",
               isOnboarded: true,
               streak: profileSource.streak || 0,
-              lastVisit: new Date().toISOString().split('T')[0],
+              lastVisit: new Date().toISOString().split("T")[0],
             };
             setUserProfile(profileData);
             localStorage.setItem(LS_PROFILE, JSON.stringify(profileData));
             setOnboardingStatus(OnboardingStep.COMPLETED);
-            localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
+            localStorage.setItem(
+              LS_ONBOARDING_STATUS,
+              OnboardingStep.COMPLETED
+            );
             runLoadUserDataInBackground();
           }
         })
         .catch((e) => {
-          console.warn('[App] Background initialization failed; continuing with local state:', e);
+          console.warn(
+            "[App] Background initialization failed; continuing with local state:",
+            e
+          );
         });
     };
 
@@ -178,27 +267,30 @@ const App: React.FC = () => {
   }, []);
 
   const handleAuthDeepLink = async (urlStr: string) => {
-    const { supabase } = await import('./services/supabaseClient');
+    const { supabase } = await import("./services/supabaseClient");
     if (isAuthProcessing.current) return;
-    const code = new URL(urlStr).searchParams.get('code');
+    const code = new URL(urlStr).searchParams.get("code");
     if (!code) return;
 
     try {
       isAuthProcessing.current = true;
       const exchangePromise = supabase.auth.exchangeCodeForSession(code);
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Authentication timed out.')), 60000)
+        setTimeout(() => reject(new Error("Authentication timed out.")), 60000)
       );
-      const { data: sessionData, error } = await Promise.race([exchangePromise, timeoutPromise]) as any;
+      const { data: sessionData, error } = (await Promise.race([
+        exchangePromise,
+        timeoutPromise,
+      ])) as any;
       if (error) throw error;
       if (sessionData?.session) {
-        alert('Login Success!');
+        alert("Login Success!");
         handleAuthSuccess();
       }
     } catch (err: any) {
-      console.error('Auth Exchange Failed:', err);
-      if (err.message !== 'Auth session missing!') {
-        alert(`Login Failed: ${err.message || 'Unknown error'}`);
+      console.error("Auth Exchange Failed:", err);
+      if (err.message !== "Auth session missing!") {
+        alert(`Login Failed: ${err.message || "Unknown error"}`);
       }
     } finally {
       isAuthProcessing.current = false;
@@ -207,12 +299,14 @@ const App: React.FC = () => {
 
   // --- User Data Loading ---
   const loadUserData = async () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split("T")[0];
     const lastVisit = localStorage.getItem(LS_LAST_VISIT);
-    let currentStreak = parseInt(localStorage.getItem(LS_STREAK) || '0');
+    let currentStreak = parseInt(localStorage.getItem(LS_STREAK) || "0");
 
     if (lastVisit !== today) {
-      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      const yesterday = new Date(Date.now() - 86400000)
+        .toISOString()
+        .split("T")[0];
       if (lastVisit === yesterday) {
         currentStreak += 1;
       } else {
@@ -220,7 +314,9 @@ const App: React.FC = () => {
       }
       localStorage.setItem(LS_LAST_VISIT, today);
       localStorage.setItem(LS_STREAK, currentStreak.toString());
-      setUserProfile(prev => prev ? ({ ...prev, streak: currentStreak, lastVisit: today }) : null);
+      setUserProfile((prev) =>
+        prev ? { ...prev, streak: currentStreak, lastVisit: today } : null
+      );
     }
 
     const loadedPlants = await loadGrowData(currentStreak);
@@ -234,7 +330,7 @@ const App: React.FC = () => {
     if (hasLoadedUserData.current) return;
     hasLoadedUserData.current = true;
     void loadUserData().catch((e) => {
-      console.warn('[App] Background user data hydration failed:', e);
+      console.warn("[App] Background user data hydration failed:", e);
       hasLoadedUserData.current = false;
     });
   };
@@ -267,29 +363,32 @@ const App: React.FC = () => {
     runLoadUserDataInBackground();
   };
 
-  const handleAddJournalEntry = async (entry: any, plantIdOverride?: string) => {
-    const targetPlantId = plantIdOverride || entry.plantId || plants[0]?.id;
-    const newEntry = { ...entry, id: `local_${Date.now()}`, date: new Date().toLocaleDateString(), plantId: targetPlantId };
-    setPlants(prev => {
-      if (prev.length === 0) return prev;
-      return prev.map(plant => plant.id === targetPlantId
-        ? { ...plant, journal: [newEntry, ...plant.journal] }
-        : plant
-      );
-    });
-    setCurrentTab(AppScreen.JOURNAL);
-
-    try {
+  const handleAddJournalEntry = async (entry: any, plantIdOverride?: string) =>
+    runAction("new-entry", async () => {
+      const targetPlantId = plantIdOverride || entry.plantId || plants[0]?.id;
+      if (!targetPlantId) throw new Error("Select a plant first");
+      const newEntry = {
+        ...entry,
+        date: new Date().toLocaleDateString(),
+        plantId: targetPlantId,
+      };
       const savedEntry = await saveAppJournalEntry(targetPlantId, newEntry);
-      await saveDiagnosisReport(targetPlantId, newEntry);
-      setPlants(prev => prev.map(plant => plant.id === targetPlantId
-        ? { ...plant, journal: plant.journal.map((j: any) => j.id === newEntry.id ? savedEntry : j) }
-        : plant
-      ));
-    } catch (error) {
-      console.warn('Journal save failed; optimistic entry kept locally:', error);
-    }
-  };
+      setPlants((prev) =>
+        prev.map((plant) =>
+          plant.id === targetPlantId
+            ? { ...plant, journal: [savedEntry, ...(plant.journal || [])] }
+            : plant
+        )
+      );
+      setJournalPlantId(targetPlantId);
+      setCurrentTab(AppScreen.JOURNAL);
+      // A secondary diagnosis record must not make an already-saved note look lost.
+      try {
+        await saveDiagnosisReport(targetPlantId, newEntry);
+      } catch (error) {
+        console.warn("Diagnosis record sync failed", error);
+      }
+    });
 
   const handleUpdateProfile = (updates: Partial<UserProfile>) => {
     if (!userProfile) return;
@@ -298,84 +397,116 @@ const App: React.FC = () => {
     setUserProfile(updated);
   };
 
-  const handleToggleTask = async (taskId: string) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-    const newStatus = !task.isCompleted;
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCompleted: newStatus, completed: newStatus } : t));
-    await toggleTaskCompletion(taskId, newStatus);
-  };
-
-  const handleAddTask = async (title: string, date: string, source: 'user' | 'ai_diagnosis' = 'user', options?: { recurrence?: 'daily' | 'weekly', notes?: string }) => {
-    const tempId = Date.now().toString();
-    const optimisticTask: Task = {
-      id: tempId,
-      title,
-      dueDate: date,
-      plantId: plants[0]?.id,
-      isCompleted: false,
-      completed: false,
-      source,
-      recurrence: options?.recurrence,
-      notes: options?.notes,
-      createdAt: new Date().toISOString()
-    };
-    setTasks(prev => [...prev, optimisticTask]);
-
-    const savedTask = await addNewTask({
-      title,
-      dueDate: date,
-      plantId: plants[0]?.id,
-      source,
-      type: 'other',
-      recurrence: options?.recurrence,
-      notes: options?.notes
+  const handleToggleTask = async (taskId: string) =>
+    runAction(`task:${taskId}`, async () => {
+      const task = tasks.find((t) => String(t.id) === String(taskId));
+      if (!task) throw new Error("Task unavailable");
+      const newStatus = !task.isCompleted;
+      if (!(await toggleTaskCompletion(taskId, newStatus)))
+        throw new Error("Task not saved");
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === task.id
+            ? { ...t, isCompleted: newStatus, completed: newStatus }
+            : t
+        )
+      );
     });
 
-    if (savedTask) {
-      setTasks(prev => prev.map(t => t.id === tempId ? savedTask : t));
-    }
-  };
+  const handleAddTask = async (
+    title: string,
+    date: string,
+    source: "user" | "ai_diagnosis" = "user",
+    options?: { recurrence?: string; notes?: string; plantId?: string }
+  ) =>
+    runAction("new-task", async () => {
+      const savedTask = await withTimeout(
+        addNewTask({
+          title,
+          dueDate: date,
+          plantId: options?.plantId || plants[0]?.id,
+          source,
+          type: "other",
+          recurrence:
+            options?.recurrence === "daily" || options?.recurrence === "weekly"
+              ? options.recurrence
+              : undefined,
+          notes: options?.notes,
+        }),
+        12000,
+        "Task save"
+      );
+      if (!savedTask) throw new Error("Task not saved");
+      setTasks((prev) => [...prev, savedTask]);
+    });
 
-  const handleUpdateTask = async (taskId: string, title: string, notes?: string, recurrence?: 'daily' | 'weekly' | 'once' | string) => {
-    const updates: any = { title, notes, recurrence };
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
-    setPlants(prev => prev.map(plant => ({
-      ...plant,
-      tasks: plant.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t)
-    })));
-    await updateTaskProperties(taskId, updates);
-  };
+  const handleUpdateTask = async (
+    taskId: string,
+    title: string,
+    notes?: string,
+    recurrence?: string,
+    dueDate?: string
+  ) =>
+    runAction(`task:${taskId}`, async () => {
+      const updates: any = {
+        title,
+        notes,
+        recurrence,
+        ...(dueDate ? { dueDate } : {}),
+      };
+      if (!(await updateTaskProperties(taskId, updates)))
+        throw new Error("Task not saved");
+      setTasks((prev) =>
+        prev.map((t) =>
+          String(t.id) === String(taskId) ? { ...t, ...updates } : t
+        )
+      );
+    });
 
-  const handleDeleteTask = async (taskId: string) => {
-    setTasks(prev => prev.filter(t => t.id !== taskId));
-    setPlants(prev => prev.map(plant => ({
-      ...plant,
-      tasks: plant.tasks.filter(t => t.id !== taskId)
-    })));
-    await deleteTask(taskId);
-  };
+  const handleDeleteTask = async (taskId: string) =>
+    runAction(`task:${taskId}`, async () => {
+      if (!(await deleteTask(taskId))) throw new Error("Task not deleted");
+      setTasks((prev) => prev.filter((t) => String(t.id) !== String(taskId)));
+    });
 
-  const handleDeleteEntry = async (entryId: string, plantId: string) => {
-    setPlants(prev => prev.map(plant =>
-      plant.id === plantId
-        ? { ...plant, journal: plant.journal.filter((j: any) => j.id !== entryId) }
-        : plant
-    ));
-    await deleteJournalEntry(entryId);
-  };
+  const handleDeleteEntry = async (entryId: string, plantId: string) =>
+    runAction(`entry:${entryId}`, async () => {
+      if (!(await deleteJournalEntry(entryId)))
+        throw new Error("Note not deleted");
+      setPlants((prev) =>
+        prev.map((plant) =>
+          plant.id === plantId
+            ? {
+                ...plant,
+                journal: (plant.journal || []).filter(
+                  (j: any) => j.id !== entryId
+                ),
+              }
+            : plant
+        )
+      );
+    });
 
-  const handleDeletePlant = async (plantId: string) => {
-    setPlants(prev => prev.filter(p => p.id !== plantId));
-    setTasks(prev => prev.filter(t => t.plantId !== plantId && (t as any).plant_id !== plantId));
-    await deletePlant(plantId);
-  };
+  const handleDeletePlant = async (plantId: string) =>
+    runAction(`plant:${plantId}`, async () => {
+      if (!(await deletePlant(plantId))) throw new Error("Plant not deleted");
+      setPlants((prev) => prev.filter((p) => p.id !== plantId));
+      setTasks((prev) =>
+        prev.filter(
+          (t) => t.plantId !== plantId && (t as any).plant_id !== plantId
+        )
+      );
+    });
 
   const handleAddPlant = async (strain: any) => {
     const newPlant = await createPlantRecord(strain);
     if (!newPlant) return;
-    setPlants(prev => [...prev, newPlant]);
-    handleAddTask(`Start journal for ${strain.name}`, new Date().toISOString().split('T')[0], 'user');
+    setPlants((prev) => [...prev, newPlant]);
+    handleAddTask(
+      `Start journal for ${strain.name}`,
+      new Date().toISOString().split("T")[0],
+      "user"
+    );
   };
 
   const completeTutorial = () => {
@@ -416,16 +547,19 @@ const App: React.FC = () => {
       setIsReturningSubscriber(init.isReturningSubscriber);
       if (init.isReturningSubscriber) {
         setHasVerifiedPaidAccess(true);
-        const profileSource = mergeProfilePreferences(init.profile, cachedProfile() || userProfile);
+        const profileSource = mergeProfilePreferences(
+          init.profile,
+          cachedProfile() || userProfile
+        );
         const profileData: UserProfile = {
           ...profileSource,
-          experience: profileSource.experience || 'Novice',
-          grow_mode: profileSource.grow_mode || 'Indoor',
-          goal: profileSource.goal || 'Maximize Yield',
-          space: profileSource.space || 'Medium',
+          experience: profileSource.experience || "Novice",
+          grow_mode: profileSource.grow_mode || "Indoor",
+          goal: profileSource.goal || "Maximize Yield",
+          space: profileSource.space || "Medium",
           isOnboarded: true,
           streak: profileSource.streak || 0,
-          lastVisit: new Date().toISOString().split('T')[0],
+          lastVisit: new Date().toISOString().split("T")[0],
         };
         setUserProfile(profileData);
         localStorage.setItem(LS_PROFILE, JSON.stringify(profileData));
@@ -445,7 +579,9 @@ const App: React.FC = () => {
       <div className="h-screen w-screen bg-surface flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm font-bold text-text-sub">Loading MasterGrowbot...</p>
+          <p className="text-sm font-bold text-text-sub">
+            Loading MasterGrowbot...
+          </p>
         </div>
       </div>
     );
@@ -467,7 +603,11 @@ const App: React.FC = () => {
 
   // 4. ONBOARDING SUMMARY → PAYWALL
   // CRITICAL: Only show summary/paywall if we're NOT in auth or tutorial
-  if (onboardingStatus === OnboardingStep.SUMMARY && !showAuth && !showTutorial) {
+  if (
+    onboardingStatus === OnboardingStep.SUMMARY &&
+    !showAuth &&
+    !showTutorial
+  ) {
     if (!userProfile) return null;
     if (showPaywall) {
       return (
@@ -482,7 +622,10 @@ const App: React.FC = () => {
     }
     return (
       <ErrorBoundary>
-        <OnboardingSummary profile={userProfile} onContinue={handleSummaryContinue} />
+        <OnboardingSummary
+          profile={userProfile}
+          onContinue={handleSummaryContinue}
+        />
       </ErrorBoundary>
     );
   }
@@ -502,23 +645,32 @@ const App: React.FC = () => {
   // 6. TUTORIAL (shown after auth success, before main app)
   // Only show tutorial if onboarding is completed but tutorial hasn't been seen
   if (showTutorial && onboardingStatus === OnboardingStep.COMPLETED) {
-    return (
-      <GetStartedTutorial onComplete={completeTutorial} />
-    );
+    return <GetStartedTutorial onComplete={completeTutorial} />;
   }
 
   // Native paid access is never trusted from local cache. If RevenueCat has not
   // confirmed active access yet, keep the user on a safe paywall/restore path.
-  if (onboardingStatus === OnboardingStep.COMPLETED && Capacitor.isNativePlatform() && !hasVerifiedPaidAccess) {
-    if (checkingSubscription) return (
-      <div className="h-screen bg-surface flex items-center justify-center" role="status" aria-live="polite">
-        <div className="text-center px-6">
-          <div className="mx-auto mb-4 w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="font-semibold">Restoring your subscription</p>
-          <p className="text-sm text-text-sub mt-2">Your saved data stays on this device.</p>
+  if (
+    onboardingStatus === OnboardingStep.COMPLETED &&
+    Capacitor.isNativePlatform() &&
+    !hasVerifiedPaidAccess
+  ) {
+    if (checkingSubscription)
+      return (
+        <div
+          className="h-screen bg-surface flex items-center justify-center"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="text-center px-6">
+            <div className="mx-auto mb-4 w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            <p className="font-semibold">Restoring your subscription</p>
+            <p className="text-sm text-text-sub mt-2">
+              Your saved data stays on this device.
+            </p>
+          </div>
         </div>
-      </div>
-    );
+      );
     return (
       <ErrorBoundary>
         <Paywall
@@ -535,14 +687,85 @@ const App: React.FC = () => {
     <div className="h-screen w-screen bg-surface overflow-hidden relative">
       <ErrorBoundary>
         <div className="h-full w-full overflow-y-auto pb-24">
-          {currentTab === AppScreen.HOME && <Home plants={plants} tasks={tasks} onToggleTask={handleToggleTask} onEditTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onDeletePlant={handleDeletePlant} onAddPlant={() => setCurrentTab(AppScreen.STRAINS)} onNavigateToPlant={() => setCurrentTab(AppScreen.JOURNAL)} />}
-          {currentTab === AppScreen.DIAGNOSE && <Diagnose onSaveToJournal={handleAddJournalEntry} onAddTask={handleAddTask} plant={plants[0]} defaultProfile={userProfile} onAddPlant={handleAddPlant} />}
-          {currentTab === AppScreen.STRAINS && <StrainSearch onAddPlant={handleAddPlant} />}
-          {currentTab === AppScreen.JOURNAL && <Journal plants={plants} tasks={tasks} onAddEntry={handleAddJournalEntry} onAddTask={handleAddTask} onEditTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onDeleteEntry={handleDeleteEntry} onUpdatePlant={(id: string, u: any) => setPlants(p => p.map(x => x.id === id ? { ...x, ...u } : x))} />}
-          {currentTab === AppScreen.PROFILE && <Profile userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onViewTutorial={() => setShowTutorial(true)} onSignOut={() => { localStorage.clear(); window.location.reload(); }} />}
+          {currentTab === AppScreen.HOME && (
+            <Home
+              busyActions={busyActions}
+              onOpenJournal={() => setCurrentTab(AppScreen.JOURNAL)}
+              plants={plants}
+              tasks={tasks}
+              onToggleTask={handleToggleTask}
+              onEditTask={handleUpdateTask}
+              onDeleteTask={handleDeleteTask}
+              onDeletePlant={handleDeletePlant}
+              onAddPlant={() => setCurrentTab(AppScreen.STRAINS)}
+              onNavigateToPlant={(id: string) => {
+                setJournalPlantId(id);
+                setCurrentTab(AppScreen.JOURNAL);
+              }}
+            />
+          )}
+          {currentTab === AppScreen.DIAGNOSE && (
+            <Diagnose
+              onSaveToJournal={handleAddJournalEntry}
+              onAddTask={handleAddTask}
+              plant={plants[0]}
+              defaultProfile={userProfile}
+              onAddPlant={handleAddPlant}
+            />
+          )}
+          {currentTab === AppScreen.STRAINS && (
+            <StrainSearch onAddPlant={handleAddPlant} />
+          )}
+          {currentTab === AppScreen.JOURNAL && (
+            <Journal
+              initialPlantId={journalPlantId}
+              busyActions={busyActions}
+              onToggleTask={handleToggleTask}
+              plants={plants}
+              tasks={tasks}
+              onAddEntry={handleAddJournalEntry}
+              onAddTask={handleAddTask}
+              onEditTask={handleUpdateTask}
+              onDeleteTask={handleDeleteTask}
+              onDeleteEntry={handleDeleteEntry}
+              onUpdatePlant={(id: string, u: any) =>
+                setPlants((p) =>
+                  p.map((x) => (x.id === id ? { ...x, ...u } : x))
+                )
+              }
+            />
+          )}
+          {currentTab === AppScreen.PROFILE && (
+            <Profile
+              userProfile={userProfile}
+              onUpdateProfile={handleUpdateProfile}
+              onViewTutorial={() => setShowTutorial(true)}
+              onSignOut={() => {
+                localStorage.clear();
+                window.location.reload();
+              }}
+            />
+          )}
         </div>
 
-        <BottomNav currentScreen={currentTab} onNavigate={(tab) => setCurrentTab(tab)} />
+        {actionError && (
+          <div
+            role="alert"
+            className="fixed bottom-24 left-4 right-4 z-[70] rounded-2xl bg-amber-50 border border-amber-200 p-4 shadow-lg text-sm text-amber-950 flex gap-3 items-center"
+          >
+            <span className="flex-1">{actionError}</span>
+            <button
+              className="min-h-11 px-2 font-bold"
+              onClick={() => setActionError(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+        <BottomNav
+          currentScreen={currentTab}
+          onNavigate={(tab) => setCurrentTab(tab)}
+        />
       </ErrorBoundary>
     </div>
   );
