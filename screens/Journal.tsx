@@ -2,8 +2,11 @@ import React, { useEffect, useState } from "react";
 import NoteCreator from "../components/NoteCreator";
 import TaskRow from "../components/TaskRow";
 import TaskEditor from "../components/TaskEditor";
-import { analyzeGrowLog } from "../services/geminiService";
-import { withTimeout } from "../services/appInitializer";
+import JournalFiles from '../components/JournalFiles';
+import { proFirstRelease } from '../services/releaseFeatures';
+import { recordEvent } from '../services/premiumLibrary';
+import { analyzeGrowLog } from '../services/geminiService';
+import { withTimeout } from '../services/appInitializer';
 const summary = (entry: any) =>
   typeof entry.aiAnalysis?.summary === "string" ? entry.aiAnalysis.summary : "";
 export default function Journal({
@@ -50,29 +53,22 @@ export default function Journal({
     .sort((a, b) => (Date.parse(b.date) || 0) - (Date.parse(a.date) || 0));
   const saveNote = async (note: any) => {
     if (!plant?.id) throw new Error("Select a plant first");
+    // Preserve the Android release behavior. iOS never waits on optional AI.
     let aiAnalysis;
-    try {
-      if (note.notes?.trim()) {
-        const result = await withTimeout(
-          analyzeGrowLog(note.notes),
-          8000,
-          "Note insight"
-        );
-        if (result) aiAnalysis = { summary: result };
-      }
-    } catch {
-      /* A note can be saved without an optional insight. */
+    if(!proFirstRelease && note.notes?.trim()) {
+      try { const text=await withTimeout(analyzeGrowLog(note.notes),8000,'Note insight'); if(text)aiAnalysis={summary:text}; } catch {}
     }
     const saved = await onAddEntry(
       {
         ...note,
         imageUri: note.image || note.imageUri,
         plantId: plant.id,
-        ...(aiAnalysis ? { aiAnalysis } : {}),
+        ...(aiAnalysis?{aiAnalysis}:{}),
       },
       plant.id
     );
     if (saved === false) throw new Error("Note was not saved");
+    recordEvent('journal_saved','journal');
     setCreator(false);
   };
   return (
@@ -118,7 +114,7 @@ export default function Journal({
         </button>
       </div>
       <div className="flex gap-2 mb-4" aria-label="Journal filters">
-        {["All", "Notes", "Tasks"].map((f) => (
+        {["All", "Notes", "Tasks", ...(proFirstRelease?['Files']:[])].map((f) => (
           <button
             key={f}
             aria-pressed={filter === f}
@@ -140,7 +136,8 @@ export default function Journal({
           {error}
         </p>
       )}
-      <div className="space-y-3">
+      {filter==='Files' && <JournalFiles />}
+      <div className={filter==='Files'?'hidden':'space-y-3'}>
         {feed.map((item) =>
           item.feedType === "task" ? (
             <TaskRow
@@ -191,7 +188,7 @@ export default function Journal({
           )
         )}
       </div>
-      {!feed.length && (
+      {!feed.length && filter!=='Files' && (
         <div className="rounded-2xl bg-white p-6 text-center">
           <h2 className="font-bold">
             {filter === "Tasks" ? "Plan your next step" : "Start your record"}
@@ -261,6 +258,7 @@ export default function Journal({
                   {summary(entry)}
                 </p>
               )}
+              {proFirstRelease && <JournalFiles entryId={String(entry.id)} />}
               {error && (
                 <p role="alert" className="text-sm text-red-700 mt-3">
                   {error}
@@ -277,7 +275,7 @@ export default function Journal({
                     throw new Error();
                   setEntry(null);
                 } catch {
-                  setError("Could not delete the note. Please try again.");
+                  setError("Could not delete the note. Delete its attached files first, then retry.");
                 } finally {
                   setDeleting(false);
                 }

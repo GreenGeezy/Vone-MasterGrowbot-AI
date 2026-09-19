@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import ProCheckIn from '../components/ProCheckIn';
+import {proFirstRelease} from '../services/releaseFeatures';
 import PlantCard from "../components/PlantCard";
 import Growbot from "../components/Growbot";
 import TaskRow from "../components/TaskRow";
@@ -51,6 +53,7 @@ export default function Home({
           </p>
         </div>
       </div>
+      {proFirstRelease && <ProCheckIn plants={plants} onAddPlant={onAddPlant} onOpenJournal={onOpenJournal} onNavigateToPlant={onNavigateToPlant} />}
       <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4 mb-5">
         <h2 className="font-bold text-emerald-950">
           One place for your next steps

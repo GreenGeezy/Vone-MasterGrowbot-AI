@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Browser } from '@capacitor/browser';
 import Growbot from '../components/Growbot';
+import {proFirstRelease} from '../services/releaseFeatures';
 import { UserProfile } from '../types';
 
 interface PostPaymentAuthProps {
@@ -58,7 +59,7 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete }) => {
           <div className="bg-green-50 p-2 rounded-xl text-green-600"><Shield size={20} /></div>
           <div>
             <h3 className="font-bold text-gray-900 text-sm">Privacy First</h3>
-            <p className="text-xs text-gray-500 font-medium">Your data is stored locally on your device.</p>
+            <p className="text-xs text-gray-500 font-medium">{proFirstRelease?'Your app uses local storage and Supabase to save your journal. Keep copies of important records; Restore Purchases restores subscription access.':'Your data is stored locally on your device.'}</p>
           </div>
         </div>
         <div className="flex items-start gap-4">
@@ -81,7 +82,7 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete }) => {
         </button>
 
         <div className="flex justify-center gap-6 text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-6">
-          <button onClick={() => openLegalLink('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')} className="hover:text-green-600 transition-colors">Terms of Use</button>
+          <button onClick={() => openLegalLink(proFirstRelease ? 'https://www.mastergrowbot.com/terms-of-service' : 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')} className="hover:text-green-600 transition-colors">Terms of Use</button>
           <button onClick={() => openLegalLink('https://www.mastergrowbot.com/privacy-policy')} className="hover:text-green-600 transition-colors">Privacy Policy</button>
         </div>
       </div>

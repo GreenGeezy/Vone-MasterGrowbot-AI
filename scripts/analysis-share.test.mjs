@@ -14,6 +14,7 @@ let shareError;
 const shares = [];
 const files = new Set();
 const service = compile(await readFile(new URL('../services/shareService.ts', import.meta.url), 'utf8'), {
+  './releaseFeatures': { proFirstRelease: true },
   './analysisShareCard': artwork,
   '@capacitor/core': { Capacitor: { isNativePlatform: () => native } },
   '@capacitor/share': { Share: { share: async options => { shares.push(options); if (shareError) throw shareError; } } },
@@ -37,10 +38,10 @@ test('photo and video captions carry distinct store calls to action', () => {
   assert.ok(photo.includes(artwork.SHARE_CTA));
   assert.ok(video.includes(artwork.SHARE_CTA));
 });
-test('native caption share carries the real store link and cancellation is neutral', async () => {
+test('native caption share uses the MasterGrowbot download page and cancellation is neutral', async () => {
   native = true;
   assert.equal(await service.shareAnalysisCard('My report', null), 'shared');
-  assert.equal(shares[0].url, 'https://apps.apple.com/app/id6752221060');
+  assert.equal(shares[0].url, service.DOWNLOAD_URL);
   shareError = new Error('Share canceled');
   assert.equal(await service.shareAnalysisCard('My report', null), 'cancelled');
   shareError = new Error('Could not open share sheet');
@@ -59,8 +60,9 @@ test('browser denial and unavailable sharing never report success', async () => 
     let copied;
     globalThis.navigator.clipboard = { writeText: async text => { copied = text; } };
     assert.equal(await service.copyAnalysisCaption('Report'), true);
-    assert.ok(copied.includes(service.APP_STORE_URL));
-    assert.ok(copied.includes(service.PLAY_STORE_URL));
+    assert.ok(copied.includes(service.DOWNLOAD_URL));
+    assert.ok(!copied.includes(service.APP_STORE_URL));
+    assert.ok(!copied.includes(service.PLAY_STORE_URL));
     assert.ok(copied.includes(artwork.SHARE_CTA));
     assert.ok(copied.includes(artwork.TRIAL_TERMS));
   } finally {

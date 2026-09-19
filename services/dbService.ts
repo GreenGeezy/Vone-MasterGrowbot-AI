@@ -82,6 +82,7 @@ const normalizeEntryType = (type?: string) => {
 
 const mapJournalRow = (row: any) => ({
   id: row.id,
+  createdAt: row.created_at,
   date: row.created_at ? new Date(row.created_at).toLocaleDateString() : new Date().toLocaleDateString(),
   type: row.entry_type === 'diagnosis' ? 'Health Check' : row.entry_type || 'note',
   title: row.entry_type === 'diagnosis' ? 'Health Check' : 'Note',
@@ -267,6 +268,7 @@ export const loadGrowData = async (streak: number): Promise<Plant[]> => {
  * Saves a new entry to the journal_logs table (or Local Storage).
  */
 export const saveJournalEntry = async (entry: {
+  draft_id?: string;
   plant_id: string;
   entry_type: 'text' | 'photo' | 'draw' | 'diagnosis' | 'chat';
   content: string;
@@ -289,6 +291,7 @@ export const saveJournalEntry = async (entry: {
   };
 
   if (!session) {
+    if(entry.draft_id) throw new Error('Reconnect before saving a note with files. Your draft is still available.');
     const entries = getLocal(STORAGE_KEYS.JOURNAL);
     entries.push(newEntry);
     setLocal(STORAGE_KEYS.JOURNAL, entries);
@@ -297,10 +300,15 @@ export const saveJournalEntry = async (entry: {
 
   const { data, error } = await supabase
     .from('journal_logs')
-    .insert({ ...newEntry, id: undefined })
+    .insert({ ...newEntry, id: entry.draft_id || undefined })
     .select()
     .maybeSingle();
 
+  if (error?.code === '23505' && entry.draft_id) {
+    const prior = await supabase.from('journal_logs').select('*').eq('id',entry.draft_id).eq('user_id',session.user.id).single();
+    if (prior.error) throw prior.error;
+    return prior.data;
+  }
   if (error) throw error;
   return data;
 };
@@ -316,6 +324,7 @@ export const saveAppJournalEntry = async (plantId: string | undefined, entry: an
   }
 
   const saved = await saveJournalEntry({
+    draft_id: entry.draftId,
     plant_id: plantId || entry.plant_id || entry.plantId || '',
     entry_type: normalizeEntryType(entry.type) as any,
     content: entry.notes || entry.content || '',

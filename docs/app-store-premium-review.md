@@ -1,6 +1,8 @@
 # MasterGrowbot AI Premium — App Store release checklist
 
-## Current build: 1.6.11 (172)
+## Current build: 1.6.12 (173)
+
+See [release-1.6.12.md](release-1.6.12.md). Catalog expansion is enabled. Private document uploads remain disabled pending the data-preserving storage migration and native checks. Do not advertise files in this rollout.
 
 See [release-1.6.11.md](release-1.6.11.md) for the task ID crash fix and Home/Journal usability improvements. Purchase flows and image/video analysis remain unchanged.
 

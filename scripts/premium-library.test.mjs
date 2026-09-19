@@ -1,0 +1,11 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
+const exports={};new Function('exports',ts.transpileModule(fs.readFileSync('supabase/functions/premium-library/rules.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(exports);
+const bytes=s=>new TextEncoder().encode(s);
+for(const [name,text,mime] of [['note.txt','A saved note','text/plain'],['table.csv','date,value\n2026-09-19,1','text/csv'],['file.pdf','%PDF-1.7\n','application/pdf'],['file.docx','PK\x03\x04[Content_Types].xml word/document.xml','application/vnd.openxmlformats-officedocument.wordprocessingml.document'],['file.xlsx','PK\x03\x04[Content_Types].xml xl/workbook.xml','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']]) test(`accept ${name}`,()=>assert.equal(exports.validateDocument(name,bytes(text)),mime));
+for(const [name,text] of [['../file.txt','x'],['x.exe','x'],['file.pdf','not pdf'],['file.docx','not zip'],['file.xlsx','PK\x03\x04[Content_Types].xml xl/workbook.xml vbaProject.bin'],['file.txt','\0'],['empty.txt','']])test(`reject ${name} ${JSON.stringify(text)}`,()=>assert.throws(()=>exports.validateDocument(name,bytes(text))));
+test('reject oversized input',()=>assert.throws(()=>exports.validateDocument('big.txt',new Uint8Array(10485761))));
+test('reject invalid UTF8',()=>assert.throws(()=>exports.validateDocument('invalid.txt',new Uint8Array([255]))));
+test('conversion fields have a restricted vocabulary',()=>{assert.equal(exports.EVENTS.has('filename'),false);assert.equal(exports.SURFACES.has('user content'),false);});

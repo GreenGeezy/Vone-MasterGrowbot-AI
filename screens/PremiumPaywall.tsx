@@ -21,6 +21,7 @@ import {
 } from '../services/revenueCatIdentity';
 import { checkVideoAccess } from '../services/videoAnalysisService';
 import { isPurchaseCancelled, premiumStatusMessage, purchaseErrorMessage, refreshPremiumCustomer } from '../services/premiumPurchaseStatus';
+import { getLibraryConfig, safeConfig, recordEvent } from '../services/premiumLibrary';
 
 interface PremiumPaywallProps {
   onClose: () => void;
@@ -35,6 +36,8 @@ const periodFor = (pkg: PurchasesPackage) =>
   pkg.identifier === 'weekly' ? 'week' : pkg.identifier === 'monthly' ? 'month' : 'year';
 
 const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, requireRestore = false }) => {
+  const [features,setFeatures]=useState(safeConfig);
+  useEffect(()=>{recordEvent('paywall_view','premium');void getLibraryConfig().then(setFeatures);},[]);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -167,8 +170,10 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
       binding = await beginPremiumRevenueCatBinding(Purchases);
       await markPremiumPurchasePending();
       storeStarted = true;
+      recordEvent('purchase_attempt','premium');
       // Apple owns the payment sheet's lifetime. A JS timeout cannot cancel it.
       const result = await Purchases.purchasePackage({ aPackage: pkg });
+      recordEvent('purchase_success','premium');
       const customerInfo = await refresh(Purchases, result.customerInfo);
       if (await confirmAccess(customerInfo)) {
         return;
@@ -177,6 +182,7 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
         setNotice(premiumStatusMessage(customerInfo));
       }
     } catch (cause: any) {
+      recordEvent(isPurchaseCancelled(cause)?'purchase_cancelled':'purchase_failed','premium');
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
       if (!wasPending && (!storeStarted || isPurchaseCancelled(cause))) {
         try { await rollbackPremiumRevenueCatBinding(Purchases, binding); } catch { /* retained for startup recovery */ }
@@ -244,31 +250,22 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
 
   return (
     <div className="fixed inset-0 z-[120] bg-slate-950 text-white flex flex-col overflow-hidden" data-testid="premium-paywall">
-      <div className="flex items-center px-5 pt-[max(3rem,env(safe-area-inset-top,0px))] pb-3">
+      <div className="flex items-center px-5 pt-[max(1rem,env(safe-area-inset-top,0px))] pb-3">
         <button onClick={onClose} disabled={busy} aria-label="Close Premium" className="p-3 rounded-full bg-white/10 disabled:opacity-40"><ArrowLeft size={20} /></button>
         <span className="ml-auto text-[10px] font-black tracking-[0.2em] text-emerald-300">MASTERGROWBOT AI PREMIUM</span>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-6">
-        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-emerald-500/25 to-cyan-400/10 border border-emerald-300/20 p-6 mt-2">
-          <Sparkles className="text-emerald-300 mb-4" />
-          <h1 className="text-3xl font-black leading-tight">See more of your grow.<br />Catch visible concerns earlier.</h1>
-          <p className="text-sm text-slate-300 mt-3 leading-relaxed">Review leaves, canopy, and the surrounding grow space from multiple angles in one short video. Every Premium plan includes all Pro features.</p>
-          <p className="text-sm font-semibold text-emerald-200 mt-3">The displayed price is your total Premium subscription price and includes Pro. Apple confirms any billing adjustment and when your plan changes.</p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 my-5">
-          {['Check multiple angles', 'Spot visible stress patterns', 'Review canopy and grow space', 'Save clear next steps'].map(item => (
-            <div key={item} className="rounded-2xl bg-white/[0.06] border border-white/10 p-3 flex gap-2 text-xs font-semibold text-slate-200">
-              <Check size={15} className="text-emerald-400 shrink-0" /> {item}
-            </div>
-          ))}
+        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-emerald-500/25 to-cyan-400/10 border border-emerald-300/20 p-3 mt-1 mb-3">
+          <h1 className="text-xl font-black leading-tight">Everything in Pro.<br />More ways to explore.</h1>
+          <p className="text-xs text-slate-300 mt-2 leading-relaxed">Video check-ins{features.uploads?' · Private journal files':''}{features.catalog && features.catalogCount===300?' · Double the strains: 600 profiles':''}</p>
+          <p className="text-xs font-semibold text-emerald-200 mt-2">One subscription. Pro included.</p>
         </div>
 
         {loading ? <div className="py-12 text-center text-sm text-slate-300">Loading localized App Store prices…</div> : (
           <div className="space-y-3" data-testid="premium-plans">
             {packages.map(pkg => (
-              <button key={pkg.identifier} disabled={busy} aria-pressed={selected === pkg.identifier} onClick={() => setSelected(pkg.identifier)} className={`w-full text-left rounded-2xl p-4 border transition ${selected === pkg.identifier ? 'bg-emerald-400/15 border-emerald-400' : 'bg-white/[0.04] border-white/10'}`}>
+              <button key={pkg.identifier} disabled={busy} aria-pressed={selected === pkg.identifier} onClick={() => {setSelected(pkg.identifier);recordEvent('plan_selected','premium');}} className={`w-full text-left rounded-2xl p-3 border transition ${selected === pkg.identifier ? 'bg-emerald-400/15 border-emerald-400' : 'bg-white/[0.04] border-white/10'}`}>
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2"><span className="font-black">{labelFor(pkg)}</span>{pkg.identifier === 'annual' && savings && <span className="rounded-full bg-emerald-400 text-slate-950 px-2 py-0.5 text-[10px] font-black">SAVE {savings}% VS MONTHLY</span>}</div>
@@ -282,6 +279,22 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
           </div>
         )}
 
+        <div className="space-y-3 my-5">
+          {[
+            {title:'See more with video',detail:'Review multiple angles in one short check-in.'},
+            ...(features.uploads?[{title:'Keep your records together',detail:'Save PDFs, spreadsheets and documents privately in Journal.'}]:[{title:'First access to new Premium features',detail:'Explore new Premium tools as they are released. No release dates are promised.'}]),
+            ...(features.catalog && features.catalog && features.catalogCount===300?[{title:'Double the strains',detail:'Explore 600 reference profiles—300 more than Pro.'}]:[]),
+            {title:'Everything in Pro included',detail:'One Premium subscription. Your Pro features come with it.'},
+          ].map(item => (
+            <div key={item.title} className="rounded-2xl bg-white/[0.06] border border-white/10 p-4 flex gap-3 text-slate-200">
+              <Check size={18} className="text-emerald-400 shrink-0 mt-0.5" /><div><p className="text-sm font-bold">{item.title}</p><p className="text-xs text-slate-400 mt-1 leading-relaxed">{item.detail}</p></div>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-2xl border border-white/10 p-4 mb-5 text-sm"><p className="text-xs text-emerald-300 font-bold">EXAMPLE WORKFLOW</p><p className="mt-2 text-slate-200">Save a check-in → add your records → revisit what changed.</p><p className="text-xs text-slate-400 mt-2">Illustrative example, not a personal analysis.</p></div>
+
+        <div className="mt-5 rounded-2xl bg-white/5 p-4 text-sm"><p className="font-bold text-slate-300 text-xs mb-2">FEEDBACK ABOUT MASTERGROWBOT</p><blockquote className="text-slate-200">“As a first-time grower I was totally lost. MasterGrowbot walked me through everything.”</blockquote><p className="text-xs text-slate-400 mt-2">Sarah K. · Feedback about the app, not specifically Premium</p></div>
         <div ref={statusPanel}>
         {error && <div role="alert" className="mt-4 rounded-xl bg-red-500/15 border border-red-400/30 p-3 text-xs text-red-100">{error}</div>}
         {notice && <div role="status" className="mt-4 rounded-xl bg-amber-400/10 border border-amber-300/30 p-3 text-xs text-amber-100 leading-relaxed">{notice}</div>}
@@ -294,18 +307,18 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
         </div>
       </div>
 
-      <div className="border-t border-white/10 bg-slate-950/95 px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+      <div className="shrink-0 border-t border-white/10 bg-slate-950/95 px-5 pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]">
         {!pending && selectedPackage && <p className="mb-2 text-center text-sm font-semibold text-slate-200">{selectedPackage.product.priceString} total per {periodFor(selectedPackage)} • Pro included</p>}
-        <button onClick={pending || verificationFailed ? checkStatus : purchase} disabled={busy || loading || (!pending && !verificationFailed && !selected)} className="w-full rounded-2xl bg-emerald-400 text-slate-950 py-4 font-black disabled:opacity-50 flex justify-center items-center gap-2">
-          {busy ? 'Checking subscription…' : verificationFailed ? 'Retry verification' : pending ? 'Check status' : <><Film size={19} /> Unlock video analysis</>}
+        <button onClick={pending || verificationFailed ? checkStatus : purchase} disabled={busy || loading || (!pending && !verificationFailed && !selected)} className="w-full rounded-2xl bg-indigo-500 text-white py-3 font-black disabled:opacity-50 flex justify-center items-center gap-2">
+          {busy ? 'Checking subscription…' : verificationFailed ? 'Retry verification' : pending ? 'Check status' : <><Film size={19} /> Continue with Premium</>}
         </button>
-        <p className="text-[10px] text-slate-400 text-center mt-2 leading-relaxed">Apple confirms your price and when the plan starts before purchase. Premium unlocks once your subscription is active. Auto-renews until canceled.</p>
+        <p className="text-[10px] text-slate-400 text-center mt-2 leading-relaxed">Auto-renews until canceled. Apple confirms billing adjustments and when your plan starts.</p>
         <div className="flex flex-wrap justify-center gap-x-3 mt-2 text-xs text-slate-300 font-bold">
           <button onClick={restore} disabled={busy} className="min-h-11 flex items-center gap-1"><RotateCcw size={13} /> Restore Purchases</button>
-          <button className="min-h-11 px-1" onClick={() => openLink('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>Terms</button>
+          <button className="min-h-11 px-1" onClick={() => openLink('https://www.mastergrowbot.com/terms-of-service')}>Terms</button>
           <button className="min-h-11 px-1" onClick={() => openLink('https://www.mastergrowbot.com/privacy-policy')}>Privacy</button>
         </div>
-        <p className="flex items-center justify-center gap-1 text-[10px] text-slate-400"><Lock size={10} /> Secure payment through Apple</p>
+
       </div>
     </div>
   );

@@ -17,6 +17,9 @@ import { analyzePlantVideo, validateVideo, VideoAccessError } from '../services/
 import { formatVideoHealthReport, VideoVisualResult } from '../services/videoVisualResult';
 import PremiumPaywall from './PremiumPaywall';
 import VideoAnalysisContext from '../components/VideoAnalysisContext';
+import {proFirstRelease} from '../services/releaseFeatures';
+import {hasPremiumAccess} from '../services/premiumCatalog';
+import {recordEvent} from '../services/premiumLibrary';
 
 /**
  * Health Score Mapping help
@@ -92,6 +95,8 @@ const LOADING_PHRASES = [
 ];
 
 const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onAddTask, defaultProfile, onAddPlant }) => {
+  const [premiumMember,setPremiumMember]=useState(false);
+  useEffect(()=>{if(Capacitor.getPlatform()==='ios')void import('@revenuecat/purchases-capacitor').then(({Purchases})=>Purchases.getCustomerInfo()).then(({customerInfo})=>setPremiumMember(hasPremiumAccess(customerInfo))).catch(()=>{});},[]);
   const [image, setImage] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -198,6 +203,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
         strain: strain === 'Leave Blank' || strain === 'Generic' ? undefined : strain,
         growMethod,
       }));
+      recordEvent('analysis_complete','video');
     } catch (cause: any) {
       if (cause instanceof VideoAccessError && cause.code === 'premium_required') {
         setRequireRestore(true);
@@ -251,6 +257,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
         userProfile: defaultProfile || { experience: 'Novice' } as UserProfile // Fallback
       });
       setResult(diagnosis);
+      recordEvent('analysis_complete','photo');
 
       // --- IN-APP REVIEW TRIGGER (3rd Success) ---
       try {
@@ -478,13 +485,13 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
 
       <div className="px-5 space-y-4 max-w-md mx-auto">
         <div className="grid grid-cols-2 gap-3">
-          <button onClick={handleStartCamera} className="bg-emerald-600 text-white min-h-[64px] rounded-2xl font-bold flex items-center justify-center gap-2"><CameraIcon size={22} /> Take Pic</button>
+          <button onClick={handleStartCamera} className="bg-emerald-600 text-white min-h-[64px] rounded-2xl font-bold flex items-center justify-center gap-2"><CameraIcon size={22} /> {proFirstRelease?'Take Photo':'Take Pic'}</button>
           <button onClick={handleGalleryUpload} className="bg-white text-slate-800 border border-slate-200 min-h-[64px] rounded-2xl font-bold flex items-center justify-center gap-2"><Upload size={20} /> Analyze Image</button>
         </div>
-        <button onClick={openVideo} data-testid="premium-video-card" className="w-full text-left flex items-center gap-3 rounded-2xl bg-slate-950 p-4 text-white shadow-md active:scale-[0.99]">
+        {proFirstRelease?<button onClick={openVideo} data-testid="premium-video-card" className="w-full text-left flex items-center gap-2 min-h-11 px-3 py-2 border border-slate-200 rounded-xl bg-white text-slate-600 text-sm"><Film size={17}/><span>{premiumMember?'Analyze video':'Video analysis'}</span>{!premiumMember&&<><span className="text-[10px] px-2 py-1 bg-slate-100 rounded-full">Premium</span><span className="ml-auto font-semibold">Explore</span></>}<ChevronRight size={16}/></button>:<button onClick={openVideo} data-testid="premium-video-card" className="w-full text-left flex items-center gap-3 rounded-2xl bg-slate-950 p-4 text-white shadow-md active:scale-[0.99]">
           <span className="rounded-xl bg-emerald-400/15 p-3 text-emerald-300"><Film size={24} /></span>
           <span className="flex-1"><span className="block text-[10px] tracking-widest font-black text-emerald-300">PREMIUM</span><span className="block text-base font-black">Analyze Video</span><span className="block text-xs text-slate-300">See more angles · View plans</span></span><ChevronRight size={20} />
-        </button>
+        </button>}
         <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 space-y-5">
           <div className="relative">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Genetics</label>
@@ -581,7 +588,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
       <input ref={recordVideoRef} className="hidden" type="file" accept="video/mp4,video/quicktime,.mov" capture="environment" onChange={event => { void selectVideo(event.target.files?.[0]); event.currentTarget.value = ''; }} />
       <input ref={chooseVideoRef} className="hidden" type="file" accept="video/mp4,video/quicktime,.mov" onChange={event => { void selectVideo(event.target.files?.[0]); event.currentTarget.value = ''; }} />
 
-      {showPremiumPaywall && <PremiumPaywall requireRestore={requireRestore} onClose={() => setShowPremiumPaywall(false)} onUnlocked={() => { setShowPremiumPaywall(false); setShowVideoFlow(true); }} />}
+      {showPremiumPaywall && <PremiumPaywall requireRestore={requireRestore} onClose={() => setShowPremiumPaywall(false)} onUnlocked={() => { setPremiumMember(true); setShowPremiumPaywall(false); setShowVideoFlow(true); }} />}
 
       {showVideoFlow && (
         <div className={`fixed inset-0 z-[110] flex flex-col ${videoResult ? "bg-gray-50 text-slate-900" : "bg-slate-950 text-white"}`} data-testid="video-workflow">

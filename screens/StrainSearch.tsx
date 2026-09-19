@@ -8,6 +8,8 @@ import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capa
 import sproutIcon from '../src/assets/images/sprout-icon.png';
 import purpleGrowRoom from '../src/assets/images/purple-grow-room.jpg';
 import { formatStrainValue, matchesStrainSearch } from '../utils/strainSearch';
+import PremiumCatalog from '../components/PremiumCatalog';
+import {proFirstRelease} from '../services/releaseFeatures';
 
 interface StrainSearchProps {
     onAddPlant: (strain: Strain) => void; // Callback to add to Garden
@@ -251,6 +253,7 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
             </div>
 
             {/* 3. List */}
+            {proFirstRelease && <PremiumCatalog onAddPlant={onAddPlant} />}
             <div className="flex-1 space-y-3 overflow-y-auto -mx-5 px-5 pb-[calc(6rem+env(safe-area-inset-bottom))]">
                 <p className="text-xs font-bold text-gray-400">{filteredStrains.length} strains</p>
                 {customStrains.length > 0 && searchQuery === '' && (

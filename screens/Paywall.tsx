@@ -6,12 +6,15 @@ import type { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import Growbot from '../components/Growbot';
+import {proFirstRelease} from '../services/releaseFeatures';
+import {recordEvent} from '../services/premiumLibrary';
 import { initializeSubscriptions, withTimeout } from '../services/appInitializer';
 
 interface PaywallProps {
   onClose: () => void;
   onPurchase: () => void;
   onSkip: () => void;
+  onOpenSavedFiles?: () => void;
 }
 
 // RevenueCat product IDs for reference (not entitlement checks):
@@ -32,7 +35,7 @@ const FEATURES = [
   { icon: '🌱', title: 'Personalized Grow Guidance', desc: 'Adapted to your setup' },
   { icon: '🪴', title: 'Smart Grow Journal', desc: 'Track each grow cycle' },
   { icon: '⏰', title: 'Daily Reminders & Tasks', desc: 'Keep care on schedule' },
-  { icon: '🎥', title: 'Premium Video Analysis Available', desc: 'MasterGrowbot AI Premium upgrade' },
+  ...(!proFirstRelease?[{ icon: '🎥', title: 'Premium Video Analysis Available', desc: 'MasterGrowbot AI Premium upgrade' }]:[]),
 ];
 
 const TestimonialCard = memo(({ testimonial, index }: { testimonial: typeof TESTIMONIALS[0]; index: number }) => (
@@ -85,7 +88,8 @@ function parsePackagePrice(pkg?: PurchasesPackage): number | null {
   return null; // Localized formatted strings are not safe numeric input.
 }
 
-const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
+const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onOpenSavedFiles }) => {
+  useEffect(()=>{recordEvent('paywall_view','pro');},[]);
   const [selectedPkgIdentifier, setSelectedPkgIdentifier] = useState<string | null>(null);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -173,7 +177,9 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       const pkg = packages.find(p => p.identifier === selectedPkgIdentifier);
       if (!pkg) { setError('Selected plan unavailable'); return; }
 
+      recordEvent('purchase_attempt','pro');
       const purchaseResult = await Purchases.purchasePackage({ aPackage: pkg });
+      recordEvent('purchase_success','pro');
 
       if (hasActivePaidAccess(purchaseResult.customerInfo)) {
         onPurchase();
@@ -202,6 +208,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
 
       setError('Subscription activation is taking longer than expected. Please tap "Restore Purchases" or try again later.');
     } catch (e: any) {
+      recordEvent(e.userCancelled?'purchase_cancelled':'purchase_failed','pro');
       if (!e.userCancelled) {
         console.error('Purchase Error:', e);
         setError(e.message || 'Purchase failed. Please try again.');
@@ -294,16 +301,16 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     }
     if (pkg.packageType === 'MONTHLY') {
       return {
-        badge: 'MOST POPULAR',
+      badge: proFirstRelease ? null : 'MOST POPULAR',
         badgeColor: 'bg-gradient-to-r from-amber-500 to-orange-400',
-        subtext: 'Best balance of flexibility and savings',
+        subtext: proFirstRelease ? `Billed monthly at ${pkg.product.priceString}` : 'Best balance of flexibility and savings',
         emphasis: false,
       };
     }
     return {
       badge: null,
       badgeColor: '',
-      subtext: 'Perfect for urgent grow issues',
+      subtext: proFirstRelease ? `Billed weekly at ${pkg.product.priceString}` : 'Perfect for urgent grow issues',
       emphasis: false,
     };
   };
@@ -332,6 +339,48 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     );
   }
 
+  if (proFirstRelease) return (
+    <div className="fixed inset-0 bg-white z-[60] flex flex-col overflow-hidden" data-testid="pro-paywall">
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <header className="bg-gradient-to-br from-green-950 to-emerald-800 text-white px-5 pt-[max(1rem,env(safe-area-inset-top,0px))] pb-4">
+          <p className="text-xs font-bold tracking-widest text-emerald-200 mb-2">MASTERGROWBOT AI PRO</p>
+          <h1 className="text-2xl font-black leading-tight">Know your plants.<br />Keep your progress.</h1>
+          <p className="text-xs text-emerald-100 mt-2">Photo check-ins and your grow journal, together.</p>
+        </header>
+        <div className="px-5 py-4">
+          <ul className="grid grid-cols-2 gap-2 mb-3 text-xs font-semibold text-slate-700">
+            {['Photo health analysis', '300 strain profiles', 'Notes & saved reports', 'Tasks & follow-ups'].map(label => <li key={label} className="flex items-center gap-2"><Check size={16} className="text-emerald-600 shrink-0" />{label}</li>)}
+          </ul>
+          <h2 className="text-sm font-bold text-slate-900 mb-3">Choose your Pro plan</h2>
+          <div className="space-y-3" aria-label="Pro billing period">
+            {packages.map(pkg => {
+              const selected = pkg.identifier === selectedPkgIdentifier;
+              const period = pkg.packageType === 'WEEKLY' ? 'week' : pkg.packageType === 'ANNUAL' ? 'year' : 'month';
+              const meta = getPlanMeta(pkg);
+              return <button type="button" key={pkg.identifier} aria-pressed={selected} disabled={isPurchasing} onClick={() => {setSelectedPkgIdentifier(pkg.identifier);recordEvent('plan_selected','pro');}} className={`w-full text-left rounded-2xl border-2 px-4 py-3 flex items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${selected ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-bold text-sm">{period === 'year' ? 'Yearly' : period === 'week' ? 'Weekly' : 'Monthly'}</span>{meta.badge && <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 rounded-full px-2 py-1">{meta.badge}</span>}</div><p className="text-sm text-slate-700 mt-1"><strong>{pkg.product.priceString}</strong> / {period}</p></div>
+                <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'}`}>{selected && <Check size={16}/>}</span>
+              </button>;
+            })}
+          </div>
+          <blockquote className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">“{TESTIMONIALS[1].text}”<footer className="text-xs text-slate-500 mt-2">{TESTIMONIALS[1].name} · MasterGrowbot user feedback</footer></blockquote>
+          {onOpenSavedFiles && <button onClick={onOpenSavedFiles} className="min-h-11 text-sm underline text-slate-600 mt-2">Open my saved files</button>}
+          {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 text-red-800 p-3 text-sm">{error}</p>}
+        </div>
+      </div>
+      <footer className="shrink-0 border-t border-slate-200 bg-white px-5 pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]">
+        <p className="text-center text-xs text-slate-700 mb-2 font-semibold">{getSubtext()}</p>
+        <button disabled={isPurchasing || !selectedPkgIdentifier} onClick={handleStartTrial} className="w-full min-h-12 rounded-2xl bg-indigo-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">{isPurchasing ? 'Confirming your subscription…' : trialEligible ? 'Start Free Trial' : 'Get Pro Access'}{!isPurchasing && <ArrowRight size={18}/>}</button>
+        <p className="text-[10px] text-center text-slate-500 mt-2">Manage or cancel in Apple Subscriptions.</p>
+        <div className="flex flex-wrap justify-center gap-x-3 text-xs text-slate-600">
+          <button disabled={isPurchasing} onClick={handleRestore} className="min-h-11 underline">Restore Purchases</button>
+          <button onClick={() => openLink('https://www.mastergrowbot.com/terms-of-service')} className="min-h-11 underline">Terms</button>
+          <button onClick={() => openLink('https://www.mastergrowbot.com/privacy-policy')} className="min-h-11 underline">Privacy</button>
+        </div>
+      </footer>
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 bg-white z-[60] flex flex-col overflow-hidden">
 
@@ -359,7 +408,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
             <span className="text-emerald-300">Starting Today.</span>
           </h1>
           <p className="text-sm font-medium text-green-100/80 max-w-sm leading-relaxed">
-            AI plant health analysis, personalized guidance, and a smart grow journal. MasterGrowbot AI Premium video analysis is available as an upgrade.
+            {proFirstRelease?'Turn a plant photo into a useful check-in. Save your observations, organize your next steps, and keep your progress in one place.':'AI plant health analysis, personalized guidance, and a smart grow journal. MasterGrowbot AI Premium video analysis is available as an upgrade.'}
           </p>
         </div>
       </div>
@@ -419,7 +468,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
             return (
               <div
                 key={pkg.identifier}
-                onClick={() => setSelectedPkgIdentifier(pkg.identifier)}
+                onClick={() => {setSelectedPkgIdentifier(pkg.identifier);recordEvent('plan_selected','pro');}}
                 className={`relative rounded-2xl border-2 p-4 transition-all duration-200 cursor-pointer ${
                   isSelected
                     ? meta.emphasis

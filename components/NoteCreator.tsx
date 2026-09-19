@@ -1,4 +1,6 @@
 import React, { useRef, useState } from "react";
+import AttachmentPicker from './AttachmentPicker';
+import { getLibraryConfig } from '../services/premiumLibrary';
 import { X, Check, Camera, Image, Trash2 } from "lucide-react";
 import {
   Camera as CapacitorCamera,
@@ -9,7 +11,12 @@ import {
 const NoteCreator: React.FC<any> = ({ onSave, onClose }) => {
   const [text, setText] = useState("");
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
-  const canSave = text.trim().length > 0 || Boolean(attachedImage);
+  const [draftId] = useState(() => crypto.randomUUID());
+  const [filesReady,setFilesReady] = useState(0);
+  const [filesPending,setFilesPending] = useState(false);
+  const [uploads,setUploads] = useState(false);
+  React.useEffect(()=>{void getLibraryConfig().then(c=>setUploads(c.uploads));},[]);
+  const canSave = !filesPending && (text.trim().length > 0 || Boolean(attachedImage) || filesReady>0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const saveLock = useRef(false);
@@ -39,6 +46,7 @@ const NoteCreator: React.FC<any> = ({ onSave, onClose }) => {
           type: "note",
           notes: text.trim(),
           image: attachedImage,
+          draftId: filesReady ? draftId : undefined,
         })) === false
       )
         throw new Error("Not saved");
@@ -60,7 +68,7 @@ const NoteCreator: React.FC<any> = ({ onSave, onClose }) => {
           <button
             disabled={saving}
             aria-label="Close note"
-            onClick={onClose}
+            onClick={() => {if((text.trim() || attachedImage || filesReady || filesPending) && !confirm('Discard this unsaved note?')) return;onClose();}}
             className="min-h-11 min-w-11"
           >
             <X className="text-gray-400" />
@@ -113,18 +121,21 @@ const NoteCreator: React.FC<any> = ({ onSave, onClose }) => {
         )}
         <div className="grid grid-cols-2 gap-3">
           <button
+            disabled={saving}
             onClick={() => handlePickImage(CameraSource.Camera)}
             className="flex items-center justify-center gap-2 bg-gray-100 px-4 py-3 rounded-2xl font-bold text-sm"
           >
             <Camera size={16} /> Take Photo
           </button>
           <button
+            disabled={saving}
             onClick={() => handlePickImage(CameraSource.Photos)}
             className="flex items-center justify-center gap-2 bg-gray-100 px-4 py-3 rounded-2xl font-bold text-sm"
           >
             <Image size={16} /> Choose From Library
           </button>
         </div>
+        {uploads && <AttachmentPicker draftId={draftId} disabled={saving} onState={(ready,pending)=>{setFilesReady(ready);setFilesPending(pending);}} />}
       </div>
     </div>
   );

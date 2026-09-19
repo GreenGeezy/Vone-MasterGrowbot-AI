@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import {proFirstRelease} from '../services/releaseFeatures';
 import { UserProfile } from '../types';
 import {
     User, LogOut, Shield, Settings, ChevronRight, Camera,
@@ -301,7 +302,12 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 {/* 3. Community & Support */}
                 <Section title="Community & Support">
                     <Row icon={ScanLine} label="View Tutorial" onClick={() => onViewTutorial && onViewTutorial()} />
-                    <Row icon={Star} label="Rate on App Store" onClick={() => {
+                    <Row icon={Star} label="Rate on App Store" onClick={async () => {
+                        if (Capacitor.getPlatform() === 'ios') {
+                            try { const { InAppReview } = await import('@capacitor-community/in-app-review'); await InAppReview.requestReview(); }
+                            catch { setShowFeedbackModal(true); }
+                            return;
+                        }
                         const storeUrl = Capacitor.getPlatform() === 'ios'
                             ? 'https://apps.apple.com/app/id6752221060?action=write-review'
                             : 'https://play.google.com/store/apps/details?id=com.mastergrowbot.app';
@@ -314,7 +320,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 {/* 4. Legal & Account */}
                 <Section title="Legal & Account">
                     <Row icon={FileText} label="Privacy Policy" onClick={() => openLink('https://www.mastergrowbot.com/privacy-policy')} />
-                    <Row icon={Shield} label="Terms of Use" onClick={() => openLink('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')} />
+                    <Row icon={Shield} label="Terms of Use" onClick={() => openLink(proFirstRelease ? 'https://www.mastergrowbot.com/terms-of-service' : 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')} />
                 </Section>
 
                 {/* DELETE ACCOUNT SECTION (Policy Compliant) */}
@@ -344,7 +350,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 </div>
 
                 <div className="text-center pb-8 opacity-40">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 1.6.11</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 1.6.12</p>
                 </div>
             </div>
 
