@@ -6,6 +6,7 @@ import type { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import Growbot from '../components/Growbot';
+import PaywallTestimonials from '../components/PaywallTestimonials';
 import {proFirstRelease} from '../services/releaseFeatures';
 import {recordEvent} from '../services/premiumLibrary';
 import { initializeSubscriptions, withTimeout } from '../services/appInitializer';
@@ -14,7 +15,6 @@ interface PaywallProps {
   onClose: () => void;
   onPurchase: () => void;
   onSkip: () => void;
-  onOpenSavedFiles?: () => void;
 }
 
 // RevenueCat product IDs for reference (not entitlement checks):
@@ -88,7 +88,7 @@ function parsePackagePrice(pkg?: PurchasesPackage): number | null {
   return null; // Localized formatted strings are not safe numeric input.
 }
 
-const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onOpenSavedFiles }) => {
+const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
   useEffect(()=>{recordEvent('paywall_view','pro');},[]);
   const [selectedPkgIdentifier, setSelectedPkgIdentifier] = useState<string | null>(null);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
@@ -100,6 +100,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onOpenSavedFiles
   const [testimonialIndex, setTestimonialIndex] = useState(0);
 
   useEffect(() => {
+    if (proFirstRelease) return;
     const timer = setInterval(() => {
       setTestimonialIndex(prev => (prev + 1) % TESTIMONIALS.length);
     }, 4000);
@@ -349,7 +350,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onOpenSavedFiles
         </header>
         <div className="px-5 py-4">
           <ul className="grid grid-cols-2 gap-2 mb-3 text-xs font-semibold text-slate-700">
-            {['Photo health analysis', '300 strain profiles', 'Notes & saved reports', 'Tasks & follow-ups'].map(label => <li key={label} className="flex items-center gap-2"><Check size={16} className="text-emerald-600 shrink-0" />{label}</li>)}
+            {[{icon:'📸',label:'Photo health analysis'}, {icon:'🧬',label:'300 strain profiles'}, {icon:'📓',label:'Notes & saved reports'}, {icon:'📅',label:'Tasks & follow-ups'}].map(({icon,label}) => <li key={label} className="flex items-center gap-2"><span aria-hidden="true" className="text-base shrink-0">{icon}</span>{label}</li>)}
           </ul>
           <h2 className="text-sm font-bold text-slate-900 mb-3">Choose your Pro plan</h2>
           <div className="space-y-3" aria-label="Pro billing period">
@@ -363,8 +364,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, onOpenSavedFiles
               </button>;
             })}
           </div>
-          <blockquote className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">“{TESTIMONIALS[1].text}”<footer className="text-xs text-slate-500 mt-2">{TESTIMONIALS[1].name} · MasterGrowbot user feedback</footer></blockquote>
-          {onOpenSavedFiles && <button onClick={onOpenSavedFiles} className="min-h-11 text-sm underline text-slate-600 mt-2">Open my saved files</button>}
+          <PaywallTestimonials />
           {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 text-red-800 p-3 text-sm">{error}</p>}
         </div>
       </div>

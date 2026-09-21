@@ -2,7 +2,10 @@ import React, { useEffect, useState } from "react";
 import NoteCreator from "../components/NoteCreator";
 import TaskRow from "../components/TaskRow";
 import TaskEditor from "../components/TaskEditor";
-import JournalFiles from '../components/JournalFiles';
+import AnalysisShareDialog from '../components/AnalysisShareDialog';
+import { journalShareSummary } from '../services/journalShare';
+import type { AnalysisShareSummary } from '../services/analysisShareCard';
+import { Share2 } from 'lucide-react';
 import { proFirstRelease } from '../services/releaseFeatures';
 import { recordEvent } from '../services/premiumLibrary';
 import { analyzeGrowLog } from '../services/geminiService';
@@ -26,6 +29,7 @@ export default function Journal({
   const [creator, setCreator] = useState(false);
   const [taskEditor, setTaskEditor] = useState<any>(null);
   const [entry, setEntry] = useState<any>(null);
+  const [shareReport, setShareReport] = useState<AnalysisShareSummary | null>(null);
   const [filter, setFilter] = useState("All");
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -114,7 +118,7 @@ export default function Journal({
         </button>
       </div>
       <div className="flex gap-2 mb-4" aria-label="Journal filters">
-        {["All", "Notes", "Tasks", ...(proFirstRelease?['Files']:[])].map((f) => (
+        {["All", "Notes", "Tasks"].map((f) => (
           <button
             key={f}
             aria-pressed={filter === f}
@@ -136,8 +140,7 @@ export default function Journal({
           {error}
         </p>
       )}
-      {filter==='Files' && <JournalFiles />}
-      <div className={filter==='Files'?'hidden':'space-y-3'}>
+      <div className="space-y-3">
         {feed.map((item) =>
           item.feedType === "task" ? (
             <TaskRow
@@ -188,7 +191,7 @@ export default function Journal({
           )
         )}
       </div>
-      {!feed.length && filter!=='Files' && (
+      {!feed.length && (
         <div className="rounded-2xl bg-white p-6 text-center">
           <h2 className="font-bold">
             {filter === "Tasks" ? "Plan your next step" : "Start your record"}
@@ -223,6 +226,7 @@ export default function Journal({
           }
         />
       )}
+      {shareReport && <AnalysisShareDialog summary={shareReport} onClose={() => setShareReport(null)} />}
       {entry && (
         <div className="fixed inset-0 z-[80] bg-black/50 p-4 flex items-center justify-center">
           <div
@@ -258,7 +262,7 @@ export default function Journal({
                   {summary(entry)}
                 </p>
               )}
-              {proFirstRelease && <JournalFiles entryId={String(entry.id)} />}
+              {journalShareSummary(entry) && <button onClick={() => setShareReport(journalShareSummary(entry))} className="w-full mt-5 min-h-12 rounded-2xl bg-emerald-100 text-emerald-950 font-bold flex items-center justify-center gap-2"><Share2 size={18}/> Share Analysis</button>}
               {error && (
                 <p role="alert" className="text-sm text-red-700 mt-3">
                   {error}
@@ -275,7 +279,7 @@ export default function Journal({
                     throw new Error();
                   setEntry(null);
                 } catch {
-                  setError("Could not delete the note. Delete its attached files first, then retry.");
+                  setError("Could not delete the note. Please try again.");
                 } finally {
                   setDeleting(false);
                 }

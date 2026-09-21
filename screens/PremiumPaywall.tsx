@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Check, Film, Lock, RotateCcw, Sparkles } from 'lucide-react';
+import PaywallTestimonials from '../components/PaywallTestimonials';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import type { PurchasesPackage } from '@revenuecat/purchases-capacitor';
@@ -258,7 +259,7 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
       <div className="flex-1 overflow-y-auto px-5 pb-6">
         <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-emerald-500/25 to-cyan-400/10 border border-emerald-300/20 p-3 mt-1 mb-3">
           <h1 className="text-xl font-black leading-tight">Everything in Pro.<br />More ways to explore.</h1>
-          <p className="text-xs text-slate-300 mt-2 leading-relaxed">Video check-ins{features.uploads?' · Private journal files':''}{features.catalog && features.catalogCount===300?' · Double the strains: 600 profiles':''}</p>
+          <p className="text-xs text-slate-300 mt-2 leading-relaxed">Video check-ins{features.catalog && features.catalogCount===300?' · Double the strains: 600 profiles':''}</p>
           <p className="text-xs font-semibold text-emerald-200 mt-2">One subscription. Pro included.</p>
         </div>
 
@@ -281,20 +282,20 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
 
         <div className="space-y-3 my-5">
           {[
-            {title:'See more with video',detail:'Review multiple angles in one short check-in.'},
-            ...(features.uploads?[{title:'Keep your records together',detail:'Save PDFs, spreadsheets and documents privately in Journal.'}]:[{title:'First access to new Premium features',detail:'Explore new Premium tools as they are released. No release dates are promised.'}]),
-            ...(features.catalog && features.catalog && features.catalogCount===300?[{title:'Double the strains',detail:'Explore 600 reference profiles—300 more than Pro.'}]:[]),
-            {title:'Everything in Pro included',detail:'One Premium subscription. Your Pro features come with it.'},
+            {icon:'🎥',title:'See more with video',detail:'Review multiple angles in one short check-in.'},
+            {icon:'✨',title:'First access to new Premium features',detail:'Explore new Premium tools as they are released. No release dates are promised.'},
+            ...(features.catalog && features.catalogCount===300?[{icon:'🧬',title:'Double the strains',detail:'Explore 600 reference profiles—300 more than Pro.'}]:[]),
+            {icon:'🌱',title:'Everything in Pro included',detail:'One Premium subscription. Your Pro features come with it.'},
           ].map(item => (
             <div key={item.title} className="rounded-2xl bg-white/[0.06] border border-white/10 p-4 flex gap-3 text-slate-200">
-              <Check size={18} className="text-emerald-400 shrink-0 mt-0.5" /><div><p className="text-sm font-bold">{item.title}</p><p className="text-xs text-slate-400 mt-1 leading-relaxed">{item.detail}</p></div>
+              <span aria-hidden="true" className="text-xl shrink-0">{item.icon}</span><div><p className="text-sm font-bold">{item.title}</p><p className="text-xs text-slate-400 mt-1 leading-relaxed">{item.detail}</p></div>
             </div>
           ))}
         </div>
 
-        <div className="rounded-2xl border border-white/10 p-4 mb-5 text-sm"><p className="text-xs text-emerald-300 font-bold">EXAMPLE WORKFLOW</p><p className="mt-2 text-slate-200">Save a check-in → add your records → revisit what changed.</p><p className="text-xs text-slate-400 mt-2">Illustrative example, not a personal analysis.</p></div>
+        <div className="rounded-2xl border border-white/10 p-4 mb-5 text-sm"><p className="text-xs text-emerald-300 font-bold">EXAMPLE WORKFLOW</p><p className="mt-2 text-slate-200">Save a check-in → add a note → revisit what changed.</p><p className="text-xs text-slate-400 mt-2">Illustrative example, not a personal analysis.</p></div>
 
-        <div className="mt-5 rounded-2xl bg-white/5 p-4 text-sm"><p className="font-bold text-slate-300 text-xs mb-2">FEEDBACK ABOUT MASTERGROWBOT</p><blockquote className="text-slate-200">“As a first-time grower I was totally lost. MasterGrowbot walked me through everything.”</blockquote><p className="text-xs text-slate-400 mt-2">Sarah K. · Feedback about the app, not specifically Premium</p></div>
+        <PaywallTestimonials dark />
         <div ref={statusPanel}>
         {error && <div role="alert" className="mt-4 rounded-xl bg-red-500/15 border border-red-400/30 p-3 text-xs text-red-100">{error}</div>}
         {notice && <div role="status" className="mt-4 rounded-xl bg-amber-400/10 border border-amber-300/30 p-3 text-xs text-amber-100 leading-relaxed">{notice}</div>}

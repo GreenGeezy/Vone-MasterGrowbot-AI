@@ -9,6 +9,7 @@ interface Props {
   result: VideoVisualResult;
   thumbnail: string | null;
   onSave: () => void;
+  saving?: boolean;
   onShare: () => void;
   onNew: () => void;
   onAddTask?: (task: string) => void;
@@ -25,7 +26,7 @@ const BulletList = ({ items }: { items: string[] }) => items.length ? (
   </ul>
 ) : <p className="text-sm text-slate-500">No specific observations returned.</p>;
 
-export default function VideoHealthReport({ result, thumbnail, onSave, onShare, onNew, onAddTask }: Props) {
+export default function VideoHealthReport({ result, thumbnail, saving = false, onSave, onShare, onNew, onAddTask }: Props) {
   const tone = result.severity === 'high' ? 'text-red-600' : result.severity === 'medium' ? 'text-amber-700' : 'text-emerald-700';
 
   return (
@@ -120,7 +121,7 @@ export default function VideoHealthReport({ result, thumbnail, onSave, onShare, 
       </section>
 
       <div className="grid grid-cols-2 gap-3">
-        <button onClick={onSave} className="rounded-2xl bg-slate-900 text-white py-4 font-bold text-sm"><Save size={18} className="inline mr-2" />Save to Journal</button>
+        <button disabled={saving} onClick={onSave} className="rounded-2xl bg-slate-900 text-white py-4 font-bold text-sm"><Save size={18} className="inline mr-2" /> {saving ? 'Saving…' : 'Save to Journal'}</button>
         <button onClick={onShare} className="rounded-2xl bg-emerald-100 text-emerald-900 py-4 font-bold text-sm"><Share2 size={18} className="inline mr-2" />Share Analysis</button>
       </div>
       <button onClick={onNew} className="w-full rounded-2xl border border-slate-200 bg-white py-4 font-bold text-sm"><RefreshCw size={16} className="inline mr-2" />Analyze another video</button>

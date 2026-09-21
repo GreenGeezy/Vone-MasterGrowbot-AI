@@ -6,6 +6,7 @@ import Growbot from '../components/Growbot';
 import { STRAIN_DATABASE } from '../data/strains';
 import { matchesStrainSearch } from '../utils/strainSearch';
 import VideoHealthReport from '../components/VideoHealthReport';
+import { mediaSelectionError } from '../services/mediaSelection';
 import AnalysisShareDialog from '../components/AnalysisShareDialog';
 import { videoShareFrame } from '../services/shareMedia';
 import type { AnalysisShareSummary } from '../services/analysisShareCard';
@@ -53,8 +54,8 @@ const PreventionSection = ({ tips }: { tips: string[] }) => (
 interface DiagnoseProps {
   plant?: Plant;
   onBack?: () => void;
-  onSaveToJournal?: (entry: any) => void;
-  onAddTask?: (title: string, date: string, source: 'ai_diagnosis' | 'user') => void;
+  onSaveToJournal?: (entry: any) => void | boolean | Promise<void | boolean>;
+  onAddTask?: (title: string, date: string, source: 'ai_diagnosis' | 'user') => void | boolean | Promise<void | boolean>;
   defaultProfile?: UserProfile | null;
   onAddPlant?: (strain: any) => void;
 }
@@ -95,6 +96,11 @@ const LOADING_PHRASES = [
 ];
 
 const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onAddTask, defaultProfile, onAddPlant }) => {
+  const mediaLock = useRef(false);
+  const saveLock = useRef(false);
+  const [pickingMedia, setPickingMedia] = useState<'camera' | 'photos' | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [savingReport, setSavingReport] = useState(false);
   const [premiumMember,setPremiumMember]=useState(false);
   useEffect(()=>{if(Capacitor.getPlatform()==='ios')void import('@revenuecat/purchases-capacitor').then(({Purchases})=>Purchases.getCustomerInfo()).then(({customerInfo})=>setPremiumMember(hasPremiumAccess(customerInfo))).catch(()=>{});},[]);
   const [image, setImage] = useState<string | null>(null);
@@ -235,13 +241,20 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     setShowVideoFlow(false);
   };
 
-  const saveVideoObservation = () => {
-    if (!videoResult || !onSaveToJournal) return;
-    onSaveToJournal({
-      id: Date.now().toString(), date: new Date().toLocaleDateString(), type: 'Health Check',
-      notes: formatVideoHealthReport(videoResult),
-    });
-    alert('Video observations saved to your journal. The video itself was not retained.');
+  const saveVideoObservation = async () => {
+    if (!videoResult || !onSaveToJournal || saveLock.current) return;
+    saveLock.current = true;
+    setSavingReport(true);
+    try {
+      const saved = await onSaveToJournal({
+        id: Date.now().toString(), date: new Date().toLocaleDateString(), type: 'Health Check',
+        notes: formatVideoHealthReport(videoResult), image: videoThumbnail || undefined,
+        shareSummary: { kind: 'video', headline: videoResult.healthLabel, score: videoResult.healthScore },
+      });
+      if (saved === false) throw new Error('Not saved');
+    } catch {
+      alert('Could not save your report. It is still here. Please try again.');
+    } finally { saveLock.current = false; setSavingReport(false); }
   };
 
   const processImage = async (dataUrl: string) => {
@@ -282,58 +295,44 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     }
   };
 
-  const handleStartCamera = async () => {
+  const pickPhoto = async (source: CameraSource) => {
+    if (mediaLock.current) return;
+    mediaLock.current = true;
+    setPickingMedia(source === CameraSource.Camera ? 'camera' : 'photos');
+    setMediaError(null);
     try {
-      const photo = await Camera.getPhoto({
-        quality: 90,
-        allowEditing: false,
-        resultType: CameraResultType.DataUrl,
-        source: CameraSource.Camera
-      });
-      if (photo.dataUrl) await processImage(photo.dataUrl);
-    } catch (err) { console.log("Camera cancelled"); }
+      const photo = await Camera.getPhoto({ quality: 90, allowEditing: false, resultType: CameraResultType.DataUrl, source });
+      if (!photo.dataUrl) throw new Error('No photo returned');
+      if (source === CameraSource.Camera) await processImage(photo.dataUrl);
+      else setPreviewImage(photo.dataUrl);
+    } catch (error) { setMediaError(mediaSelectionError(error)); }
+    finally { mediaLock.current = false; setPickingMedia(null); }
   };
-
-  const handleGalleryUpload = async () => {
-    try {
-      const photo = await Camera.getPhoto({
-        quality: 90,
-        allowEditing: false,
-        resultType: CameraResultType.DataUrl,
-        source: CameraSource.Photos
-      });
-      if (photo.dataUrl) setPreviewImage(photo.dataUrl);
-    } catch (err) { console.log("Gallery cancelled"); }
-  };
+  const handleStartCamera = () => pickPhoto(CameraSource.Camera);
+  const handleGalleryUpload = () => pickPhoto(CameraSource.Photos);
 
   const handleShare = () => {
     if (!result) return;
     setShareSummary({ kind: 'photo', headline: result.diagnosis, score: result.healthScore, imageUrl: image || undefined });
   };
 
-  const handleSave = () => {
-    if (onSaveToJournal && result && image) {
-      onSaveToJournal({
-        id: Date.now().toString(),
-        date: new Date().toLocaleDateString(),
-        type: 'Health Check',
-        notes: formatDiagnosisReport(result),
-        image: image,
-        diagnosisData: result,
+  const handleSave = async () => {
+    if (!onSaveToJournal || !result || !image || saveLock.current) return;
+    saveLock.current = true;
+    setSavingReport(true);
+    try {
+      const saved = await onSaveToJournal({
+        id: Date.now().toString(), date: new Date().toLocaleDateString(), type: 'Health Check',
+        notes: formatDiagnosisReport(result), image, diagnosisData: result,
       });
-
-      // Auto-Task Logic for Low Health
+      if (saved === false) throw new Error('Not saved');
       if (result.healthScore < 70 && onAddTask) {
-        const today = new Date().toISOString().split('T')[0];
-        onAddTask(`Review Diagnosis: ${result.diagnosis}`, today, 'ai_diagnosis');
-        alert("Saved to Journal + Follow-up Task Created! 📝✅");
-      } else {
-        alert("Saved to Journal! 📝");
+        try {
+          if (await onAddTask(`Review Diagnosis: ${result.diagnosis}`, new Date().toISOString().split('T')[0], 'ai_diagnosis') === false) throw new Error();
+        } catch { alert('Your report was saved. The follow-up task could not be added; you can add it in Journal.'); }
       }
-
-    } else {
-      alert("Could not save entry.");
-    }
+    } catch { alert('Could not save your report. It is still here. Please try again.'); }
+    finally { saveLock.current = false; setSavingReport(false); }
   };
 
   const filteredStrains = STRAIN_DATABASE.filter(strain => matchesStrainSearch(strain, searchQuery));
@@ -464,7 +463,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
           )}
 
           <div className="grid grid-cols-2 gap-4 pb-4">
-            <button onClick={handleSave} className="py-4 bg-gray-900 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"><Save size={18} /> Save to Journal</button>
+            <button disabled={savingReport} onClick={handleSave} className="py-4 bg-gray-900 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"><Save size={18} /> {savingReport ? 'Saving…' : 'Save to Journal'}</button>
             <button onClick={handleShare} className="py-4 bg-emerald-100 text-emerald-900 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-emerald-200"><Share2 size={18} /> Share Analysis</button>
           </div>
           <p className="text-xs text-center text-gray-500 pb-3">Share a plant check-in. Invite a second look.</p>
@@ -485,8 +484,9 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
 
       <div className="px-5 space-y-4 max-w-md mx-auto">
         <div className="grid grid-cols-2 gap-3">
-          <button onClick={handleStartCamera} className="bg-emerald-600 text-white min-h-[64px] rounded-2xl font-bold flex items-center justify-center gap-2"><CameraIcon size={22} /> {proFirstRelease?'Take Photo':'Take Pic'}</button>
-          <button onClick={handleGalleryUpload} className="bg-white text-slate-800 border border-slate-200 min-h-[64px] rounded-2xl font-bold flex items-center justify-center gap-2"><Upload size={20} /> Analyze Image</button>
+          {mediaError && <p role="alert" className="col-span-2 text-sm text-red-700 bg-red-50 p-3 rounded-xl">{mediaError}</p>}
+          <button disabled={!!pickingMedia} aria-busy={pickingMedia === 'camera'} onClick={handleStartCamera} className="bg-emerald-600 text-white min-h-[64px] rounded-2xl font-bold flex items-center justify-center gap-2"><CameraIcon size={22} /> {pickingMedia === 'camera' ? 'Opening camera…' : proFirstRelease ? 'Take Photo' : 'Take Pic'}</button>
+          <button disabled={!!pickingMedia} aria-busy={pickingMedia === 'photos'} onClick={handleGalleryUpload} className="bg-white text-slate-800 border border-slate-200 min-h-[64px] rounded-2xl font-bold flex items-center justify-center gap-2"><Upload size={20} /> {pickingMedia === 'photos' ? 'Opening photos…' : 'Analyze Image'}</button>
         </div>
         {proFirstRelease?<button onClick={openVideo} data-testid="premium-video-card" className="w-full text-left flex items-center gap-2 min-h-11 px-3 py-2 border border-slate-200 rounded-xl bg-white text-slate-600 text-sm"><Film size={17}/><span>{premiumMember?'Analyze video':'Video analysis'}</span>{!premiumMember&&<><span className="text-[10px] px-2 py-1 bg-slate-100 rounded-full">Premium</span><span className="ml-auto font-semibold">Explore</span></>}<ChevronRight size={16}/></button>:<button onClick={openVideo} data-testid="premium-video-card" className="w-full text-left flex items-center gap-3 rounded-2xl bg-slate-950 p-4 text-white shadow-md active:scale-[0.99]">
           <span className="rounded-xl bg-emerald-400/15 p-3 text-emerald-300"><Film size={24} /></span>
@@ -622,7 +622,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
               </div>
             )}
 
-            {videoResult && <VideoHealthReport result={videoResult} thumbnail={videoThumbnail} onSave={saveVideoObservation}
+            {videoResult && <VideoHealthReport result={videoResult} thumbnail={videoThumbnail} onSave={saveVideoObservation} saving={savingReport}
               onShare={() => setShareSummary({ kind: 'video', headline: videoResult.healthLabel, score: videoResult.healthScore, imageUrl: videoThumbnail || undefined })}
               onAddTask={onAddTask ? (task) => {
                 onAddTask(task, new Date().toISOString().split('T')[0], 'ai_diagnosis');

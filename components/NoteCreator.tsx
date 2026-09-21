@@ -1,6 +1,5 @@
 import React, { useRef, useState } from "react";
-import AttachmentPicker from './AttachmentPicker';
-import { getLibraryConfig } from '../services/premiumLibrary';
+import { mediaSelectionError } from '../services/mediaSelection';
 import { X, Check, Camera, Image, Trash2 } from "lucide-react";
 import {
   Camera as CapacitorCamera,
@@ -11,28 +10,27 @@ import {
 const NoteCreator: React.FC<any> = ({ onSave, onClose }) => {
   const [text, setText] = useState("");
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
-  const [draftId] = useState(() => crypto.randomUUID());
-  const [filesReady,setFilesReady] = useState(0);
-  const [filesPending,setFilesPending] = useState(false);
-  const [uploads,setUploads] = useState(false);
-  React.useEffect(()=>{void getLibraryConfig().then(c=>setUploads(c.uploads));},[]);
-  const canSave = !filesPending && (text.trim().length > 0 || Boolean(attachedImage) || filesReady>0);
+  const canSave = text.trim().length > 0 || Boolean(attachedImage);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const saveLock = useRef(false);
+  const photoLock = useRef(false);
+  const [pickingPhoto, setPickingPhoto] = useState(false);
 
   const handlePickImage = async (source: CameraSource) => {
+    if (photoLock.current || saving) return;
+    photoLock.current = true; setPickingPhoto(true); setError("");
     try {
       const photo = await CapacitorCamera.getPhoto({
         quality: 80,
         resultType: CameraResultType.Base64,
         source,
       });
-      if (photo.base64String)
-        setAttachedImage(`data:image/jpeg;base64,${photo.base64String}`);
+      if (!photo.base64String) throw new Error('No photo returned');
+      setAttachedImage(`data:image/${photo.format || 'jpeg'};base64,${photo.base64String}`);
     } catch (e) {
-      console.warn("Image selection was canceled or failed.");
-    }
+      setError(mediaSelectionError(e) || "");
+    } finally { photoLock.current = false; setPickingPhoto(false); }
   };
 
   const handleSave = async () => {
@@ -46,7 +44,6 @@ const NoteCreator: React.FC<any> = ({ onSave, onClose }) => {
           type: "note",
           notes: text.trim(),
           image: attachedImage,
-          draftId: filesReady ? draftId : undefined,
         })) === false
       )
         throw new Error("Not saved");
@@ -66,16 +63,16 @@ const NoteCreator: React.FC<any> = ({ onSave, onClose }) => {
       <div role="dialog" aria-modal="true" aria-label="New note" className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl max-h-[85dvh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <button
-            disabled={saving}
+            disabled={saving || pickingPhoto}
             aria-label="Close note"
-            onClick={() => {if((text.trim() || attachedImage || filesReady || filesPending) && !confirm('Discard this unsaved note?')) return;onClose();}}
+            onClick={() => {if((text.trim() || attachedImage) && !confirm('Discard this unsaved note?')) return;onClose();}}
             className="min-h-11 min-w-11"
           >
             <X className="text-gray-400" />
           </button>
           <button
             onClick={handleSave}
-            disabled={!canSave || saving}
+            disabled={!canSave || saving || pickingPhoto}
             aria-label="Save note"
             className={`p-2 rounded-full ${
               canSave ? "bg-primary text-white" : "bg-gray-100 text-gray-300"
@@ -97,7 +94,7 @@ const NoteCreator: React.FC<any> = ({ onSave, onClose }) => {
         )}
         <textarea
           aria-label="Note"
-          disabled={saving}
+          disabled={saving || pickingPhoto}
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="What changed today? Add an observation or a photo."
@@ -119,23 +116,23 @@ const NoteCreator: React.FC<any> = ({ onSave, onClose }) => {
             </button>
           </div>
         )}
+        {pickingPhoto && <p role="status" className="text-sm text-gray-600 mb-2">Opening photo picker…</p>}
         <div className="grid grid-cols-2 gap-3">
           <button
-            disabled={saving}
+            disabled={saving || pickingPhoto}
             onClick={() => handlePickImage(CameraSource.Camera)}
             className="flex items-center justify-center gap-2 bg-gray-100 px-4 py-3 rounded-2xl font-bold text-sm"
           >
             <Camera size={16} /> Take Photo
           </button>
           <button
-            disabled={saving}
+            disabled={saving || pickingPhoto}
             onClick={() => handlePickImage(CameraSource.Photos)}
             className="flex items-center justify-center gap-2 bg-gray-100 px-4 py-3 rounded-2xl font-bold text-sm"
           >
             <Image size={16} /> Choose From Library
           </button>
         </div>
-        {uploads && <AttachmentPicker draftId={draftId} disabled={saving} onState={(ready,pending)=>{setFilesReady(ready);setFilesPending(pending);}} />}
       </div>
     </div>
   );

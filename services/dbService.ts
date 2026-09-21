@@ -90,7 +90,8 @@ const mapJournalRow = (row: any) => ({
   imageUri: row.media_url,
   image: row.media_url,
   tags: row.tags || [],
-  aiAnalysis: row.ai_analysis?.summary ? row.ai_analysis : (row.ai_analysis ? { summary: String(row.ai_analysis) } : undefined),
+  aiAnalysis: typeof row.ai_analysis === 'string' ? { summary: row.ai_analysis } : row.ai_analysis || undefined,
+  shareSummary: row.ai_analysis?.shareSummary,
   diagnosisData: row.ai_analysis?.diagnosisData,
 });
 
@@ -323,6 +324,8 @@ export const saveAppJournalEntry = async (plantId: string | undefined, entry: an
     mediaUrl = await uploadImage(imageData, path) || imageData;
   }
 
+  const analysisMetadata = typeof entry.aiAnalysis === 'string' ? { summary: entry.aiAnalysis } : entry.aiAnalysis || {};
+  const reportMetadata = { ...analysisMetadata, ...(entry.diagnosisData ? { diagnosisData: entry.diagnosisData } : {}), ...(entry.shareSummary ? { shareSummary: entry.shareSummary } : {}) };
   const saved = await saveJournalEntry({
     draft_id: entry.draftId,
     plant_id: plantId || entry.plant_id || entry.plantId || '',
@@ -330,7 +333,7 @@ export const saveAppJournalEntry = async (plantId: string | undefined, entry: an
     content: entry.notes || entry.content || '',
     media_url: mediaUrl || undefined,
     tags: entry.tags || [],
-    ai_analysis: entry.aiAnalysis || (entry.diagnosisData ? { diagnosisData: entry.diagnosisData } : undefined),
+    ai_analysis: Object.keys(reportMetadata).length ? reportMetadata : undefined,
   });
 
   return mapJournalRow(saved || {
@@ -340,7 +343,7 @@ export const saveAppJournalEntry = async (plantId: string | undefined, entry: an
     content: entry.notes || entry.content || '',
     media_url: mediaUrl,
     tags: entry.tags || [],
-    ai_analysis: entry.aiAnalysis,
+    ai_analysis: Object.keys(reportMetadata).length ? reportMetadata : undefined,
   });
 };
 

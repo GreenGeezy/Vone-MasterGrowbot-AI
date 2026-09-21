@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import JournalFiles from './components/JournalFiles';
-import { proFirstRelease } from './services/releaseFeatures';
 import { OnboardingStep, UserProfile, Plant, Task, AppScreen } from "./types";
 import Splash from "./screens/Splash";
 import Onboarding from "./screens/Onboarding";
@@ -49,7 +47,6 @@ const LS_LAST_VISIT = "mastergrowbot_last_visit";
 const LS_STREAK = "mastergrowbot_streak";
 
 const App: React.FC = () => {
-  const [showSavedFiles, setShowSavedFiles] = useState(false);
   const [journalPlantId, setJournalPlantId] = useState<string | undefined>();
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyActions, setBusyActions] = useState<string[]>([]);
@@ -600,7 +597,6 @@ const App: React.FC = () => {
   }
 
   // Previously saved documents remain owner-accessible without a paid entitlement.
-  if (proFirstRelease && showSavedFiles) return <ErrorBoundary><main className="fixed inset-0 overflow-y-auto bg-white px-5 pt-[max(1.5rem,env(safe-area-inset-top,0px))] pb-8"><button className="min-h-11 underline" onClick={() => setShowSavedFiles(false)}>Back</button><h1 className="text-2xl font-bold mt-3">Your saved files</h1><p className="text-sm text-slate-600 mt-2">Open, download or delete files saved with this app session. A subscription is not required to access existing files.</p><JournalFiles /></main></ErrorBoundary>;
 
   // 3. ONBOARDING QUIZ
   if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) {
@@ -619,7 +615,6 @@ const App: React.FC = () => {
       return (
         <ErrorBoundary>
           <Paywall
-            onOpenSavedFiles={() => setShowSavedFiles(true)}
             onClose={() => setShowPaywall(false)}
             onPurchase={handlePaywallPurchase}
             onSkip={() => {}}
@@ -681,7 +676,6 @@ const App: React.FC = () => {
     return (
       <ErrorBoundary>
         <Paywall
-          onOpenSavedFiles={() => setShowSavedFiles(true)}
           onClose={() => {}}
           onPurchase={handlePaywallPurchase}
           onSkip={() => {}}
