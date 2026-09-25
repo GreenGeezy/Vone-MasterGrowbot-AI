@@ -57,10 +57,11 @@ export const uploadImage = async (base64: string, path: string): Promise<string 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return null; // Should not trigger now due to anon auth
 
-    const blob = base64ToBlob(base64);
+    const mime = /^data:(image\/(?:jpeg|png|webp));base64,/i.exec(base64)?.[1]?.toLowerCase() || 'image/jpeg';
+    const blob = base64ToBlob(base64, mime);
     const { error: uploadError } = await supabase.storage
       .from('user_uploads')
-      .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+      .upload(path, blob, { contentType: mime, upsert: true });
 
     if (uploadError) throw uploadError;
 
@@ -193,6 +194,13 @@ export const createPlantRecord = async (strain: any): Promise<Plant | null> => {
     setLocal(STORAGE_KEYS.PLANTS, plants);
     return localPlant;
   }
+  let storedImage = localPlant.imageUri;
+  if (typeof storedImage === 'string' && /^data:image\//i.test(storedImage)) {
+    const extension = /^data:image\/(png|webp);/i.exec(storedImage)?.[1]?.toLowerCase() || 'jpg';
+    storedImage = await uploadImage(storedImage, `${session.user.id}/plants/${Date.now()}-${crypto.randomUUID()}.${extension}`) || '';
+    if (!storedImage) throw new Error('Plant photo upload failed. Your custom strain is still available; retry when connected.');
+  }
+  const savedStrain = { ...strain, imageUri: storedImage, image: storedImage };
   const { data, error } = await supabase
     .from('plants')
     .insert({
@@ -200,9 +208,9 @@ export const createPlantRecord = async (strain: any): Promise<Plant | null> => {
       grow_id: growId,
       name: localPlant.name,
       strain: localPlant.strain,
-      strain_details: strain,
+      strain_details: savedStrain,
       stage: localPlant.stage,
-      image_url: localPlant.imageUri,
+      image_url: storedImage,
       health_score: localPlant.healthScore,
       days_in_stage: localPlant.daysInStage,
       total_days: localPlant.totalDays,

@@ -498,16 +498,16 @@ const App: React.FC = () => {
       );
     });
 
-  const handleAddPlant = async (strain: any) => {
+  const handleAddPlant = async (strain: any) => runAction('add-plant', async () => {
     const newPlant = await createPlantRecord(strain);
-    if (!newPlant) return;
+    if (!newPlant) throw new Error('Plant could not be saved');
     setPlants((prev) => [...prev, newPlant]);
     handleAddTask(
       `Start journal for ${strain.name}`,
       new Date().toISOString().split("T")[0],
       "user"
     );
-  };
+  });
 
   const completeTutorial = () => {
     setShowTutorial(false);
