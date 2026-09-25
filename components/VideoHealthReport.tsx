@@ -1,7 +1,7 @@
 import React from 'react';
 import {
-  Activity, CalendarPlus, Eye, Gauge, Leaf, ListChecks, RefreshCw,
-  Save, ScanSearch, Share2, Sprout, Wind,
+  Activity, CalendarPlus, Eye, ListChecks, RefreshCw,
+  Save, ScanSearch, Share2, Sprout,
 } from 'lucide-react';
 import type { VideoVisualResult } from '../services/videoVisualResult';
 
@@ -35,25 +35,23 @@ export default function VideoHealthReport({ result, thumbnail, saving = false, o
         <p className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-800">
           <Activity size={15} /> Video plant health report
         </p>
-        <h3 className={`text-3xl font-black leading-tight mt-3 ${tone}`}>{result.healthLabel}</h3>
+        <h3 className={`text-2xl font-black leading-tight mt-3 ${tone}`}>{result.visualSummary}</h3>
+        <p className="mt-2 text-sm font-semibold">Next action: {result.priorityAction}</p>
         <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-500">Visible stage: {result.growthStage}</p>
       </header>
 
       {thumbnail && <img src={thumbnail} alt="Frame from your analyzed plant video" className="w-full max-h-64 object-contain rounded-3xl bg-slate-950 shadow-sm" />}
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl bg-white border border-purple-100 p-4 text-center shadow-sm">
-          <Leaf className="text-purple-500 mx-auto mb-2" size={22} />
-          <p className="text-xs font-bold uppercase text-slate-500">Plant score</p>
-          <p className="text-2xl font-black mt-1">{Math.round(result.healthScore)}<span className="text-sm text-slate-500"> / 100</span></p>
-          <p className="text-xs text-slate-500 mt-1">AI visual estimate</p>
-        </div>
-        <div className="rounded-2xl bg-white border border-cyan-100 p-4 text-center shadow-sm">
-          <Gauge className="text-cyan-600 mx-auto mb-2" size={22} />
-          <p className="text-xs font-bold uppercase text-slate-500">Confidence</p>
-          <p className="text-2xl font-black mt-1">{Math.round(result.confidence)}<span className="text-sm text-slate-500">%</span></p>
-          <p className="text-xs text-slate-500 mt-1">Based on video clarity</p>
-        </div>
+      <div className="space-y-3">
+        <section className="rounded-2xl bg-white border border-purple-100 p-4 shadow-sm">
+          <h4 className="font-black">Plant Health</h4>
+          <p className="text-sm mt-2">{result.healthLabel} · {Math.round(result.healthScore)}/100 visual estimate</p>
+        </section>
+        <section className="rounded-2xl bg-white border border-cyan-100 p-4 shadow-sm">
+          <h4 className="font-black">Grow Environment</h4>
+          <p className="text-sm mt-2">{result.environmentSummary}</p>
+          <p className="text-xs text-slate-500 mt-2">Visible context only. Sensor measurements are needed for an environment score.</p>
+        </section>
       </div>
 
       <section className="rounded-3xl bg-white p-5 shadow-sm border border-slate-100">
@@ -103,12 +101,6 @@ export default function VideoHealthReport({ result, thumbnail, saving = false, o
           <p className="mb-3 text-xs font-black uppercase tracking-wider text-emerald-300">Canopy and room checks</p>
           <BulletList items={result.growWideChecks} />
         </div>
-      </section>
-
-      <section className="rounded-3xl bg-white p-5 border border-emerald-100 shadow-sm">
-        <h4 className="flex gap-2 items-center font-black mb-3"><Wind size={20} className="text-emerald-600" /> Environment visible in video</h4>
-        <p className="text-sm leading-relaxed">{result.environmentSummary}</p>
-        <p className="text-xs text-slate-500 mt-3">Visible context only. Temperature, humidity, airflow, and other measurements are not inferred without sensor data.</p>
       </section>
 
       <section className="rounded-3xl bg-white p-5 border border-slate-100 shadow-sm">

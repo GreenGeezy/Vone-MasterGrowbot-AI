@@ -103,7 +103,7 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
       ]);
       const offering = offerings.all[PREMIUM_OFFERING];
       const verified = validatedPremiumPackages((offering?.availablePackages || []) as any) as PurchasesPackage[];
-      if (verified.length !== 3) throw new Error('Premium plans are not available from the App Store yet. Please try again shortly.');
+      if (!verified.length) throw new Error('Premium plans are not available from the App Store yet. Please try again shortly.');
       const cadence = preferredPremiumCadence(customerInfo);
       setPackages(verified);
       setSelected(cadence && verified.some(pkg => pkg.identifier === cadence) ? cadence : null);

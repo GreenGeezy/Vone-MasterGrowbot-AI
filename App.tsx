@@ -384,7 +384,7 @@ const App: React.FC = () => {
       setCurrentTab(AppScreen.JOURNAL);
       // A secondary diagnosis record must not make an already-saved note look lost.
       try {
-        await saveDiagnosisReport(targetPlantId, newEntry);
+        await saveDiagnosisReport(targetPlantId, newEntry, savedEntry.imageUri);
       } catch (error) {
         console.warn("Diagnosis record sync failed", error);
       }

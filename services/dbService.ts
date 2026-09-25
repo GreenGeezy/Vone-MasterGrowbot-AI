@@ -321,7 +321,8 @@ export const saveAppJournalEntry = async (plantId: string | undefined, entry: an
 
   if (session?.user?.id && imageData?.startsWith?.('data:image')) {
     const path = `${session.user.id}/journal/${Date.now()}.jpg`;
-    mediaUrl = await uploadImage(imageData, path) || imageData;
+    mediaUrl = await uploadImage(imageData, path);
+    if (!mediaUrl) throw new Error('Photo upload failed. Your entry is still on this screen; reconnect and try saving again.');
   }
 
   const analysisMetadata = typeof entry.aiAnalysis === 'string' ? { summary: entry.aiAnalysis } : entry.aiAnalysis || {};
@@ -347,14 +348,22 @@ export const saveAppJournalEntry = async (plantId: string | undefined, entry: an
   });
 };
 
-export const saveDiagnosisReport = async (plantId: string | undefined, entry: any) => {
+export const saveDiagnosisReport = async (plantId: string | undefined, entry: any, savedImageUrl?: string) => {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user?.id || !entry?.diagnosisData) return null;
+
+  // The journal upload is the single durable copy of a photo. Older records
+  // may still contain data URLs, but never add another embedded copy here.
+  const imageUrl = savedImageUrl || entry.imageUri || entry.image;
+  if (typeof imageUrl === 'string' && imageUrl.startsWith('data:')) {
+    console.warn('Skipping diagnosis record until its photo has a stored URL');
+    return false;
+  }
 
   const { error } = await supabase.from('diagnosis_reports').insert({
     user_id: session.user.id,
     plant_id: plantId && !plantId.startsWith('local_') ? plantId : null,
-    image_url: entry.imageUri || entry.image || null,
+    image_url: imageUrl || null,
     diagnosis_json: entry.diagnosisData,
     confidence_score: entry.diagnosisData.confidence ?? null,
   });
@@ -708,40 +717,11 @@ export const getChatMessages = async (sessionId: string): Promise<StoredMessage[
 
 export const deleteUserData = async (): Promise<boolean> => {
   const { data: { session } } = await supabase.auth.getSession();
-
-  // 1. Clear Local Storage
-  localStorage.clear();
-
-  // 2. Delete from Supabase (if authenticated)
   if (session?.user?.id) {
-    const uid = session.user.id;
-    const cleanupSteps: Array<[string, () => PromiseLike<any>]> = [
-      ['profiles', () => supabase.from('profiles').delete().eq('id', uid)],
-      ['grow_logs', () => supabase.from('grow_logs').delete().eq('user_id', uid)],
-      ['journal_logs', () => supabase.from('journal_logs').delete().eq('user_id', uid)],
-      ['tasks', () => supabase.from('tasks').delete().eq('user_id', uid)],
-      ['chat_sessions', () => supabase.from('chat_sessions').delete().eq('user_id', uid)],
-      ['chat_messages', () => supabase.from('chat_messages').delete().eq('user_id', uid)],
-      ['user_feedback', () => supabase.from('user_feedback').delete().eq('user_id', uid)],
-      ['support_tickets', () => supabase.from('support_tickets').delete().eq('user_id', uid)],
-      ['auth_session', () => supabase.auth.signOut()],
-    ];
-
-    const results = await Promise.allSettled(
-      cleanupSteps.map(async ([, action]) => {
-        const result = await action();
-        if (result?.error) throw result.error;
-      })
-    );
-
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        console.warn(`Account cleanup step failed or was skipped: ${cleanupSteps[index][0]}`);
-      }
-    });
-
-    return true;
+    const { data, error } = await supabase.functions.invoke('delete-account', { body: {} });
+    if (error || data?.deleted !== true) throw new Error('Account deletion could not be confirmed. Please retry or contact support.');
+    await supabase.auth.signOut().catch(() => {});
   }
-
-  return true; // Local only account deleted
+  localStorage.clear();
+  return true;
 };

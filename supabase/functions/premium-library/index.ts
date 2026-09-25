@@ -55,7 +55,7 @@ Deno.serve(async req=>{
   if(action==='profile') {
    if(!flags.catalog_enabled) throw new ApiError('The expanded library is temporarily unavailable.',503);
    await requirePremium(userId);
-   const {data,error}=await admin.from('premium_strain_profiles').select('id,name,profile').eq('id',String(body.id).slice(0,150)).single();
+   const {data,error}=await admin.from('premium_strain_profiles').select('id,name,profile,source_url,reviewed_at').eq('id',String(body.id).slice(0,150)).single();
    if(error||!data) throw new ApiError('Profile unavailable',404);
    return response(data);
   }

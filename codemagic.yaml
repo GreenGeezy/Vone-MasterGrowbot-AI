@@ -89,6 +89,9 @@ workflows:
           npm run test:reliability
           npm run test:premium
           npm run test:sharing
+          node --test scripts/journal-share.test.mjs scripts/premium-library.test.mjs
+          npm run validate:strains
+          node scripts/validate-premium-library.mjs
           npm run build
           npx cap sync ios
           cat ios/App/Podfile.lock

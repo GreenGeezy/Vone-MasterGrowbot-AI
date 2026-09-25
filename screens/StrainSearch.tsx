@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, X, Camera, Sparkles, Sprout, ChevronRight, Leaf } from 'lucide-react';
+import { Search, Plus, X, Camera, Sparkles, Sprout, ChevronRight } from 'lucide-react';
 import { STRAIN_DATABASE } from '../data/strains';
 import { getCustomStrains, saveCustomStrain, uploadImage } from '../services/dbService';
 import { getStrainInsights } from '../services/geminiService';
@@ -7,8 +7,9 @@ import { Strain } from '../types';
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
 import sproutIcon from '../src/assets/images/sprout-icon.png';
 import purpleGrowRoom from '../src/assets/images/purple-grow-room.jpg';
-import { formatStrainValue, matchesStrainSearch } from '../utils/strainSearch';
+import { matchesStrainSearch } from '../utils/strainSearch';
 import PremiumCatalog from '../components/PremiumCatalog';
+import StrainReferenceDetails from '../components/StrainReferenceDetails';
 import {proFirstRelease} from '../services/releaseFeatures';
 
 interface StrainSearchProps {
@@ -62,9 +63,9 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
         const strainToSave = {
             ...newStrain,
             imageUri: newStrainImage, // Save the base64 string directly for offline support
-            thc_level: 'Not established',
-            cbd_level: 'Not established',
-            most_common_terpene: 'Not established'
+            thc_level: '',
+            cbd_level: '',
+            most_common_terpene: ''
         };
 
         saveCustomStrain(strainToSave);
@@ -106,8 +107,8 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
                     <h3 className="font-black text-gray-900 leading-tight break-words">{strain.name}</h3>
                     <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">{strain.type}</p>
                     <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-[11px] font-bold text-gray-700">
-                        <span><span className="text-gray-400">Est. THC</span> {formatStrainValue(strain.thc_level)}</span>
-                        <span><span className="text-gray-400">Est. CBD</span> {formatStrainValue(strain.cbd_level)}</span>
+                        {strain.thc_level && strain.thc_level !== 'Not established' && <span><span className="text-gray-400">Reported THC</span> {strain.thc_level}</span>}
+                        {strain.cbd_level && strain.cbd_level !== 'Not established' && <span><span className="text-gray-400">Reported CBD</span> {strain.cbd_level}</span>}
                     </div>
                 </div>
                 <ChevronRight size={20} className="text-gray-300" />
@@ -151,31 +152,7 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
                 </div>
 
                 <div className="p-5 max-w-2xl mx-auto">
-                    <div className="grid grid-cols-2 border-y border-gray-100 py-4 mb-6">
-                        <div className="pr-4 border-r border-gray-100 text-center min-w-0">
-                            <div className="text-[10px] font-bold text-gray-400 uppercase">Estimated THC</div>
-                            <div className="text-xl font-black text-gray-900 mt-1 break-words">{formatStrainValue(strain.thc_level)}</div>
-                        </div>
-                        <div className="pl-4 text-center min-w-0">
-                            <div className="text-[10px] font-bold text-gray-400 uppercase">Estimated CBD</div>
-                            <div className="text-xl font-black text-gray-900 mt-1 break-words">{formatStrainValue(strain.cbd_level)}</div>
-                        </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 mb-6">
-                        <Leaf size={18} className="text-orange-500 mt-0.5 shrink-0" />
-                        <div className="min-w-0">
-                            <div className="text-[10px] font-bold text-gray-400 uppercase">Primary Terpene</div>
-                            <div className="font-black text-gray-900 break-words">{formatStrainValue(strain.most_common_terpene)}</div>
-                        </div>
-                    </div>
-
-                    <div className="mb-8">
-                        <h3 className="font-black text-gray-900 mb-2">About This Strain</h3>
-                        <p className="text-gray-600 leading-relaxed text-sm whitespace-pre-wrap break-words">
-                            {formatStrainValue(strain.description)}
-                        </p>
-                    </div>
+                    <div className="mb-8"><StrainReferenceDetails profile={strain} /></div>
 
                     {/* AI INSIGHTS SECTION */}
                     <div className="mb-8">
