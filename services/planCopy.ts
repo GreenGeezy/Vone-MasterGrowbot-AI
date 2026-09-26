@@ -17,3 +17,18 @@ export function planBenefit(period: 'weekly' | 'monthly' | 'annual', product: St
   if (period === 'monthly') return weeklyEquivalent(product, 52 / 12) || 'Stay on top of each grow';
   return weeklyEquivalent(product, 52) || 'Support your full grow cycle';
 }
+
+export function trialDuration(intro: { periodUnit?: string; periodNumberOfUnits?: number; period?: string } | null | undefined): string | null {
+  if (!intro) return null;
+  let count = intro.periodNumberOfUnits;
+  let unit = intro.periodUnit?.toLowerCase();
+  if ((!count || !unit) && intro.period) {
+    const match = /^P(\d+)([DWMY])$/.exec(intro.period);
+    if (match) {
+      count = Number(match[1]);
+      unit = ({ D: 'day', W: 'week', M: 'month', Y: 'year' } as Record<string, string>)[match[2]];
+    }
+  }
+  if (!Number.isSafeInteger(count) || !count || count < 1 || count > 365 || !['day', 'week', 'month', 'year'].includes(unit || '')) return null;
+  return `${count} ${unit}${count === 1 ? '' : 's'}`;
+}

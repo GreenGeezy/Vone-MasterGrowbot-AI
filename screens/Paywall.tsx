@@ -10,7 +10,7 @@ import PaywallTestimonials from '../components/PaywallTestimonials';
 import {proFirstRelease} from '../services/releaseFeatures';
 import {recordEvent} from '../services/premiumLibrary';
 import { initializeSubscriptions, withTimeout } from '../services/appInitializer';
-import { planBenefit } from '../services/planCopy';
+import { planBenefit, trialDuration } from '../services/planCopy';
 
 interface PaywallProps {
   onClose: () => void;
@@ -286,7 +286,8 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     if (selectedPkg.packageType === 'WEEKLY') period = 'week';
     if (selectedPkg.packageType === 'ANNUAL') period = 'year';
     if (trialEligible) {
-      return `Free trial, then ${price}/${period} unless canceled.`;
+      const duration = trialDuration((selectedPkg.product as any).introPrice);
+      return `${duration ? `${duration} free trial` : 'Free trial'}, then ${price}/${period} unless canceled.`;
     }
     return `Auto-renews at ${price}/${period} unless canceled.`;
   };

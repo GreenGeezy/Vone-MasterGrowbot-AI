@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 const source = await readFile(new URL('../services/planCopy.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { planBenefit } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const { planBenefit, trialDuration } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 
 test('annual comparison uses actual numeric price and preserves currency', () => {
   assert.match(planBenefit('annual', { price: 99.99, currencyCode: 'USD', priceString: '$99.99' }), /\$1\.92\/week/);
@@ -13,4 +13,9 @@ test('annual comparison uses actual numeric price and preserves currency', () =>
 test('missing store price suppresses the weekly equivalent', () => {
   assert.equal(planBenefit('annual', { priceString: '$99.99' }), 'Support your full grow cycle');
   assert.equal(planBenefit('weekly', { priceString: '$7.99' }), 'Try a focused check-in this week');
+});
+test('trial duration comes only from store introductory offer data', () => {
+  assert.equal(trialDuration({ periodUnit: 'DAY', periodNumberOfUnits: 7 }), '7 days');
+  assert.equal(trialDuration({ period: 'P1W' }), '1 week');
+  assert.equal(trialDuration(undefined), null);
 });
