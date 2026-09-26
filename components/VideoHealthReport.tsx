@@ -45,7 +45,7 @@ export default function VideoHealthReport({ result, thumbnail, saving = false, o
       <div className="space-y-3">
         <section className="rounded-2xl bg-white border border-purple-100 p-4 shadow-sm">
           <h4 className="font-black">Plant Health</h4>
-          <p className="text-sm mt-2">{result.healthLabel} · {Math.round(result.healthScore)}/100 visual estimate</p>
+          <p className="text-sm mt-2">{result.plantVisible === false ? 'Plant not directly visible · health not assessed' : `${result.healthLabel} · ${Math.round(result.healthScore)}/100 visual estimate`}</p>
         </section>
         <section className="rounded-2xl bg-white border border-cyan-100 p-4 shadow-sm">
           <h4 className="font-black">Grow Environment</h4>

@@ -13,7 +13,7 @@ type ReferenceProfile = {
 const available = (value?: string) => Boolean(value?.trim() && !/^(not established|unknown|n\/a|undefined|null)$/i.test(value.trim()));
 
 /** Only render reference fields that actually carry information. */
-export default function StrainReferenceDetails({ profile, sourceUrl }: { profile: ReferenceProfile; sourceUrl?: string }) {
+export default function StrainReferenceDetails({ profile }: { profile: ReferenceProfile }) {
   const facts = [
     ['Breeder', profile.breeder],
     ['Classification', profile.classification],
@@ -28,6 +28,5 @@ export default function StrainReferenceDetails({ profile, sourceUrl }: { profile
     {facts.length > 0 && <dl className="grid grid-cols-2 gap-3">{facts.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs font-bold text-gray-500">{label}</dt><dd className="font-semibold break-words">{value}</dd></div>)}</dl>}
     {!hasComposition && <p className="text-xs text-gray-500">Cannabinoid and terpene values vary; verified data is unavailable for this profile.</p>}
     {hasComposition && <p className="text-xs text-gray-500">Reported composition varies by sample and has not been independently verified for your plant.</p>}
-    {sourceUrl && /^https:\/\//i.test(sourceUrl) && <a className="underline text-emerald-700" href={sourceUrl} target="_blank" rel="noopener noreferrer">View reference source</a>}
   </section>;
 }

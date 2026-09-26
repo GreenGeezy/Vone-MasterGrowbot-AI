@@ -86,6 +86,9 @@ export async function checkVideoAccess(): Promise<boolean> {
 export interface VideoAnalysisContext {
   strain?: string;
   growMethod?: 'Indoor' | 'Outdoor' | 'Greenhouse';
+  growthStage?: string;
+  temperature?: number;
+  humidity?: number;
 }
 
 export async function analyzePlantVideo(file: File, signal: AbortSignal, context: VideoAnalysisContext = {}): Promise<VideoVisualResult> {
@@ -94,7 +97,7 @@ export async function analyzePlantVideo(file: File, signal: AbortSignal, context
   if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
   let data;
   try {
-    data = await requestEdge({ mode: 'video_visual_analysis', mimeType, fileData, strain: context.strain, growMethod: context.growMethod }, 110000, signal);
+    data = await requestEdge({ mode: 'video_visual_analysis', mimeType, fileData, strain: context.strain, growMethod: context.growMethod, growthStage: context.growthStage, temperature: context.temperature, humidity: context.humidity }, 110000, signal);
   } catch (error) {
     if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
     throw await edgeError(error);

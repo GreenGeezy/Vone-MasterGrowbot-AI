@@ -8,9 +8,15 @@ interface Props {
   onStrainChange: (strain: string) => void;
   growMethod: GrowMethod;
   onGrowMethodChange: (method: GrowMethod) => void;
+  growthStage: string;
+  onGrowthStageChange: (stage: string) => void;
+  temperature: string;
+  onTemperatureChange: (value: string) => void;
+  humidity: string;
+  onHumidityChange: (value: string) => void;
 }
 
-const VideoAnalysisContext: React.FC<Props> = ({ strain, onStrainChange, growMethod, onGrowMethodChange }) => {
+const VideoAnalysisContext: React.FC<Props> = ({ strain, onStrainChange, growMethod, onGrowMethodChange, growthStage, onGrowthStageChange, temperature, onTemperatureChange, humidity, onHumidityChange }) => {
   const [customMode, setCustomMode] = useState(false);
   const [customName, setCustomName] = useState('');
   const isKnown = strain === 'Generic' || STRAIN_DATABASE.some(item => item.name === strain);
@@ -20,6 +26,20 @@ const VideoAnalysisContext: React.FC<Props> = ({ strain, onStrainChange, growMet
       <div className="mb-4">
         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">Personalize your report</p>
         <p className="mt-1 text-xs leading-relaxed text-slate-400">Add your setup and strain so the analysis can prioritize more relevant visual patterns and next steps.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 mt-4">
+        <label className="text-xs text-slate-300">Growth stage
+          <select value={growthStage} onChange={event => onGrowthStageChange(event.target.value)} className="block w-full min-h-11 rounded-xl bg-slate-900 border border-white/10 text-white px-2 mt-1">
+            <option value="">Not specified</option><option>Seedling</option><option>Vegetative</option><option>Flowering</option>
+          </select>
+        </label>
+        <span className="text-xs text-slate-400 self-center">Optional readings make environment checks more specific.</span>
+        <label className="text-xs text-slate-300">Air temperature (°C)
+          <input type="number" inputMode="decimal" min="0" max="50" step="0.1" value={temperature} onChange={event => onTemperatureChange(event.target.value)} placeholder="If measured" className="block w-full min-h-11 rounded-xl bg-slate-900 border border-white/10 text-white px-3 mt-1" />
+        </label>
+        <label className="text-xs text-slate-300">Relative humidity (%)
+          <input type="number" inputMode="decimal" min="0" max="100" step="1" value={humidity} onChange={event => onHumidityChange(event.target.value)} placeholder="If measured" className="block w-full min-h-11 rounded-xl bg-slate-900 border border-white/10 text-white px-3 mt-1" />
+        </label>
       </div>
       <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Growing environment</label>
       <div className="grid grid-cols-3 gap-1 rounded-xl bg-slate-900 p-1" data-testid="video-grow-method">

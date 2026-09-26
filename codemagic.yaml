@@ -88,6 +88,7 @@ workflows:
           npm run typecheck
           npm run test:reliability
           npm run test:premium
+          node --test scripts/plan-copy.test.mjs
           npm run test:sharing
           node --test scripts/journal-share.test.mjs scripts/premium-library.test.mjs
           npm run validate:strains

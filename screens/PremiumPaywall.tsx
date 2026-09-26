@@ -23,6 +23,7 @@ import {
 import { checkVideoAccess } from '../services/videoAnalysisService';
 import { isPurchaseCancelled, premiumStatusMessage, purchaseErrorMessage, refreshPremiumCustomer } from '../services/premiumPurchaseStatus';
 import { getLibraryConfig, safeConfig, recordEvent } from '../services/premiumLibrary';
+import { planBenefit } from '../services/planCopy';
 
 interface PremiumPaywallProps {
   onClose: () => void;
@@ -270,7 +271,8 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2"><span className="font-black">{labelFor(pkg)}</span>{pkg.identifier === 'annual' && savings && <span className="rounded-full bg-emerald-400 text-slate-950 px-2 py-0.5 text-[10px] font-black">SAVE {savings}% VS MONTHLY</span>}</div>
-                    <p className="text-sm text-slate-300 mt-1">{pkg.product.priceString} total per {periodFor(pkg)} · Pro included</p>
+                    <p className="text-sm text-slate-300 mt-1">{pkg.product.priceString} / {periodFor(pkg)} · Pro included</p>
+                    <p className="text-xs font-semibold text-emerald-300 mt-1">{planBenefit(pkg.identifier as 'weekly' | 'monthly' | 'annual', pkg.product)}</p>
                   </div>
                   <div className={`h-6 w-6 rounded-full border-2 flex items-center justify-center ${selected === pkg.identifier ? 'bg-emerald-400 border-emerald-400' : 'border-slate-500'}`}>{selected === pkg.identifier && <Check size={15} className="text-slate-950" />}</div>
                 </div>

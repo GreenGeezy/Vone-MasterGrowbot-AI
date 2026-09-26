@@ -10,6 +10,7 @@ import PaywallTestimonials from '../components/PaywallTestimonials';
 import {proFirstRelease} from '../services/releaseFeatures';
 import {recordEvent} from '../services/premiumLibrary';
 import { initializeSubscriptions, withTimeout } from '../services/appInitializer';
+import { planBenefit } from '../services/planCopy';
 
 interface PaywallProps {
   onClose: () => void;
@@ -114,9 +115,9 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     try {
       if (!Capacitor.isNativePlatform()) {
         const mockPackages = [
-          { identifier: 'mg_weekly', packageType: 'WEEKLY', product: { priceString: '$7.99', title: '', description: '' } } as any,
-          { identifier: 'mg_monthly', packageType: 'MONTHLY', product: { priceString: '$29.99', title: '', description: '' } } as any,
-          { identifier: 'mg_annual', packageType: 'ANNUAL', product: { priceString: '$99.99', title: '', description: '' } } as any,
+          { identifier: 'mg_weekly', packageType: 'WEEKLY', product: { price: 7.99, currencyCode: 'USD', priceString: '$7.99' } } as any,
+          { identifier: 'mg_monthly', packageType: 'MONTHLY', product: { price: 29.99, currencyCode: 'USD', priceString: '$29.99' } } as any,
+          { identifier: 'mg_annual', packageType: 'ANNUAL', product: { price: 99.99, currencyCode: 'USD', priceString: '$99.99' } } as any,
         ];
         setPackages(mockPackages);
         setSelectedPkgIdentifier('mg_annual');
@@ -267,14 +268,14 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       if (Number.isFinite(savings) && savings > 0 && Number.isFinite(weeklyEquivalent)) {
         return {
           badge: `Save ${savings}% vs monthly`,
-          subtext: `Billed yearly at ${annualPkg?.product.priceString}`,
+          subtext: planBenefit('annual', annualPkg!.product),
         };
       }
     }
 
     return {
       badge: 'Yearly plan',
-      subtext: annualPkg ? `Billed yearly at ${annualPkg.product.priceString}` : 'Billed yearly',
+      subtext: annualPkg ? planBenefit('annual', annualPkg.product) : 'Support your full grow cycle',
     };
   };
 
@@ -304,14 +305,14 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       return {
       badge: proFirstRelease ? null : 'MOST POPULAR',
         badgeColor: 'bg-gradient-to-r from-amber-500 to-orange-400',
-        subtext: proFirstRelease ? `Billed monthly at ${pkg.product.priceString}` : 'Best balance of flexibility and savings',
+        subtext: planBenefit('monthly', pkg.product),
         emphasis: false,
       };
     }
     return {
       badge: null,
       badgeColor: '',
-      subtext: proFirstRelease ? `Billed weekly at ${pkg.product.priceString}` : 'Perfect for urgent grow issues',
+      subtext: planBenefit('weekly', pkg.product),
       emphasis: false,
     };
   };
@@ -359,7 +360,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
               const period = pkg.packageType === 'WEEKLY' ? 'week' : pkg.packageType === 'ANNUAL' ? 'year' : 'month';
               const meta = getPlanMeta(pkg);
               return <button type="button" key={pkg.identifier} aria-pressed={selected} disabled={isPurchasing} onClick={() => {setSelectedPkgIdentifier(pkg.identifier);recordEvent('plan_selected','pro');}} className={`w-full text-left rounded-2xl border-2 px-4 py-3 flex items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${selected ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
-                <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-bold text-sm">{period === 'year' ? 'Yearly' : period === 'week' ? 'Weekly' : 'Monthly'}</span>{meta.badge && <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 rounded-full px-2 py-1">{meta.badge}</span>}</div><p className="text-sm text-slate-700 mt-1"><strong>{pkg.product.priceString}</strong> / {period}</p></div>
+                <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-bold text-sm">{period === 'year' ? 'Yearly' : period === 'week' ? 'Weekly' : 'Monthly'}</span>{meta.badge && <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 rounded-full px-2 py-1">{meta.badge}</span>}</div><p className="text-sm text-slate-700 mt-1"><strong>{pkg.product.priceString}</strong> / {period}</p><p className="text-xs text-emerald-800 mt-1">{meta.subtext}</p></div>
                 <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'}`}>{selected && <Check size={16}/>}</span>
               </button>;
             })}

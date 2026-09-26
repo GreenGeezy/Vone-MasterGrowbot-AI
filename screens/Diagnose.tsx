@@ -128,6 +128,9 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   const [strain, setStrain] = useState<string>(plant?.strain || 'Generic');
   // Initialize from defaultProfile, fallback to Indoor if undefined
   const [growMethod, setGrowMethod] = useState<'Indoor' | 'Outdoor' | 'Greenhouse'>(defaultProfile?.grow_mode || 'Indoor');
+  const [growthStage, setGrowthStage] = useState('');
+  const [temperature, setTemperature] = useState('');
+  const [humidity, setHumidity] = useState('');
 
   const [showStrainMenu, setShowStrainMenu] = useState(false);
   const [showCustomUi, setShowCustomUi] = useState(false); // Toggle for Custom UI
@@ -208,6 +211,9 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
       setVideoResult(await analyzePlantVideo(videoFile, controller.signal, {
         strain: strain === 'Leave Blank' || strain === 'Generic' ? undefined : strain,
         growMethod,
+        growthStage: growthStage || undefined,
+        temperature: temperature.trim() !== '' && Number(temperature) >= 0 && Number(temperature) <= 50 ? Number(temperature) : undefined,
+        humidity: humidity.trim() !== '' && Number(humidity) >= 0 && Number(humidity) <= 100 ? Number(humidity) : undefined,
       }));
       recordEvent('analysis_complete','video');
     } catch (cause: any) {
@@ -597,7 +603,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
             <button onClick={closeVideoFlow} aria-label="Close video analysis" className="rounded-full bg-slate-500/10 p-3"><X size={20} /></button>
           </div>
           <div className="flex-1 overflow-y-auto p-5 pb-10">
-            {!videoResult && <VideoAnalysisContext strain={strain} onStrainChange={setStrain} growMethod={growMethod} onGrowMethodChange={setGrowMethod} />}
+            {!videoResult && <VideoAnalysisContext strain={strain} onStrainChange={setStrain} growMethod={growMethod} onGrowMethodChange={setGrowMethod} growthStage={growthStage} onGrowthStageChange={setGrowthStage} temperature={temperature} onTemperatureChange={setTemperature} humidity={humidity} onHumidityChange={setHumidity} />}
             {!videoFile && !videoResult && !preparingVideo && (
               <div className="max-w-md mx-auto">
                 <div className="rounded-[2rem] border border-emerald-400/20 bg-emerald-400/10 p-5 mb-5"><Eye className="text-emerald-300 mb-3" /><p className="text-sm text-slate-200 leading-relaxed">Move slowly around the plant. Keep the leaves in focus and include affected areas from more than one angle.</p><p className="text-xs text-slate-400 mt-2">Maximum 20 seconds and 8 MB. Analysis uses visual evidence only; avoid recording private conversations.</p></div>

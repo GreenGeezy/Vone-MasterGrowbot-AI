@@ -30,17 +30,21 @@ const SYSTEM_MESSAGE =
   "You are MasterGrowbot AI, a legal cannabis cultivation assistant. Provide practical, careful, structured plant-health guidance. Do not claim certainty from images. Clearly distinguish visible signs from possible causes, state uncertainty, and recommend human verification for severe or high-risk issues.";
 
 const VIDEO_SYSTEM_MESSAGE = `You create a cannabis-focused video plant health report for lawful adult cultivators.
-Describe visible evidence across leaves, stems, flowers when present, canopy, containers, and the wider grow space.
-Distinguish visible observations from possible interpretations. Always give the best-supported working interpretation,
-even when confidence is limited, and connect each interpretation to the evidence that supports it. Rank likely causes
-instead of stopping at "needs a closer look", "could not determine", or similarly unhelpful conclusions. Use phrases
-such as "appears consistent with" and "may indicate" so an educated visual estimate is never presented as certainty.
-If the video is indirect, blurry, color-cast, or incomplete, lower confidence, explain the limitation, and still provide
-the most useful evidence-based assessment possible. Provide practical care and crop-quality checks that can be saved
-as journal tasks: targeted leaf and stem inspection, comparison with recent watering/environment/feeding records,
-sanitation and airflow checks, and collecting missing visual or sensor evidence. Tailor recommendations to the selected
-grow setting and cultivar when supplied, but do not invent cultivar traits or measurements. Include grow-wide checks
-for canopy consistency, spacing, visible airflow obstructions, cleanliness, and patterns affecting multiple plants.
+Make the output useful as a plant care plan, rather than a narration of the recording. First decide whether an actual
+plant is directly visible. If only a screen, photograph, reflection, or glare is visible, plantVisible=false, confidence=0,
+healthScore=0, severity=uncertain, healthLabel="Mixed visual condition". Explain that this is an unassessed plant, not
+a poor-health score. Do not infer leaf color, disease, growth stage or environment from the indirect video. Give two
+practical next steps to film the plant directly and record the relevant environment readings instead.
+When the plant is visible, identify distinct visible signs (location, distribution, color and progression if discernible),
+give the best-supported working interpretation with alternatives and uncertainty, then prioritize one practical next
+action that helps distinguish causes or prevent further stress. Care recommendations must be concrete checks or actions
+the grower can perform, with what to check and why; avoid merely restating visible signs or giving generic "monitor it"
+advice. Compare with recent watering, feeding, and environmental logs before suggesting changes. In environmentSummary,
+combine visible airflow, lighting, spacing and sanitation clues with any user-entered measurements. State explicitly when
+temperature/humidity are absent; video alone cannot measure them. Never invent a sensor reading or convert an unverified
+measurement into proof of a cause. Grow-wide checks should address canopy consistency and conditions shared across plants.
+Media limitations belong in mediaQuality, not repeated throughout the action plan. Tailor to supplied stage, grow setting
+and cultivar without inventing cultivar traits. Use cautious language for visual hypotheses.
 Never invent measurements. Do not provide potency advice, harvest timing, exact feeding recipes or targets,
 controlled-substance yield optimization, medical claims, guaranteed diagnosis, sales, delivery, purchase,
 consumption, intoxication, or content involving minors or illegal activity.`;
@@ -53,8 +57,9 @@ export const VIDEO_RESPONSE_FORMAT = {
     schema: {
       type: "object",
       additionalProperties: false,
-      required: ["visualSummary", "growthStage", "visibleSigns", "possibleInterpretations", "severity", "confidence", "healthScore", "healthLabel", "environmentSummary", "areasToInspect", "priorityAction", "careRecommendations", "growOverview", "growWideChecks", "recommendedVerification", "mediaQuality"],
+      required: ["plantVisible", "visualSummary", "growthStage", "visibleSigns", "possibleInterpretations", "severity", "confidence", "healthScore", "healthLabel", "environmentSummary", "areasToInspect", "priorityAction", "careRecommendations", "growOverview", "growWideChecks", "recommendedVerification", "mediaQuality"],
       properties: {
+        plantVisible: { type: "boolean" },
         visualSummary: { type: "string" },
         growthStage: { type: "string" },
         visibleSigns: { type: "array", maxItems: 8, items: { type: "string" } },
@@ -183,9 +188,15 @@ export function buildMessages(body: Record<string, unknown>): ChatMessage[] {
     const { dataUrl } = toVideoDataUrl(fileData, mimeType);
     const strain = typeof body.strain === "string" ? body.strain.trim().replace(/[\r\n]/g, " ").slice(0, 80) : "";
     const growMethod = ["Indoor", "Outdoor", "Greenhouse"].includes(String(body.growMethod)) ? String(body.growMethod) : "";
+    const growthStage = ["Seedling", "Vegetative", "Flowering"].includes(String(body.growthStage)) ? String(body.growthStage) : "";
+    const temperature = typeof body.temperature === "number" && Number.isFinite(body.temperature) && body.temperature >= 0 && body.temperature <= 50 ? body.temperature : null;
+    const humidity = typeof body.humidity === "number" && Number.isFinite(body.humidity) && body.humidity >= 0 && body.humidity <= 100 ? body.humidity : null;
     const context = [
       strain ? `User-selected cultivar: ${strain}.` : "",
       growMethod ? `User-selected grow setting: ${growMethod}.` : "",
+      growthStage ? `User-reported stage: ${growthStage}.` : "",
+      temperature !== null ? `User-entered air temperature: ${temperature}°C.` : "",
+      humidity !== null ? `User-entered relative humidity: ${humidity}%.` : "",
     ].filter(Boolean).join(" ");
     messages.push({
       role: "user",
@@ -268,6 +279,7 @@ export function parseVideoResult(value: string) {
   try { parsed = JSON.parse(extractJsonObject(value)); } catch { throw new ProviderResponseError("The video analysis response was incomplete. Please try again."); }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new ProviderResponseError("The video analysis response was incomplete. Please try again.");
   const result = parsed as Record<string, unknown>;
+  if (typeof result.plantVisible !== "boolean") throw new ProviderResponseError("The video analysis response omitted plant visibility. Please try again.");
   const requiredStrings = ["visualSummary", "growthStage", "healthLabel", "environmentSummary", "priorityAction", "growOverview", "recommendedVerification", "mediaQuality"];
   const requiredLists = ["visibleSigns", "possibleInterpretations", "areasToInspect", "careRecommendations", "growWideChecks"];
   if (requiredStrings.some((key) => typeof result[key] !== "string" || !(result[key] as string).trim())) throw new ProviderResponseError("The video analysis response omitted a required observation. Please try again.");
@@ -277,6 +289,13 @@ export function parseVideoResult(value: string) {
   if (!["Likely healthy visual pattern", "Possible early stress pattern", "Likely visible stress", "Mixed visual condition"].includes(String(result.healthLabel))) throw new ProviderResponseError("The video analysis response contained an invalid health label. Please try again.");
   for (const key of ["confidence", "healthScore"]) {
     if (typeof result[key] !== "number" || !Number.isFinite(result[key]) || (result[key] as number) < 0 || (result[key] as number) > 100) throw new ProviderResponseError(`The video analysis response contained an invalid ${key}. Please try again.`);
+  }
+  if (result.plantVisible === false) {
+    result.confidence = 0;
+    result.healthScore = 0;
+    result.severity = "uncertain";
+    result.healthLabel = "Mixed visual condition";
+    result.growthStage = "Not visible";
   }
   return result;
 }
