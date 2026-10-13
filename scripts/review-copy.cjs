@@ -17,7 +17,7 @@ async (page) => {
  await page.getByRole('button',{name:'Make it yours'}).waitFor();
  const button=await page.getByRole('button',{name:'Make it yours'}).isEnabled();
  if(!button)throw Error('Walkthrough blocks Continue');
- await page.getByRole('button',{name:'Replay example walkthrough'}).click();
+ await page.getByRole('button',{name:'Replay photo-to-report animation'}).click();
  await page.locator('.sample-playing').waitFor();
  await page.emulateMedia({reducedMotion:'reduce'});
  await page.reload();

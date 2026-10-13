@@ -23,8 +23,8 @@ async (page) => {
     if(overflow)failures.push({width:375,screen,largeText:true});
   }
   await page.goto('http://127.0.0.1:3011/review/screen?screen=intent');
-  await page.getByRole('button',{name:/Keep my grow organized/}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();
-  await page.getByRole('button',{name:/Getting started/}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();
+  await page.getByRole('button',{name:/Keep track of my grow/}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();
+  await page.getByRole('button',{name:/This is my first grow/}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();
   await page.reload();await page.getByRole('heading',{name:'What’s your growing goal?'}).waitFor();
   // Gallery links intentionally choose their screen; the application draft remains persisted independently.
   const draft=await page.evaluate(()=>JSON.parse(localStorage.getItem('mg_onboarding_v2')));

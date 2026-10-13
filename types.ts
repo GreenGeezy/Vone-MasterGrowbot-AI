@@ -184,7 +184,7 @@ export interface UserProfile {
   goal?: 'Maximize Yield' | 'Improve Quality' | 'Learn Skills';
   space?: 'Small' | 'Medium' | 'Large';
   onboardingIntent?: 'photo' | 'journal' | 'references' | 'learn' | 'explore';
-  onboardingGoal?: 'skills' | 'health' | 'quality' | 'organize' | 'explore';
+  onboardingGoal?: 'skills' | 'health' | 'size' | 'quality' | 'organize' | 'explore';
   notStartedYet?: boolean;
   experienceUndecided?: boolean;
   growSetupUndecided?: boolean;

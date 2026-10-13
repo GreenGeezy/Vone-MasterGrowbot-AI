@@ -36,7 +36,7 @@ export function firstActionDetails(p?: Partial<UserProfile> | null) {
 /** Unknown answers remain explicit preferences; analysis uses a safe existing level. */
 export function answerOnboarding(profile: Partial<UserProfile>, key: string, value: string): Partial<UserProfile> {
   if (key === 'onboardingGoal') {
-    const destinations = { skills: 'learn', health: 'photo', quality: 'journal', organize: 'journal', explore: 'explore' } as const;
+    const destinations = { skills: 'learn', health: 'photo', size: 'journal', quality: 'journal', organize: 'journal', explore: 'explore' } as const;
     if (value in destinations) return { ...profile, onboardingGoal: value as UserProfile['onboardingGoal'], onboardingIntent: destinations[value as keyof typeof destinations] };
   }
   if (key === 'experience') {
@@ -53,10 +53,11 @@ export function answerOnboarding(profile: Partial<UserProfile>, key: string, val
 
 export function goalDetails(p: Partial<UserProfile>) {
   const details = {
-    skills: { title: 'Become a better grower', description: 'Build knowledge you can put to work. Start with strain references, then record what you learn in your journal.' },
-    health: { title: 'Grow healthier plants', description: 'Give your next plant check a clearer starting point. Review visible signs, explore suggested next checks, and save the report.' },
+    skills: { title: 'Get better at growing', description: 'Learn your plants, one grow at a time. Explore strain references and keep notes on what works for your setup.' },
+    health: { title: 'Keep your plants healthy', description: 'Got yellow leaves or something that looks off? Start with a photo report, check the suggested next steps, and keep a record.' },
+    size: { title: 'Grow bigger plants', description: 'Keep an eye on growth and care as your plants develop. Start a journal, add photos, and track what changes in your setup.' },
     quality: { title: 'Improve your grow’s quality', description: 'Make your observations easier to act on. Keep photos, notes, and follow-ups together so you can revisit what changed.' },
-    organize: { title: 'Keep your grow organized', description: 'Turn scattered notes into a grow record you can return to. Start with one journal entry and build from there.' },
+    organize: { title: 'Keep track of your grow', description: 'Keep your grow in one place. Save photos, notes, and reports so you can pick up where you left off.' },
     explore: { title: 'Find your growing goal', description: 'You don’t need all the answers yet. Explore the tools and choose your first step when you’re ready.' },
   };
   return p.onboardingGoal ? details[p.onboardingGoal] : null;

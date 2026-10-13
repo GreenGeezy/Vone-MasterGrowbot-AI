@@ -35,7 +35,8 @@ test('onboarding survives resume and preserves selected destination',()=>{
 
 test('goals map to achievable first actions and unsure answers preserve honest preferences',()=>{
  const {answerOnboarding,initialDestination,goalDetails}=load('services/onboardingState.ts');
- let p=answerOnboarding({},'onboardingGoal','skills');assert.equal(initialDestination(p),'STRAINS');assert.equal(goalDetails(p).title,'Become a better grower');
+ let p=answerOnboarding({},'onboardingGoal','skills');assert.equal(initialDestination(p),'STRAINS');assert.equal(goalDetails(p).title,'Get better at growing');
+ p=answerOnboarding(p,'onboardingGoal','size');assert.equal(initialDestination(p),'JOURNAL');assert.equal(goalDetails(p).title,'Grow bigger plants');
  p=answerOnboarding(p,'experience','not_sure');assert.equal(p.experienceUndecided,true);
  p=answerOnboarding(p,'grow_mode','Indoor');p=answerOnboarding(p,'grow_mode','not_sure');assert.equal(p.grow_mode,undefined);assert.equal(p.growSetupUndecided,true);
  p=answerOnboarding(p,'onboardingGoal','explore');assert.equal(initialDestination(p),'HOME');
