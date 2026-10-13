@@ -32,3 +32,12 @@ export function trialDuration(intro: { periodUnit?: string; periodNumberOfUnits?
   if (!Number.isSafeInteger(count) || !count || count < 1 || count > 365 || !['day', 'week', 'month', 'year'].includes(unit || '')) return null;
   return `${count} ${unit}${count === 1 ? '' : 's'}`;
 }
+
+/** Never promise a trial from eligibility alone or from a configured paid intro offer. */
+export function proPurchaseLabel(eligible: boolean, intro?: { price?: number; periodUnit?: string; periodNumberOfUnits?: number; period?: string } | null): string {
+  if (!eligible || intro?.price !== 0) return 'Get Pro Access';
+  const duration = trialDuration(intro);
+  if (!duration) return 'Get Pro Access';
+  const [count, unit] = duration.split(' ');
+  return `Start ${count}-${unit.replace(/s$/, '').replace(/^./, char => char.toUpperCase())} Free Trial`;
+}

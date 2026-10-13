@@ -5,7 +5,7 @@ import TaskEditor from "../components/TaskEditor";
 import AnalysisShareDialog from '../components/AnalysisShareDialog';
 import { journalShareSummary } from '../services/journalShare';
 import type { AnalysisShareSummary } from '../services/analysisShareCard';
-import { Share2 } from 'lucide-react';
+import { Share2, Film, ChevronRight } from 'lucide-react';
 import { proFirstRelease } from '../services/releaseFeatures';
 import { recordEvent } from '../services/premiumLibrary';
 import { analyzeGrowLog } from '../services/geminiService';
@@ -80,7 +80,7 @@ export default function Journal({
     <div className="bg-surface min-h-screen pb-32 pt-[max(3rem,env(safe-area-inset-top))] px-5">
       <h1 className="text-2xl font-black">Journal</h1>
       <p className="text-sm text-gray-600 mt-1 mb-4">
-        Notes remember what happened. Tasks plan what comes next.
+        Keep a photo, note what changed, and plan your next check.
       </p>
       {plants.length > 0 ? (
         <label className="block text-xs font-bold text-gray-600 mb-4">
@@ -119,7 +119,7 @@ export default function Journal({
           Add task
         </button>
       </div>
-      {proFirstRelease && onVideoCheckIn && <button onClick={onVideoCheckIn} className="w-full min-h-11 mb-4 text-left text-sm font-semibold text-purple-800">Explore video check-ins <span className="ml-2 rounded-full bg-purple-50 px-2 py-1 text-xs">Premium</span></button>}
+      {proFirstRelease && entries.length > 0 && onVideoCheckIn && <button onClick={onVideoCheckIn} className="premium-context-card"><Film size={22} aria-hidden="true"/><span><strong>Want a closer look?</strong><span>Review multiple angles with video analysis.</span><small>Premium</small></span><ChevronRight size={20} aria-hidden="true"/></button>}
       <div className="flex gap-2 mb-4" aria-label="Journal filters">
         {["All", "Notes", "Tasks"].map((f) => (
           <button

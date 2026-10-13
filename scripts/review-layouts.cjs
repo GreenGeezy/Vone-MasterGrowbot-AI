@@ -6,7 +6,7 @@ async (page) => {
     for(const screen of screens){
       await page.goto(`http://127.0.0.1:3011/review/screen?screen=${screen}`);
       await page.locator('#root > *').first().waitFor({state:'visible'});
-      if(screen==='pro')await page.getByRole('button',{name:'Get Pro Access',exact:true}).waitFor();
+      if(screen==='pro')await page.getByRole('button',{name:'Start 3-Day Free Trial',exact:true}).waitFor();
       if(screen==='premium')await page.getByText('Continue with Premium',{exact:true}).waitFor();
       const geometry=await page.evaluate(()=>({width:innerWidth,documentWidth:document.documentElement.scrollWidth,
         footer:[...document.querySelectorAll('.journey-footer button,.journey-screen button')].filter(e=>e.textContent==='Continue').map(e=>({y:e.getBoundingClientRect().top,bottom:e.getBoundingClientRect().bottom})),height:innerHeight}));

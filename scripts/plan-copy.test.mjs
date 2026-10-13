@@ -4,7 +4,17 @@ import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 const source = await readFile(new URL('../services/planCopy.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { planBenefit, trialDuration } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const { planBenefit, trialDuration, proPurchaseLabel } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+
+test('Pro CTA promises a trial only for verified eligibility and a valid free offer', () => {
+  const intro = {price:0, period:'P3D'};
+  assert.equal(proPurchaseLabel(true,intro),'Start 3-Day Free Trial');
+  assert.equal(proPurchaseLabel(false,intro),'Get Pro Access');
+  assert.equal(proPurchaseLabel(true,{...intro,price:1}),'Get Pro Access');
+  assert.equal(proPurchaseLabel(true,{price:0}),'Get Pro Access');
+  assert.equal(proPurchaseLabel(true,null),'Get Pro Access');
+  assert.equal(proPurchaseLabel(true,{price:0,period:'P1W'}),'Start 1-Week Free Trial');
+});
 
 test('annual comparison uses actual numeric price and preserves currency', () => {
   assert.match(planBenefit('annual', { price: 99.99, currencyCode: 'USD', priceString: '$99.99' }), /\$1\.92\/week/);

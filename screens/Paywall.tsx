@@ -13,7 +13,7 @@ import {recordEvent,setAnalyticsReceipt} from '../services/premiumLibrary';
 import {hasVerifiedPaidAccess} from '../services/paidAccess';
 import {pendingProPurchase,markProPurchasePending} from '../services/proPurchaseRecovery';
 import { initializeSubscriptions, withTimeout } from '../services/appInitializer';
-import { planBenefit, trialDuration } from '../services/planCopy';
+import { planBenefit, trialDuration, proPurchaseLabel } from '../services/planCopy';
 
 import type { UserProfile } from '../types';
 import { growerBenefits } from '../services/growerBenefits';
@@ -129,6 +129,15 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, profile }) => {
           { identifier: 'mg_monthly', packageType: 'MONTHLY', product: { price: 29.99, currencyCode: 'USD', priceString: '$29.99' } } as any,
           { identifier: 'mg_annual', packageType: 'ANNUAL', product: { price: 99.99, currencyCode: 'USD', priceString: '$99.99' } } as any,
         ];
+        // Only the isolated design gallery simulates trial eligibility. Native offers remain StoreKit-driven.
+        if (import.meta.env.DEV && location.pathname.startsWith('/review')) {
+          mockPackages.forEach(pkg => {
+            pkg.product.identifier = pkg.identifier;
+            pkg.product.introPrice = { price: 0, priceString: '$0.00', period: 'P3D', periodUnit: 'DAY', periodNumberOfUnits: 3, cycles: 1 };
+          });
+          const previewTrial = new URLSearchParams(location.search).get('trial');
+          if (!['ineligible', 'unknown'].includes(previewTrial || '')) setTrialEligibleProductIds(mockPackages.map(pkg => pkg.product.identifier));
+        }
         setPackages(mockPackages);
         setSelectedPkgIdentifier('mg_annual');
         setLoading(false);
@@ -289,7 +298,9 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, profile }) => {
 
   const selectedPkg = packages.find(p => p.identifier === selectedPkgIdentifier);
   const trialEligible = Boolean(
-    selectedPkg && trialEligibleProductIds.includes(selectedPkg.product.identifier)
+    selectedPkg && selectedPkg.product.introPrice?.price === 0 &&
+    trialDuration(selectedPkg.product.introPrice) &&
+    trialEligibleProductIds.includes(selectedPkg.product.identifier)
   );
   const annualPkg = packages.find((p: any) => p.packageType === 'ANNUAL');
   const monthlyPkg = packages.find((p: any) => p.packageType === 'MONTHLY');
@@ -412,7 +423,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, profile }) => {
       </div>
       <footer className="shrink-0 border-t border-slate-200 bg-white px-5 pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]">
         <p className="text-center text-xs text-slate-700 mb-2 font-semibold">{getSubtext()}</p>
-        <button disabled={isPurchasing || (!pending&&!selectedPkgIdentifier)} onClick={pending?checkPending:handleStartTrial} className="w-full min-h-12 rounded-2xl bg-emerald-800 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">{isPurchasing ? 'Confirming your subscription…' : pending ? 'Check subscription status' : trialEligible ? 'Start Free Trial' : 'Get Pro Access'}{!isPurchasing && <ArrowRight size={18}/>}</button>
+        <button disabled={isPurchasing || (!pending&&!selectedPkgIdentifier)} onClick={pending?checkPending:handleStartTrial} className="w-full min-h-12 rounded-2xl bg-emerald-800 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">{isPurchasing ? 'Confirming your subscription…' : pending ? 'Check subscription status' : proPurchaseLabel(trialEligible, selectedPkg?.product.introPrice)}{!isPurchasing && <ArrowRight size={18}/>}</button>
         {pending&&<button onClick={()=>openLink('https://apps.apple.com/account/subscriptions')} className="journey-text-button">Open Apple Subscriptions</button>}
         {pending&&error&&<button className="block min-h-11 text-xs underline mx-auto" onClick={async()=>{await markProPurchasePending(false);setPending(false);setError('Before purchasing again, confirm Apple Subscriptions shows no active or pending Pro plan.');}}>Apple shows no plan? Choose a plan again</button>}
         <p className="text-xs text-center text-slate-600 mt-2">Manage or cancel in Apple Subscriptions.</p>
@@ -577,7 +588,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, profile }) => {
           ) : isPurchasing ? (
             <span className="animate-pulse">Processing...</span>
           ) : trialEligible ? (
-            <>Start Free Trial <ArrowRight strokeWidth={3} size={20} /></>
+            <>{proPurchaseLabel(trialEligible, selectedPkg?.product.introPrice)} <ArrowRight strokeWidth={3} size={20} /></>
           ) : (
             <>Subscribe Now <ArrowRight strokeWidth={3} size={20} /></>
           )}

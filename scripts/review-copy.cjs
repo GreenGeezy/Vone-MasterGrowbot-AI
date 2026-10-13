@@ -4,7 +4,7 @@ async (page) => {
  await page.setViewportSize({width:402,height:874});
  for(const experience of ['Novice','Intermediate','Expert']){
   await page.goto(`http://127.0.0.1:3011/review/screen?screen=pro&experience=${experience}`);
-  await page.getByRole('button',{name:'Get Pro Access',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Start 3-Day Free Trial',exact:true}).waitFor();
   const heading=await page.getByRole('heading',{level:1}).textContent();
   cases.push({experience,heading});
   const selected=page.locator('[aria-label="Pro billing period"] button[aria-pressed="true"]');

@@ -30,6 +30,7 @@ import { readOnboarding } from '../services/onboardingState';
 import type { UserProfile } from '../types';
 interface PremiumPaywallProps {
   profile?: Partial<UserProfile> | null;
+  entryPoint?: 'video' | 'catalog';
   onClose: () => void;
   onUnlocked: () => void;
   requireRestore?: boolean;
@@ -41,7 +42,7 @@ const labelFor = (pkg: PurchasesPackage) =>
 const periodFor = (pkg: PurchasesPackage) =>
   pkg.identifier === 'weekly' ? 'week' : pkg.identifier === 'monthly' ? 'month' : 'year';
 
-const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, requireRestore = false, profile }) => {
+const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, requireRestore = false, profile, entryPoint = 'video' }) => {
   const benefits=growerBenefits(profile || readOnboarding().profile);
   const [features,setFeatures]=useState(safeConfig);
   useEffect(()=>{recordEvent('paywall_view','premium');void getLibraryConfig().then(setFeatures);},[]);
@@ -266,9 +267,9 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
 
       <div className="flex-1 overflow-y-auto px-5 pb-6">
         <div className="subscription-hero premium-hero relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-emerald-500/25 to-cyan-400/10 border border-emerald-300/20 p-3 mt-1 mb-3">
-          <h1 className="text-xl font-black leading-tight">Everything in Pro.<br />More ways to explore.</h1>
-          <p className="text-xs text-slate-600 mt-2 leading-relaxed">Video check-ins{features.catalog && features.catalogCount===300?' · Double the strains: 600 profiles':''}</p>
-          <p className="text-xs font-semibold text-emerald-800 mt-2">One subscription. Pro included.</p>
+          <h1 className="text-xl font-black leading-tight">{entryPoint === 'catalog' && features.catalog ? 'Find more strains for your next grow.' : 'See more of your plant.'}</h1>
+          <p className="text-xs text-slate-600 mt-2 leading-relaxed">{entryPoint === 'catalog' && features.catalog ? 'Expanded strain references, plus video analysis.' : 'Review multiple angles in one video check-in.'}{features.catalog && features.catalogCount===300?' · Double the strains: 600 profiles':''}</p>
+          <p className="text-xs font-semibold text-emerald-800 mt-2">Everything in Pro included.</p>
         </div>
 
         {loading ? <div className="py-12 text-center text-sm text-slate-600">Loading localized App Store prices…</div> : (
@@ -301,7 +302,7 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
           ))}
         </div>
 
-        <div className="rounded-2xl border border-slate-200 p-4 mb-5 text-sm"><p className="text-xs text-emerald-800 font-bold">EXAMPLE WORKFLOW</p><p className="mt-2 text-slate-700">Save a check-in → add a note → revisit what changed.</p><p className="text-xs text-slate-600 mt-2">Illustrative example, not a personal analysis.</p></div>
+        <div className="rounded-2xl border border-slate-200 p-4 mb-5 text-sm"><p className="text-xs text-emerald-800 font-bold">EXAMPLE WORKFLOW</p><p className="mt-2 text-slate-700">Save a check-in → add a note → revisit what changed.</p><p className="text-xs text-slate-600 mt-2">Build a record you can return to throughout your grow.</p></div>
 
 
         <div ref={statusPanel}>
@@ -319,6 +320,7 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
 
       <div className="subscription-footer shrink-0 border-t border-slate-200 bg-[#fafbf7]/95 px-5 pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]">
         {!pending && selectedPackage && <p className="mb-2 text-center text-sm font-semibold text-slate-700">{selectedPackage.product.priceString} total per {periodFor(selectedPackage)} • Pro included</p>}
+        {!pending && !verificationFailed && selectedPackage && <p className="text-xs text-center text-slate-600 mb-2">No free trial.</p>}
         <button onClick={pending || verificationFailed ? checkStatus : purchase} disabled={busy || loading || (!pending && !verificationFailed && !selected)} className="w-full rounded-2xl bg-emerald-800 text-white py-3 font-black disabled:opacity-50 flex justify-center items-center gap-2">
           {busy ? 'Checking subscription…' : verificationFailed ? 'Retry verification' : pending ? 'Check status' : <><Film size={19} /> Continue with Premium</>}
         </button>
