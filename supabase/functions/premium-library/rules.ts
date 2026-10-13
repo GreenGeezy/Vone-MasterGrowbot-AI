@@ -2,8 +2,13 @@ export const FILE_TYPES: Record<string,string> = {
  pdf:'application/pdf', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
  xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', csv:'text/csv', txt:'text/plain',
 };
-export const EVENTS = new Set(['paywall_view','plan_selected','purchase_attempt','purchase_success','purchase_cancelled','purchase_failed','analysis_complete','journal_saved','followup_visit','attachment_upload','attachment_open','attachment_delete','catalog_interest']);
-export const SURFACES = new Set(['pro','premium','photo','video','journal','home','catalog']);
+export const EVENTS = new Set(['paywall_view','plan_selected','purchase_attempt','purchase_success','purchase_cancelled','purchase_failed','analysis_complete','journal_saved','followup_visit','attachment_upload','attachment_open','attachment_delete','catalog_interest','onboarding_view','onboarding_answer','onboarding_complete']);
+export const SURFACES = new Set(['pro','premium','photo','video','journal','home','catalog','onboarding']);
+export function eventMetadata(value:unknown):Record<string,string> {
+ const allowed=new Set(['build','platform','environment','step','entry_point','variant','product_id','offering_id','outcome','error_category','rc_app_user_id']);
+ if(!value||typeof value!=='object'||Array.isArray(value))return {};
+ return Object.fromEntries(Object.entries(value).filter(([k,v])=>allowed.has(k)&&typeof v==='string'&&/^[a-zA-Z0-9_$.:\-]{1,100}$/.test(v)));
+}
 export function validateDocument(name:string, bytes:Uint8Array) {
  if (!name || name.length>180 || /[\\/\x00-\x1f]/.test(name)) throw new Error('Choose a file with a valid name.');
  const ext=name.split('.').pop()?.toLowerCase() || '';

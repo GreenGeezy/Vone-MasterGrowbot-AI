@@ -1,6 +1,6 @@
 import type { UserProfile } from '../types';
 
-const PERSONAL_FIELDS = ['avatarUri', 'name', 'experience', 'grow_mode', 'goal', 'space', 'hasSeenTutorial'] as const;
+const PERSONAL_FIELDS = ['avatarUri', 'name', 'experience', 'grow_mode', 'goal', 'space', 'hasSeenTutorial', 'onboardingIntent', 'onboardingGoal', 'notStartedYet', 'experienceUndecided', 'growSetupUndecided'] as const;
 
 /** Cloud authentication data remains authoritative; device-edited preferences survive refresh. */
 export function mergeProfilePreferences(cloud: Partial<UserProfile> | null, local: Partial<UserProfile> | null): Partial<UserProfile> {
@@ -8,6 +8,7 @@ export function mergeProfilePreferences(cloud: Partial<UserProfile> | null, loca
   for (const field of PERSONAL_FIELDS) {
     if (local?.[field] !== undefined) Object.assign(merged, { [field]: local[field] });
   }
+  if (local?.notStartedYet || local?.growSetupUndecided) delete merged.grow_mode;
   return merged;
 }
 

@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { OnboardingStep, UserProfile, Plant, Task, AppScreen } from "./types";
+import { completeOnboarding, readOnboarding, writeOnboarding, initialDestination, firstActionDetails, onboardingVariant } from "./services/onboardingState";
+import { recordEvent } from "./services/premiumLibrary";
+import { proFirstRelease } from "./services/releaseFeatures";
 import Splash from "./screens/Splash";
 import Onboarding from "./screens/Onboarding";
+import LegacyOnboarding from "./screens/LegacyOnboarding";
 import OnboardingSummary from "./screens/OnboardingSummary";
 import Home from "./screens/Home";
 import Diagnose from "./screens/Diagnose";
@@ -47,6 +51,8 @@ const LS_LAST_VISIT = "mastergrowbot_last_visit";
 const LS_STREAK = "mastergrowbot_streak";
 
 const App: React.FC = () => {
+  const [variant] = useState(() => onboardingVariant(import.meta.env.VITE_ONBOARDING_EXPERIMENT_ENABLED === "true"));
+  const [browseSavedData,setBrowseSavedData] = useState(false);
   const [journalPlantId, setJournalPlantId] = useState<string | undefined>();
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyActions, setBusyActions] = useState<string[]>([]);
@@ -68,12 +74,13 @@ const App: React.FC = () => {
     setBusyActions([...actionLocks.current]);
     setActionError(null);
     try {
+      if(Capacitor.isNativePlatform() && browseSavedData)throw new Error('Renew Pro to save a new check-in. Your saved journal is available to read.');
       await action();
       return true;
     } catch (error) {
       console.warn("Task/journal action failed", error);
       setActionError(
-        "Could not save this change. Check your connection and try again."
+        browseSavedData ? 'Your saved journal is available to read. Renew Pro to save new changes.' : 'Could not save this change. Check your connection and try again.'
       );
       return false;
     } finally {
@@ -99,6 +106,9 @@ const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<AppScreen>(AppScreen.HOME);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [onboardingEditStep, setOnboardingEditStep] = useState<number | undefined>();
+  const [firstActionHint, setFirstActionHint] = useState(false);
+  const [openVideoFromJournal, setOpenVideoFromJournal] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
@@ -191,7 +201,7 @@ const App: React.FC = () => {
       void initializeSubscriptions()
         .then((active) => {
           if (!isMounted) return;
-          if (active) setHasVerifiedPaidAccess(true);
+          setHasVerifiedPaidAccess(active);
         })
         .finally(() => {
           if (isMounted) setCheckingSubscription(false);
@@ -355,9 +365,12 @@ const App: React.FC = () => {
 
     // 4. Show tutorial if not seen
     const hasSeenTutorial = userProfile?.hasSeenTutorial;
-    if (!hasSeenTutorial) {
-      setShowTutorial(true);
-    }
+    if (proFirstRelease) {
+      completeOnboarding();
+      setShowTutorial(false);
+      setFirstActionHint(true);
+      setCurrentTab(initialDestination(userProfile) as AppScreen);
+    } else if (!hasSeenTutorial) { setShowTutorial(true); }
 
     // 5. Load user data
     runLoadUserDataInBackground();
@@ -380,11 +393,12 @@ const App: React.FC = () => {
             : plant
         )
       );
+      recordEvent('journal_saved','journal',{outcome:'persisted'});
       setJournalPlantId(targetPlantId);
       setCurrentTab(AppScreen.JOURNAL);
       // A secondary diagnosis record must not make an already-saved note look lost.
       try {
-        await saveDiagnosisReport(targetPlantId, newEntry);
+        await saveDiagnosisReport(targetPlantId, newEntry, savedEntry.imageUri || savedEntry.image);
       } catch (error) {
         console.warn("Diagnosis record sync failed", error);
       }
@@ -498,16 +512,16 @@ const App: React.FC = () => {
       );
     });
 
-  const handleAddPlant = async (strain: any) => {
+  const handleAddPlant = async (strain: any) => runAction('add-plant', async () => {
     const newPlant = await createPlantRecord(strain);
-    if (!newPlant) return;
+    if (!newPlant) throw new Error('Plant could not be saved');
     setPlants((prev) => [...prev, newPlant]);
     handleAddTask(
       `Start journal for ${strain.name}`,
       new Date().toISOString().split("T")[0],
       "user"
     );
-  };
+  });
 
   const completeTutorial = () => {
     setShowTutorial(false);
@@ -522,6 +536,7 @@ const App: React.FC = () => {
   };
 
   const handleOnboardingComplete = (profile: UserProfile) => {
+    recordEvent("onboarding_complete","onboarding",{variant});
     setUserProfile(profile);
     localStorage.setItem(LS_PROFILE, JSON.stringify(profile));
     setOnboardingStatus(OnboardingStep.SUMMARY);
@@ -535,9 +550,20 @@ const App: React.FC = () => {
   // CRITICAL FIX: After purchase, go directly to auth screen
   // Do NOT go back to summary
   const handlePaywallPurchase = () => {
+    setBrowseSavedData(false);
     setHasVerifiedPaidAccess(true);
     setShowPaywall(false);
-    setShowAuth(true);
+    if (proFirstRelease) {
+      const profile = userProfile || { ...readOnboarding().profile, experience: 'Novice' };
+      const updated = { ...profile, isOnboarded: true, hasSeenTutorial: true };
+      setUserProfile(updated as UserProfile);
+      localStorage.setItem(LS_PROFILE, JSON.stringify(updated));
+      setOnboardingStatus(OnboardingStep.COMPLETED);
+      localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
+      completeOnboarding(); setFirstActionHint(true);
+      setCurrentTab(initialDestination(updated) as AppScreen);
+      runLoadUserDataInBackground();
+    } else setShowAuth(true);
   };
 
   // Auth retry helper (for child components)
@@ -587,11 +613,14 @@ const App: React.FC = () => {
     );
   }
 
+  if (showPaywall && (onboardingStatus === OnboardingStep.SPLASH || onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE)) {
+    return <Paywall profile={userProfile} onClose={() => setShowPaywall(false)} onPurchase={handlePaywallPurchase} onSkip={() => setShowPaywall(false)} />;
+  }
   // 2. SPLASH (new user, not yet started onboarding)
   if (onboardingStatus === OnboardingStep.SPLASH) {
     return (
       <ErrorBoundary>
-        <Splash onGetStarted={handleGetStarted} />
+        {proFirstRelease ? variant === 'control' ? <LegacyOnboarding onComplete={handleOnboardingComplete}/> : <Onboarding onComplete={handleOnboardingComplete} onRestore={() => setShowPaywall(true)} /> : <Splash onGetStarted={handleGetStarted} />}
       </ErrorBoundary>
     );
   }
@@ -600,7 +629,8 @@ const App: React.FC = () => {
 
   // 3. ONBOARDING QUIZ
   if (onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE) {
-    return <Onboarding onComplete={handleOnboardingComplete} />;
+    if (!proFirstRelease || variant === "control") return <LegacyOnboarding onComplete={handleOnboardingComplete}/>;
+    return <Onboarding initialStep={onboardingEditStep} onComplete={handleOnboardingComplete} onRestore={() => setShowPaywall(true)} />;
   }
 
   // 4. ONBOARDING SUMMARY → PAYWALL
@@ -614,7 +644,7 @@ const App: React.FC = () => {
     if (showPaywall) {
       return (
         <ErrorBoundary>
-          <Paywall
+          <Paywall profile={userProfile}
             onClose={() => setShowPaywall(false)}
             onPurchase={handlePaywallPurchase}
             onSkip={() => {}}
@@ -627,6 +657,7 @@ const App: React.FC = () => {
         <OnboardingSummary
           profile={userProfile}
           onContinue={handleSummaryContinue}
+          onEdit={(step) => { setOnboardingEditStep(step); writeOnboarding({ ...readOnboarding(), step }); setOnboardingStatus(OnboardingStep.QUIZ_EXPERIENCE); localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.QUIZ_EXPERIENCE); }}
         />
       </ErrorBoundary>
     );
@@ -655,7 +686,7 @@ const App: React.FC = () => {
   if (
     onboardingStatus === OnboardingStep.COMPLETED &&
     Capacitor.isNativePlatform() &&
-    !hasVerifiedPaidAccess
+    !hasVerifiedPaidAccess && !browseSavedData
   ) {
     if (checkingSubscription)
       return (
@@ -675,8 +706,8 @@ const App: React.FC = () => {
       );
     return (
       <ErrorBoundary>
-        <Paywall
-          onClose={() => {}}
+        <Paywall profile={userProfile}
+          onClose={() => {setBrowseSavedData(true);setCurrentTab(AppScreen.JOURNAL);runLoadUserDataInBackground();}}
           onPurchase={handlePaywallPurchase}
           onSkip={() => {}}
         />
@@ -693,6 +724,7 @@ const App: React.FC = () => {
             <Home
               busyActions={busyActions}
               onOpenJournal={() => setCurrentTab(AppScreen.JOURNAL)}
+              onCheckPhoto={() => {setOpenVideoFromJournal(false);setCurrentTab(AppScreen.DIAGNOSE);}}
               plants={plants}
               tasks={tasks}
               onToggleTask={handleToggleTask}
@@ -707,7 +739,8 @@ const App: React.FC = () => {
             />
           )}
           {currentTab === AppScreen.DIAGNOSE && (
-            <Diagnose
+            browseSavedData ? <Paywall profile={userProfile} onClose={()=>setCurrentTab(AppScreen.JOURNAL)} onPurchase={handlePaywallPurchase} onSkip={()=>setCurrentTab(AppScreen.JOURNAL)}/> : <Diagnose
+              initialVideo={openVideoFromJournal}
               onSaveToJournal={handleAddJournalEntry}
               onAddTask={handleAddTask}
               plant={plants[0]}
@@ -716,11 +749,13 @@ const App: React.FC = () => {
             />
           )}
           {currentTab === AppScreen.STRAINS && (
-            <StrainSearch onAddPlant={handleAddPlant} />
+            browseSavedData ? <Paywall profile={userProfile} onClose={()=>setCurrentTab(AppScreen.JOURNAL)} onPurchase={handlePaywallPurchase} onSkip={()=>setCurrentTab(AppScreen.JOURNAL)}/> : <StrainSearch onAddPlant={handleAddPlant} />
           )}
           {currentTab === AppScreen.JOURNAL && (
             <Journal
               initialPlantId={journalPlantId}
+              onAddPlant={() => setCurrentTab(AppScreen.STRAINS)}
+              onVideoCheckIn={() => {setOpenVideoFromJournal(true);setCurrentTab(AppScreen.DIAGNOSE);}}
               busyActions={busyActions}
               onToggleTask={handleToggleTask}
               plants={plants}
@@ -739,7 +774,7 @@ const App: React.FC = () => {
           )}
           {currentTab === AppScreen.PROFILE && (
             <Profile
-              userProfile={userProfile}
+              userProfile={userProfile || {experience:'Novice'}}
               onUpdateProfile={handleUpdateProfile}
               onViewTutorial={() => setShowTutorial(true)}
               onSignOut={() => {
@@ -750,6 +785,7 @@ const App: React.FC = () => {
           )}
         </div>
 
+        {firstActionHint && <div className="fixed top-[max(1rem,env(safe-area-inset-top))] left-4 right-4 z-[75] rounded-2xl border border-emerald-200 bg-white p-4 shadow-lg flex items-center gap-3" role="status"><span className="flex-1 text-sm text-emerald-950">{firstActionDetails(userProfile).hint}</span><button className="min-h-11 px-3 font-bold text-emerald-800" onClick={() => setFirstActionHint(false)}>Got it</button></div>}
         {actionError && (
           <div
             role="alert"
@@ -766,7 +802,7 @@ const App: React.FC = () => {
         )}
         <BottomNav
           currentScreen={currentTab}
-          onNavigate={(tab) => setCurrentTab(tab)}
+          onNavigate={(tab) => {setOpenVideoFromJournal(false);setCurrentTab(tab);}}
         />
       </ErrorBoundary>
     </div>

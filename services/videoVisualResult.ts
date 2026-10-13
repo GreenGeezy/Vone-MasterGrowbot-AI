@@ -1,5 +1,6 @@
 /** Observation-only contract. Deliberately excludes treatment and cultivation targets. */
 export interface VideoVisualResult {
+  plantVisible?: boolean;
   visualSummary: string;
   growthStage: string;
   severity: 'low' | 'medium' | 'high' | 'uncertain';
@@ -26,6 +27,7 @@ export function parseVideoVisualResult(input: unknown): VideoVisualResult {
   }
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw invalid();
   const value = input as Record<string, unknown>;
+  if (value.plantVisible !== undefined && typeof value.plantVisible !== 'boolean') throw invalid();
   const text = (item: unknown): string => {
     if (typeof item !== 'string' || !item.trim() || item.length > 1500) throw invalid();
     return item.trim();
@@ -41,6 +43,7 @@ export function parseVideoVisualResult(input: unknown): VideoVisualResult {
   // Explicit projection prevents unrelated model fields from entering the result UI.
   // This validates structure; semantic safety also requires the server prompt/output policy.
   return {
+    plantVisible: value.plantVisible === undefined ? true : value.plantVisible as boolean,
     visualSummary: text(value.visualSummary),
     growthStage: text(value.growthStage),
     severity: value.severity as VideoVisualResult['severity'],
@@ -103,7 +106,7 @@ function extractJsonObject(sourceValue: string): string {
 export function formatVideoHealthReport(result: VideoVisualResult): string {
   const bullets = (items: string[]) => items.map(item => `- ${item}`).join('\n');
   return [
-    `Video Plant Health Report: ${result.healthLabel} (${Math.round(result.healthScore)}/100, ${Math.round(result.confidence)}% confidence)`,
+    result.plantVisible === false ? 'Video Plant Health Report: Plant not directly visible; health not assessed' : `Video Plant Health Report: ${result.healthLabel} (${Math.round(result.healthScore)}/100, ${Math.round(result.confidence)}% confidence)`,
     `Growth stage visible: ${result.growthStage}`,
     `Summary: ${result.visualSummary}`,
     `Priority action: ${result.priorityAction}`,

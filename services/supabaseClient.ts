@@ -90,7 +90,7 @@ export const updateOnboardingProfile = async (updates: any) => {
   const { error } = await supabase
     .from('profiles')
     .upsert({ ...Object.fromEntries(Object.entries(updates).filter(([key]) =>
-      ['email', 'grow_experience', 'subscription_status', 'experience_level', 'grow_environment', 'primary_goal', 'grow_space_size'].includes(key)
+      ['email', 'grow_experience', 'experience_level', 'grow_environment', 'primary_goal', 'grow_space_size'].includes(key)
     )), id: user.id });
 
   if (error) throw error;

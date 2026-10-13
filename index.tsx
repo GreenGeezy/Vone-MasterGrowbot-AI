@@ -19,7 +19,10 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
-root.render(
+if (import.meta.env.DEV && location.pathname.startsWith('/review')) {
+  if(new URLSearchParams(location.search).get('text')==='large')document.documentElement.style.fontSize='20px';
+  import('./screens/ReviewGallery').then(({default:ReviewGallery})=>root.render(<ReviewGallery/>));
+} else root.render(
   <React.StrictMode>
     <App />
   </React.StrictMode>

@@ -26,3 +26,13 @@ entrypoint = "./functions/gemini-v3/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/premium-library/index.ts"
+
+[functions.delete-account]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/delete-account/index.ts"
+
+[functions.conversion-events]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/conversion-events/index.ts"

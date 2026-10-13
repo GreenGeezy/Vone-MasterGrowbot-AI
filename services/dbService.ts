@@ -57,10 +57,14 @@ export const uploadImage = async (base64: string, path: string): Promise<string 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return null; // Should not trigger now due to anon auth
 
-    const blob = base64ToBlob(base64);
+    const contentType = base64.startsWith('data:')
+      ? /^data:(image\/(?:jpeg|png|webp|gif|heic|heif));base64,/i.exec(base64)?.[1]?.toLowerCase()
+      : 'image/jpeg'; // Legacy camera callers pass bare JPEG base64.
+    if (!contentType) throw new Error('Unsupported image format');
+    const blob = base64ToBlob(base64, contentType);
     const { error: uploadError } = await supabase.storage
       .from('user_uploads')
-      .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+      .upload(path, blob, { contentType, upsert: false });
 
     if (uploadError) throw uploadError;
 
@@ -193,6 +197,13 @@ export const createPlantRecord = async (strain: any): Promise<Plant | null> => {
     setLocal(STORAGE_KEYS.PLANTS, plants);
     return localPlant;
   }
+  let storedImage = localPlant.imageUri;
+  if (typeof storedImage === 'string' && /^data:image\//i.test(storedImage)) {
+    const extension = /^data:image\/(png|webp);/i.exec(storedImage)?.[1]?.toLowerCase() || 'jpg';
+    storedImage = await uploadImage(storedImage, `${session.user.id}/plants/${Date.now()}-${crypto.randomUUID()}.${extension}`) || '';
+    if (!storedImage) throw new Error('Plant photo upload failed. Your custom strain is still available; retry when connected.');
+  }
+  const savedStrain = { ...strain, imageUri: storedImage, image: storedImage };
   const { data, error } = await supabase
     .from('plants')
     .insert({
@@ -200,9 +211,9 @@ export const createPlantRecord = async (strain: any): Promise<Plant | null> => {
       grow_id: growId,
       name: localPlant.name,
       strain: localPlant.strain,
-      strain_details: strain,
+      strain_details: savedStrain,
       stage: localPlant.stage,
-      image_url: localPlant.imageUri,
+      image_url: storedImage,
       health_score: localPlant.healthScore,
       days_in_stage: localPlant.daysInStage,
       total_days: localPlant.totalDays,
@@ -320,8 +331,9 @@ export const saveAppJournalEntry = async (plantId: string | undefined, entry: an
   const { data: { session } } = await supabase.auth.getSession();
 
   if (session?.user?.id && imageData?.startsWith?.('data:image')) {
-    const path = `${session.user.id}/journal/${Date.now()}.jpg`;
-    mediaUrl = await uploadImage(imageData, path) || imageData;
+    const path = `${session.user.id}/journal/${crypto.randomUUID()}`;
+    mediaUrl = await uploadImage(imageData, path);
+    if (!mediaUrl) throw new Error('Photo upload failed. Your entry has not been saved. Please retry.');
   }
 
   const analysisMetadata = typeof entry.aiAnalysis === 'string' ? { summary: entry.aiAnalysis } : entry.aiAnalysis || {};
@@ -347,14 +359,22 @@ export const saveAppJournalEntry = async (plantId: string | undefined, entry: an
   });
 };
 
-export const saveDiagnosisReport = async (plantId: string | undefined, entry: any) => {
+export const saveDiagnosisReport = async (plantId: string | undefined, entry: any, savedImageUrl?: string) => {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user?.id || !entry?.diagnosisData) return null;
+
+  // The journal upload is the single durable copy of a photo. Older records
+  // may still contain data URLs, but never add another embedded copy here.
+  const imageUrl = savedImageUrl || entry.imageUri || entry.image;
+  if (typeof imageUrl === 'string' && imageUrl.startsWith('data:')) {
+    console.warn('Skipping diagnosis record until its photo has a stored URL');
+    return false;
+  }
 
   const { error } = await supabase.from('diagnosis_reports').insert({
     user_id: session.user.id,
     plant_id: plantId && !plantId.startsWith('local_') ? plantId : null,
-    image_url: entry.imageUri || entry.image || null,
+    image_url: imageUrl || null,
     diagnosis_json: entry.diagnosisData,
     confidence_score: entry.diagnosisData.confidence ?? null,
   });
@@ -707,41 +727,26 @@ export const getChatMessages = async (sessionId: string): Promise<StoredMessage[
 // --- Account Deletion ---
 
 export const deleteUserData = async (): Promise<boolean> => {
-  const { data: { session } } = await supabase.auth.getSession();
-
-  // 1. Clear Local Storage
-  localStorage.clear();
-
-  // 2. Delete from Supabase (if authenticated)
-  if (session?.user?.id) {
-    const uid = session.user.id;
-    const cleanupSteps: Array<[string, () => PromiseLike<any>]> = [
-      ['profiles', () => supabase.from('profiles').delete().eq('id', uid)],
-      ['grow_logs', () => supabase.from('grow_logs').delete().eq('user_id', uid)],
-      ['journal_logs', () => supabase.from('journal_logs').delete().eq('user_id', uid)],
-      ['tasks', () => supabase.from('tasks').delete().eq('user_id', uid)],
-      ['chat_sessions', () => supabase.from('chat_sessions').delete().eq('user_id', uid)],
-      ['chat_messages', () => supabase.from('chat_messages').delete().eq('user_id', uid)],
-      ['user_feedback', () => supabase.from('user_feedback').delete().eq('user_id', uid)],
-      ['support_tickets', () => supabase.from('support_tickets').delete().eq('user_id', uid)],
-      ['auth_session', () => supabase.auth.signOut()],
-    ];
-
-    const results = await Promise.allSettled(
-      cleanupSteps.map(async ([, action]) => {
-        const result = await action();
-        if (result?.error) throw result.error;
-      })
-    );
-
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        console.warn(`Account cleanup step failed or was skipped: ${cleanupSteps[index][0]}`);
-      }
-    });
-
-    return true;
-  }
-
-  return true; // Local only account deleted
+  const { deleteAccountWithConfirmation } = await import('./accountDeletion');
+  const { CONFIG } = await import('./config');
+  const { initializeSupabaseSession } = await import('./supabaseClient');
+  return deleteAccountWithConfirmation({
+    remove: async () => {
+      const session = await initializeSupabaseSession();
+      const result = await taskRequest(signal => fetch(`${CONFIG.SUPABASE_URL}/functions/v1/delete-account`, {
+        method: 'POST', signal,
+        headers: { 'Content-Type': 'application/json', apikey: CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ confirm: 'DELETE' }),
+      }), 60000);
+      const payload = await result.json().catch(() => null);
+      if (!result.ok) throw new Error(payload?.error || 'Account deletion could not finish. Please retry.');
+      return payload;
+    },
+    clear: async () => {
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+      const { Preferences } = await import('@capacitor/preferences');
+      for (const key of ['mg_rc_stable_id','mg_rc_pending_previous_id','mg_rc_pending_premium_purchase','mg_rc_pending_pro_purchase']) await Preferences.remove({ key });
+      localStorage.clear();
+    },
+  });
 };

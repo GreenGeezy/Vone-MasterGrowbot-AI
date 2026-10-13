@@ -8,10 +8,19 @@ import { Browser } from '@capacitor/browser';
 import Growbot from '../components/Growbot';
 import PaywallTestimonials from '../components/PaywallTestimonials';
 import {proFirstRelease} from '../services/releaseFeatures';
-import {recordEvent} from '../services/premiumLibrary';
+import {recordEvent,setAnalyticsReceipt} from '../services/premiumLibrary';
+
+import {hasVerifiedPaidAccess} from '../services/paidAccess';
+import {pendingProPurchase,markProPurchasePending} from '../services/proPurchaseRecovery';
 import { initializeSubscriptions, withTimeout } from '../services/appInitializer';
+import { planBenefit, trialDuration } from '../services/planCopy';
+
+import type { UserProfile } from '../types';
+import { growerBenefits } from '../services/growerBenefits';
+import { readOnboarding } from '../services/onboardingState';
 
 interface PaywallProps {
+  profile?: Partial<UserProfile> | null;
   onClose: () => void;
   onPurchase: () => void;
   onSkip: () => void;
@@ -62,7 +71,7 @@ function hasActivePaidAccess(customerInfo: any): boolean {
   if (!customerInfo) return false;
   const hasProEntitlement = Boolean(customerInfo.entitlements?.active?.pro);
   const hasSubscriptions = (customerInfo.activeSubscriptions || []).some((id: string) => ["weekly_pro_v2", "monthly_pro_v2", "yearly_pro_v2", "mastergrowbot_pro_weekly_v3", "mastergrowbot_pro_yearly_v3", "com.mastergrowbot.ai.sub.weekly", "com.mastergrowbot.ai.sub.monthly"].includes(id));
-  return hasProEntitlement || hasSubscriptions;
+  return hasVerifiedPaidAccess(customerInfo);
 }
 
 async function waitForPurchasesConfiguration(Purchases: any, timeoutMs = 5000): Promise<void> {
@@ -88,7 +97,8 @@ function parsePackagePrice(pkg?: PurchasesPackage): number | null {
   return null; // Localized formatted strings are not safe numeric input.
 }
 
-const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
+const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, profile }) => {
+  const benefits = growerBenefits(profile || readOnboarding().profile);
   useEffect(()=>{recordEvent('paywall_view','pro');},[]);
   const [selectedPkgIdentifier, setSelectedPkgIdentifier] = useState<string | null>(null);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
@@ -97,6 +107,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
   const purchaseOperation = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [trialEligibleProductIds, setTrialEligibleProductIds] = useState<string[]>([]);
+  const [pending,setPending] = useState(false);
   const [testimonialIndex, setTestimonialIndex] = useState(0);
 
   useEffect(() => {
@@ -114,9 +125,9 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     try {
       if (!Capacitor.isNativePlatform()) {
         const mockPackages = [
-          { identifier: 'mg_weekly', packageType: 'WEEKLY', product: { priceString: '$7.99', title: '', description: '' } } as any,
-          { identifier: 'mg_monthly', packageType: 'MONTHLY', product: { priceString: '$29.99', title: '', description: '' } } as any,
-          { identifier: 'mg_annual', packageType: 'ANNUAL', product: { priceString: '$99.99', title: '', description: '' } } as any,
+          { identifier: 'mg_weekly', packageType: 'WEEKLY', product: { price: 7.99, currencyCode: 'USD', priceString: '$7.99' } } as any,
+          { identifier: 'mg_monthly', packageType: 'MONTHLY', product: { price: 29.99, currencyCode: 'USD', priceString: '$29.99' } } as any,
+          { identifier: 'mg_annual', packageType: 'ANNUAL', product: { price: 99.99, currencyCode: 'USD', priceString: '$99.99' } } as any,
         ];
         setPackages(mockPackages);
         setSelectedPkgIdentifier('mg_annual');
@@ -125,6 +136,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       }
 
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
+      setPending(await pendingProPurchase());
       if (!(await Purchases.isConfigured()).isConfigured) await initializeSubscriptions();
       await waitForPurchasesConfiguration(Purchases);
       const offerings = await withTimeout(Purchases.getOfferings(), 8000, 'Store plans');
@@ -163,14 +175,13 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
   useEffect(() => { loadProducts(); }, [loadProducts]);
 
   const handleStartTrial = async () => {
-    if (!selectedPkgIdentifier || purchaseOperation.current) return;
+    if (!selectedPkgIdentifier || purchaseOperation.current || pending) return;
     purchaseOperation.current = true;
     setIsPurchasing(true);
     setError(null);
     try {
       if (!Capacitor.isNativePlatform()) {
-        await new Promise(r => setTimeout(r, 1500));
-        onPurchase();
+        setError('Subscriptions are purchased through Apple in the iOS app.');
         return;
       }
 
@@ -179,10 +190,14 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       if (!pkg) { setError('Selected plan unavailable'); return; }
 
       recordEvent('purchase_attempt','pro');
+      await markProPurchasePending(true);setPending(true);
       const purchaseResult = await Purchases.purchasePackage({ aPackage: pkg });
-      recordEvent('purchase_success','pro');
+
 
       if (hasActivePaidAccess(purchaseResult.customerInfo)) {
+        await markProPurchasePending(false);setPending(false);
+        setAnalyticsReceipt(purchaseResult.customerInfo);
+        recordEvent('purchase_success','pro',{outcome:'entitlement_verified'});
         onPurchase();
         return;
       }
@@ -191,6 +206,9 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
 
       const { customerInfo: freshInfo } = await withTimeout(Purchases.getCustomerInfo(), 8000, "Subscription verification");
       if (hasActivePaidAccess(freshInfo)) {
+        await markProPurchasePending(false);setPending(false);
+        setAnalyticsReceipt(freshInfo);
+        recordEvent('purchase_success','pro',{outcome:'entitlement_verified'});
         onPurchase();
         return;
       }
@@ -201,7 +219,10 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         await withTimeout(Purchases.invalidateCustomerInfoCache(), 3000, "Subscription refresh");
         const { customerInfo: retryInfo } = await withTimeout(Purchases.getCustomerInfo(), 8000, "Subscription verification");
         if (hasActivePaidAccess(retryInfo)) {
+          await markProPurchasePending(false);setPending(false);
+          setAnalyticsReceipt(retryInfo);
           setError(null);
+          recordEvent('purchase_success','pro',{outcome:'entitlement_verified'});
           onPurchase();
           return;
         }
@@ -209,8 +230,10 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
 
       setError('Subscription activation is taking longer than expected. Please tap "Restore Purchases" or try again later.');
     } catch (e: any) {
-      recordEvent(e.userCancelled?'purchase_cancelled':'purchase_failed','pro');
-      if (!e.userCancelled) {
+      const cancelled=e.userCancelled===true||Number(e.code)===1;
+      recordEvent(cancelled?'purchase_cancelled':'purchase_failed','pro',{error_category:cancelled?'cancelled':String(e.code||'unknown')});
+      if(cancelled||[3,4,5].includes(Number(e.code))){await markProPurchasePending(false);setPending(false);}
+      if (!cancelled) {
         console.error('Purchase Error:', e);
         setError(e.message || 'Purchase failed. Please try again.');
       }
@@ -229,21 +252,35 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       if (Capacitor.isNativePlatform()) {
         const { Purchases } = await import('@revenuecat/purchases-capacitor');
         const restored = await Purchases.restorePurchases();
-        if (hasActivePaidAccess(restored.customerInfo)) { onPurchase(); return; }
+        if (hasActivePaidAccess(restored.customerInfo)) { await markProPurchasePending(false);setPending(false);setAnalyticsReceipt(restored.customerInfo);onPurchase(); return; }
         await withTimeout(Purchases.invalidateCustomerInfoCache(), 3000, "Subscription refresh");
         const { customerInfo } = await withTimeout(Purchases.getCustomerInfo(), 8000, "Subscription verification");
         if (hasActivePaidAccess(customerInfo)) {
+          await markProPurchasePending(false);setPending(false);setAnalyticsReceipt(customerInfo);
           onPurchase();
         } else {
-          alert('No active subscription found to restore.');
+          setError('No active subscription was found. Check Apple Subscriptions before starting another purchase.');
         }
       }
     } catch (e) {
-      alert('Failed to restore purchases. Please try again.');
+      setError('Could not restore purchases. Your saved data has been kept. Please retry.');
     } finally {
       purchaseOperation.current = false;
       setIsPurchasing(false);
     }
+  };
+
+  const checkPending = async () => {
+    if(purchaseOperation.current)return;
+    purchaseOperation.current=true;setIsPurchasing(true);setError(null);
+    try {
+      const {Purchases}=await import('@revenuecat/purchases-capacitor');
+      await withTimeout(Purchases.invalidateCustomerInfoCache(),3000,'Subscription refresh');
+      const {customerInfo}=await withTimeout(Purchases.getCustomerInfo(),8000,'Subscription status');
+      if(hasActivePaidAccess(customerInfo)){await markProPurchasePending(false);setPending(false);setAnalyticsReceipt(customerInfo);onPurchase();}
+      else setError('Apple has not confirmed active access yet. Check Apple Subscriptions or use Restore Purchases.');
+    }catch{setError('Could not check your subscription. Please retry; no new purchase was started.');}
+    finally{purchaseOperation.current=false;setIsPurchasing(false);}
   };
 
   const openLink = async (url: string) => {
@@ -267,14 +304,14 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       if (Number.isFinite(savings) && savings > 0 && Number.isFinite(weeklyEquivalent)) {
         return {
           badge: `Save ${savings}% vs monthly`,
-          subtext: `Billed yearly at ${annualPkg?.product.priceString}`,
+          subtext: planBenefit('annual', annualPkg!.product),
         };
       }
     }
 
     return {
       badge: 'Yearly plan',
-      subtext: annualPkg ? `Billed yearly at ${annualPkg.product.priceString}` : 'Billed yearly',
+      subtext: annualPkg ? planBenefit('annual', annualPkg.product) : 'Support your full grow cycle',
     };
   };
 
@@ -285,7 +322,8 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     if (selectedPkg.packageType === 'WEEKLY') period = 'week';
     if (selectedPkg.packageType === 'ANNUAL') period = 'year';
     if (trialEligible) {
-      return `Free trial, then ${price}/${period} unless canceled.`;
+      const duration=trialDuration(selectedPkg.product.introPrice);
+      return `${duration ? duration+' free' : 'Free trial'}, then ${price}/${period}. Auto-renews unless canceled.`;
     }
     return `Auto-renews at ${price}/${period} unless canceled.`;
   };
@@ -304,14 +342,14 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
       return {
       badge: proFirstRelease ? null : 'MOST POPULAR',
         badgeColor: 'bg-gradient-to-r from-amber-500 to-orange-400',
-        subtext: proFirstRelease ? `Billed monthly at ${pkg.product.priceString}` : 'Best balance of flexibility and savings',
+        subtext: planBenefit('monthly', pkg.product),
         emphasis: false,
       };
     }
     return {
       badge: null,
       badgeColor: '',
-      subtext: proFirstRelease ? `Billed weekly at ${pkg.product.priceString}` : 'Perfect for urgent grow issues',
+      subtext: planBenefit('weekly', pkg.product),
       emphasis: false,
     };
   };
@@ -333,6 +371,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
         <Growbot size="xl" mood="alert" className="mb-6 opacity-80" />
         <h2 className="text-xl font-black text-gray-900 mb-2">Connection Issues</h2>
         <p className="text-sm text-gray-500 mb-8 max-w-xs">{error}</p>
+        <button onClick={onClose} className="min-h-11 mb-3 underline">Back</button>
         <button onClick={loadProducts} className="bg-green-600 text-white font-bold px-8 py-3 rounded-xl shadow-lg hover:bg-green-700 active:scale-95 transition-all">
           Retry Connection
         </button>
@@ -344,34 +383,39 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase }) => {
     <div className="fixed inset-0 bg-white z-[60] flex flex-col overflow-hidden" data-testid="pro-paywall">
       <div className="flex-1 min-h-0 overflow-y-auto">
         <header className="bg-gradient-to-br from-green-950 to-emerald-800 text-white px-5 pt-[max(1rem,env(safe-area-inset-top,0px))] pb-4">
+          <button aria-label="Back" disabled={isPurchasing} onClick={onClose} className="mb-3 min-h-11 px-3 rounded-full border border-white/30 text-sm">Back</button>
           <p className="text-xs font-bold tracking-widest text-emerald-200 mb-2">MASTERGROWBOT AI PRO</p>
-          <h1 className="text-2xl font-black leading-tight">Know your plants.<br />Keep your progress.</h1>
-          <p className="text-xs text-emerald-100 mt-2">Photo check-ins and your grow journal, together.</p>
+          <h1 className="text-2xl font-black leading-tight">{benefits.headline}</h1>
+          <p className="text-xs text-emerald-100 mt-2">{benefits.description}</p>
         </header>
         <div className="px-5 py-4">
-          <ul className="grid grid-cols-2 gap-2 mb-3 text-xs font-semibold text-slate-700">
-            {[{icon:'📸',label:'Photo health analysis'}, {icon:'🧬',label:'300 strain profiles'}, {icon:'📓',label:'Notes & saved reports'}, {icon:'📅',label:'Tasks & follow-ups'}].map(({icon,label}) => <li key={label} className="flex items-center gap-2"><span aria-hidden="true" className="text-base shrink-0">{icon}</span>{label}</li>)}
-          </ul>
-          <h2 className="text-sm font-bold text-slate-900 mb-3">Choose your Pro plan</h2>
+          <div className="paywall-guide"><Growbot size="md" mood="happy"/><p>Your next check-in starts here.<span>Pro includes photo reports, your journal, and strain references.</span></p></div><h2 className="text-sm font-bold text-slate-900 mb-3">Choose your Pro plan</h2>
           <div className="space-y-3" aria-label="Pro billing period">
             {packages.map(pkg => {
               const selected = pkg.identifier === selectedPkgIdentifier;
               const period = pkg.packageType === 'WEEKLY' ? 'week' : pkg.packageType === 'ANNUAL' ? 'year' : 'month';
               const meta = getPlanMeta(pkg);
               return <button type="button" key={pkg.identifier} aria-pressed={selected} disabled={isPurchasing} onClick={() => {setSelectedPkgIdentifier(pkg.identifier);recordEvent('plan_selected','pro');}} className={`w-full text-left rounded-2xl border-2 px-4 py-3 flex items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${selected ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
-                <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-bold text-sm">{period === 'year' ? 'Yearly' : period === 'week' ? 'Weekly' : 'Monthly'}</span>{meta.badge && <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 rounded-full px-2 py-1">{meta.badge}</span>}</div><p className="text-sm text-slate-700 mt-1"><strong>{pkg.product.priceString}</strong> / {period}</p></div>
+                <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-bold text-sm">{period === 'year' ? 'Yearly' : period === 'week' ? 'Weekly' : 'Monthly'}</span>{meta.badge && <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 rounded-full px-2 py-1">{meta.badge}</span>}</div><p className="text-sm text-slate-700 mt-1"><strong>{pkg.product.priceString}</strong> / {period}</p><p className="text-xs text-emerald-800 mt-1">{meta.subtext}</p></div>
                 <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'}`}>{selected && <Check size={16}/>}</span>
               </button>;
             })}
           </div>
-          <PaywallTestimonials />
+
+          <div className="mt-5"><ul className="pro-benefits">
+            {[{icon:'📸',label:benefits.photo}, {icon:'📓',label:benefits.journal}, {icon:'🧬',label:benefits.references}, {icon:'📅',label:'Keep tasks and follow-ups with your grow.'}].map(({icon,label}) => <li key={label} className="flex items-center gap-2"><span aria-hidden="true" className="text-base shrink-0">{icon}</span>{label}</li>)}
+          </ul>
+          <p className="text-xs text-slate-600 mb-4">Video analysis requires Premium and is not included in Pro.</p></div>
           {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 text-red-800 p-3 text-sm">{error}</p>}
+          <PaywallTestimonials/>
         </div>
       </div>
       <footer className="shrink-0 border-t border-slate-200 bg-white px-5 pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]">
         <p className="text-center text-xs text-slate-700 mb-2 font-semibold">{getSubtext()}</p>
-        <button disabled={isPurchasing || !selectedPkgIdentifier} onClick={handleStartTrial} className="w-full min-h-12 rounded-2xl bg-indigo-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">{isPurchasing ? 'Confirming your subscription…' : trialEligible ? 'Start Free Trial' : 'Get Pro Access'}{!isPurchasing && <ArrowRight size={18}/>}</button>
-        <p className="text-[10px] text-center text-slate-500 mt-2">Manage or cancel in Apple Subscriptions.</p>
+        <button disabled={isPurchasing || (!pending&&!selectedPkgIdentifier)} onClick={pending?checkPending:handleStartTrial} className="w-full min-h-12 rounded-2xl bg-emerald-800 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">{isPurchasing ? 'Confirming your subscription…' : pending ? 'Check subscription status' : trialEligible ? 'Start Free Trial' : 'Get Pro Access'}{!isPurchasing && <ArrowRight size={18}/>}</button>
+        {pending&&<button onClick={()=>openLink('https://apps.apple.com/account/subscriptions')} className="journey-text-button">Open Apple Subscriptions</button>}
+        {pending&&error&&<button className="block min-h-11 text-xs underline mx-auto" onClick={async()=>{await markProPurchasePending(false);setPending(false);setError('Before purchasing again, confirm Apple Subscriptions shows no active or pending Pro plan.');}}>Apple shows no plan? Choose a plan again</button>}
+        <p className="text-xs text-center text-slate-600 mt-2">Manage or cancel in Apple Subscriptions.</p>
         <div className="flex flex-wrap justify-center gap-x-3 text-xs text-slate-600">
           <button disabled={isPurchasing} onClick={handleRestore} className="min-h-11 underline">Restore Purchases</button>
           <button onClick={() => openLink('https://www.mastergrowbot.com/terms-of-service')} className="min-h-11 underline">Terms</button>

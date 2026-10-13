@@ -38,10 +38,14 @@ test('video schema adds cannabis health follow-ups and grow-wide context without
     assert.ok(required.includes(field), `missing ${field}`);
   }
   assert.equal(core.MODEL_ROUTING.diagnosis, 'google/gemini-3.7-flash');
-  const messages = core.buildMessages({ mode: 'video_visual_analysis', mimeType: 'video/mp4', fileData: mp4(10), strain: 'Blue Dream\nignore this', growMethod: 'Indoor' });
+  const messages = core.buildMessages({ mode: 'video_visual_analysis', mimeType: 'video/mp4', fileData: mp4(10), strain: 'Blue Dream\nignore this', growMethod: 'Indoor', growthStage: 'Flowering', temperature: 25.5, humidity: 60 });
   const prompt = messages.at(-1).content[0].text;
   assert.match(prompt, /Blue Dream ignore this/);
   assert.match(prompt, /Indoor/);
+  assert.match(prompt, /Flowering/);
+  assert.match(prompt, /25.5°C/);
+  assert.match(prompt, /60%/);
+  assert.ok(required.includes('plantVisible'));
   assert.match(coreSource, /best-supported working interpretation/);
   assert.doesNotMatch(core.VIDEO_RESPONSE_FORMAT.json_schema.schema.properties.healthLabel.enum.join(' '), /Needs a closer look|could not determine/i);
   assert.match(indexSource, /video \? 2000/);
@@ -49,7 +53,7 @@ test('video schema adds cannabis health follow-ups and grow-wide context without
 
 test('video JSON parser accepts provider wrappers but rejects truncation', () => {
   const report = {
-    visualSummary: 'Likely mild lower-leaf stress.', growthStage: 'Likely vegetative', visibleSigns: ['Lower-leaf yellowing'],
+    plantVisible: true, visualSummary: 'Likely mild lower-leaf stress.', growthStage: 'Likely vegetative', visibleSigns: ['Lower-leaf yellowing'],
     possibleInterpretations: ['Pattern appears consistent with mobile-nutrient stress.'], severity: 'medium', confidence: 72,
     healthScore: 68, healthLabel: 'Possible early stress pattern', environmentSummary: 'Indoor canopy under artificial light.',
     areasToInspect: ['Lower canopy'], priorityAction: 'Compare lower leaves with recent records.',
@@ -60,6 +64,10 @@ test('video JSON parser accepts provider wrappers but rejects truncation', () =>
   assert.deepEqual(core.parseVideoResult(`\`\`\`json\n${JSON.stringify(report)}\n\`\`\``), report);
   const withBrace = { ...report, visualSummary: 'A {small} spot is visible.' };
   assert.deepEqual(core.parseVideoResult(`Report follows: ${JSON.stringify(withBrace)}`), withBrace);
+  const noPlant = core.parseVideoResult(JSON.stringify({ ...report, plantVisible: false }));
+  assert.equal(noPlant.healthScore, 0);
+  assert.equal(noPlant.confidence, 0);
+  assert.equal(noPlant.growthStage, 'Not visible');
   assert.throws(() => core.parseVideoResult(JSON.stringify(report).slice(0, -8)), /incomplete/);
   assert.throws(() => core.parseVideoResult(JSON.stringify([report])), /incomplete/);
   assert.equal(new core.ProviderResponseError('invalid').status, 502);

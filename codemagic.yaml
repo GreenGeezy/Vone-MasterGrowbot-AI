@@ -88,7 +88,12 @@ workflows:
           npm run typecheck
           npm run test:reliability
           npm run test:premium
+          node --test scripts/plan-copy.test.mjs
           npm run test:sharing
+          npm run test:library
+          npm run test:growth
+          npm run validate:strains
+          node scripts/validate-premium-library.mjs
           npm run build
           npx cap sync ios
           cat ios/App/Podfile.lock

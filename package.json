@@ -1,7 +1,7 @@
 {
   "name": "mastergrowbot-ai",
   "private": true,
-  "version": "1.6.13",
+  "version": "2.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,9 +9,11 @@
     "preview": "vite preview",
     "validate:strains": "node scripts/validate-strains.mjs",
     "typecheck": "tsc --noEmit",
-    "test:reliability": "node --test scripts/tasks.test.mjs scripts/edge-request.test.mjs scripts/auth-session.test.mjs scripts/profile-preferences.test.mjs",
+    "test:reliability": "node --test scripts/tasks.test.mjs scripts/edge-request.test.mjs scripts/auth-session.test.mjs scripts/profile-preferences.test.mjs scripts/media-persistence.test.mjs",
     "test:premium": "node --test scripts/premium-catalog.test.mjs scripts/video-visual-result.test.mjs scripts/premium-backend.test.mjs scripts/premium-recovery.test.mjs scripts/premium-access.test.mjs",
-    "test:sharing": "node --test scripts/analysis-share.test.mjs"
+    "test:sharing": "node --test scripts/analysis-share.test.mjs scripts/journal-share.test.mjs",
+    "test:library": "node --test scripts/premium-library.test.mjs",
+    "test:growth": "node --test scripts/growth-reliability.test.mjs"
   },
   "dependencies": {
     "@capacitor-community/in-app-review": "^6.0.0",

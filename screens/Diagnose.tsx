@@ -58,6 +58,9 @@ interface DiagnoseProps {
   onAddTask?: (title: string, date: string, source: 'ai_diagnosis' | 'user') => void | boolean | Promise<void | boolean>;
   defaultProfile?: UserProfile | null;
   onAddPlant?: (strain: any) => void;
+  initialVideo?: boolean;
+  previewResult?: ExtendedDiagnosisResult;
+  previewImage?: string;
 }
 
 const RecoveryChecklist = ({ steps, themeColor, onAddTask }: { steps: string[], themeColor: string, onAddTask?: (t: string) => void }) => {
@@ -66,10 +69,10 @@ const RecoveryChecklist = ({ steps, themeColor, onAddTask }: { steps: string[], 
     <div className="space-y-2 mt-3">
       {steps.map((step, idx) => (
         <div key={idx} className={`flex items-start gap-2 p-3 rounded-xl border transition-all ${checkedState[idx] ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-100 shadow-sm'}`}>
-          <div onClick={() => { const updated = [...checkedState]; updated[idx] = !updated[idx]; setCheckedState(updated); }} className="flex gap-3 flex-1 cursor-pointer">
+          <button type="button" role="checkbox" aria-checked={checkedState[idx]} onClick={() => { const updated = [...checkedState]; updated[idx] = !updated[idx]; setCheckedState(updated); }} className="flex gap-3 flex-1 min-h-11 text-left cursor-pointer">
             <div className={`mt-0.5 transition-colors ${checkedState[idx] ? 'text-gray-300' : themeColor}`}>{checkedState[idx] ? <CheckSquare size={18} /> : <Square size={18} />}</div>
             <p className={`text-xs sm:text-sm leading-snug transition-all ${checkedState[idx] ? 'text-gray-400 line-through' : 'text-gray-700 font-semibold'}`}>{step}</p>
-          </div>
+          </button>
           {!checkedState[idx] && onAddTask && (
             <button
               onClick={() => onAddTask(step)}
@@ -95,7 +98,7 @@ const LOADING_PHRASES = [
   "Building your custom care plan..."
 ];
 
-const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onAddTask, defaultProfile, onAddPlant }) => {
+const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onAddTask, defaultProfile, onAddPlant, initialVideo=false, previewResult, previewImage: previewPhoto }) => {
   const mediaLock = useRef(false);
   const saveLock = useRef(false);
   const [pickingMedia, setPickingMedia] = useState<'camera' | 'photos' | null>(null);
@@ -103,14 +106,15 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   const [savingReport, setSavingReport] = useState(false);
   const [premiumMember,setPremiumMember]=useState(false);
   useEffect(()=>{if(Capacitor.getPlatform()==='ios')void import('@revenuecat/purchases-capacitor').then(({Purchases})=>Purchases.getCustomerInfo()).then(({customerInfo})=>setPremiumMember(hasPremiumAccess(customerInfo))).catch(()=>{});},[]);
-  const [image, setImage] = useState<string | null>(null);
+  const isLocalReview=import.meta.env.DEV && location.pathname.startsWith('/review');
+  const [image, setImage] = useState<string | null>(isLocalReview?previewPhoto||null:null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<ExtendedDiagnosisResult | null>(null);
+  const [result, setResult] = useState<ExtendedDiagnosisResult | null>(isLocalReview?previewResult||null:null);
   const [shareSummary, setShareSummary] = useState<AnalysisShareSummary | null>(null);
   const [requireRestore, setRequireRestore] = useState(false);
   const [videoThumbnail, setVideoThumbnail] = useState<string | null>(null);
-  const [showPremiumPaywall, setShowPremiumPaywall] = useState(false);
+  const [showPremiumPaywall, setShowPremiumPaywall] = useState(initialVideo);
   const [showVideoFlow, setShowVideoFlow] = useState(false);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -128,6 +132,9 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   const [strain, setStrain] = useState<string>(plant?.strain || 'Generic');
   // Initialize from defaultProfile, fallback to Indoor if undefined
   const [growMethod, setGrowMethod] = useState<'Indoor' | 'Outdoor' | 'Greenhouse'>(defaultProfile?.grow_mode || 'Indoor');
+  const [growthStage, setGrowthStage] = useState('');
+  const [temperature, setTemperature] = useState('');
+  const [humidity, setHumidity] = useState('');
 
   const [showStrainMenu, setShowStrainMenu] = useState(false);
   const [showCustomUi, setShowCustomUi] = useState(false); // Toggle for Custom UI
@@ -208,6 +215,9 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
       setVideoResult(await analyzePlantVideo(videoFile, controller.signal, {
         strain: strain === 'Leave Blank' || strain === 'Generic' ? undefined : strain,
         growMethod,
+        growthStage: growthStage || undefined,
+        temperature: temperature.trim() !== '' && Number(temperature) >= 0 && Number(temperature) <= 50 ? Number(temperature) : undefined,
+        humidity: humidity.trim() !== '' && Number(humidity) >= 0 && Number(humidity) <= 100 ? Number(humidity) : undefined,
       }));
       recordEvent('analysis_complete','video');
     } catch (cause: any) {
@@ -379,16 +389,19 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
       <div className="bg-gray-50 min-h-screen pb-[120px] overflow-y-auto font-sans">
         <div className="sticky top-0 z-[60] bg-white/90 backdrop-blur px-6 py-4 flex justify-between items-center shadow-sm">
           <div className="flex items-center gap-2 text-gray-800 font-black uppercase text-xs tracking-widest"><Activity size={16} className={themeColor} /> Health Report</div>
-          <button onClick={() => { setResult(null); setImage(null); }} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={18} /></button>
+          <button aria-label="Close report" onClick={() => { setResult(null); setImage(null); }} className="min-h-11 min-w-11 grid place-items-center bg-gray-100 rounded-full hover:bg-gray-200"><X size={18} /></button>
         </div>
 
         <div className="p-6 space-y-6 max-w-lg mx-auto">
           {/* Header */}
           <div className="animate-in fade-in slide-in-from-top-4">
             <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2 text-white ${bgTheme}`}>{result.severity} Severity • {result.confidence}% Conf.</span>
-            <h1 className={`text-3xl font-black leading-tight ${themeColor}`}>{result.diagnosis}</h1>
+            <h1 className="text-2xl font-bold leading-tight text-emerald-950">{result.diagnosis}</h1>
             <p className="text-xs font-bold text-gray-400 mt-1 uppercase tracking-wide">Detected in {result.growthStage}</p>
           </div>
+
+          <button disabled={savingReport} onClick={handleSave} className="journey-primary"><Save size={18}/>{savingReport?'Saving…':'Save to Journal'}</button>
+          <p className="text-sm text-slate-600">Keep this report with your notes so you can revisit what changed.</p>
 
           {/* Priority Action */}
           <div className={`${bgTheme} text-white p-6 rounded-[2rem] shadow-xl relative overflow-hidden`}>
@@ -448,8 +461,9 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
                 // Logic to add task for TODAY directly
                 if (onAddTask) {
                   const today = new Date().toISOString().split('T')[0];
-                  onAddTask(stepTitle, today, 'ai_diagnosis');
-                  alert("Task Added to Today's Plan! 📅");
+                  void Promise.resolve(onAddTask(stepTitle, today, 'ai_diagnosis')).then(saved => {
+                    if(saved!==false)alert('Task saved.');
+                  }).catch(()=>alert('The task could not be saved. Please retry.'));
                 }
               }}
             />
@@ -588,7 +602,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
       <input ref={recordVideoRef} className="hidden" type="file" accept="video/mp4,video/quicktime,.mov" capture="environment" onChange={event => { void selectVideo(event.target.files?.[0]); event.currentTarget.value = ''; }} />
       <input ref={chooseVideoRef} className="hidden" type="file" accept="video/mp4,video/quicktime,.mov" onChange={event => { void selectVideo(event.target.files?.[0]); event.currentTarget.value = ''; }} />
 
-      {showPremiumPaywall && <PremiumPaywall requireRestore={requireRestore} onClose={() => setShowPremiumPaywall(false)} onUnlocked={() => { setPremiumMember(true); setShowPremiumPaywall(false); setShowVideoFlow(true); }} />}
+      {showPremiumPaywall && <PremiumPaywall profile={defaultProfile} requireRestore={requireRestore} onClose={() => setShowPremiumPaywall(false)} onUnlocked={() => { setPremiumMember(true); setShowPremiumPaywall(false); setShowVideoFlow(true); }} />}
 
       {showVideoFlow && (
         <div className={`fixed inset-0 z-[110] flex flex-col ${videoResult ? "bg-gray-50 text-slate-900" : "bg-slate-950 text-white"}`} data-testid="video-workflow">
@@ -597,7 +611,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
             <button onClick={closeVideoFlow} aria-label="Close video analysis" className="rounded-full bg-slate-500/10 p-3"><X size={20} /></button>
           </div>
           <div className="flex-1 overflow-y-auto p-5 pb-10">
-            {!videoResult && <VideoAnalysisContext strain={strain} onStrainChange={setStrain} growMethod={growMethod} onGrowMethodChange={setGrowMethod} />}
+            {!videoResult && <VideoAnalysisContext strain={strain} onStrainChange={setStrain} growMethod={growMethod} onGrowMethodChange={setGrowMethod} growthStage={growthStage} onGrowthStageChange={setGrowthStage} temperature={temperature} onTemperatureChange={setTemperature} humidity={humidity} onHumidityChange={setHumidity} />}
             {!videoFile && !videoResult && !preparingVideo && (
               <div className="max-w-md mx-auto">
                 <div className="rounded-[2rem] border border-emerald-400/20 bg-emerald-400/10 p-5 mb-5"><Eye className="text-emerald-300 mb-3" /><p className="text-sm text-slate-200 leading-relaxed">Move slowly around the plant. Keep the leaves in focus and include affected areas from more than one angle.</p><p className="text-xs text-slate-400 mt-2">Maximum 20 seconds and 8 MB. Analysis uses visual evidence only; avoid recording private conversations.</p></div>

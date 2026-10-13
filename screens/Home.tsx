@@ -16,6 +16,7 @@ export default function Home({
   onNavigateToPlant,
   onAddPlant,
   onOpenJournal,
+  onCheckPhoto,
   busyActions = [],
 }: any) {
   const [editing, setEditing] = useState<any>(null);
@@ -54,21 +55,7 @@ export default function Home({
         </div>
       </div>
       {proFirstRelease && <ProCheckIn plants={plants} onAddPlant={onAddPlant} onOpenJournal={onOpenJournal} onNavigateToPlant={onNavigateToPlant} />}
-      <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4 mb-5">
-        <h2 className="font-bold text-emerald-950">
-          One place for your next steps
-        </h2>
-        <p className="text-sm text-emerald-900 mt-1">
-          Tap a circle to mark done. Tap the task text to edit. Keep notes and
-          future plans in Journal.
-        </p>
-        <button
-          onClick={onOpenJournal}
-          className="mt-3 min-h-11 px-4 rounded-xl bg-emerald-600 text-white font-bold text-sm"
-        >
-          Open Journal
-        </button>
-      </div>
+      {proFirstRelease && onCheckPhoto && <button onClick={onCheckPhoto} className="journey-primary mb-5">Check a plant photo</button>}
       <div className="space-y-3">{pending.map(row)}</div>
       {!pending.length && (
         <div className="p-5 rounded-2xl bg-white border border-gray-100">

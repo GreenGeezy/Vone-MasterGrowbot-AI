@@ -327,22 +327,22 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 <div className="px-4 mt-8 mb-12">
                     <button
                         onClick={async () => {
-                            if (window.confirm('Warning: This action is permanent. All your grow logs, AI insights, and photos will be deleted. Do you wish to proceed?')) {
+                            if (window.confirm('Delete your account and saved data permanently? This does not cancel an Apple subscription. Manage subscriptions in Apple Settings before continuing.')) {
                                 try {
                                     const { deleteUserData } = await import('../services/dbService');
-                                    await deleteUserData();
+                                    if (!(await deleteUserData())) throw new Error('Deletion was not confirmed.');
                                     onSignOut();
                                     // Force reload to clear any in-memory state
                                     window.location.reload();
                                 } catch (e) {
                                     console.error("Deletion failed:", e);
-                                    alert("Network error. Please try again.");
+                                    alert("Account deletion could not finish. Your device data has been kept. Please retry.");
                                 }
                             }
                         }}
                         className="w-full py-4 bg-red-50 text-red-600 font-black rounded-xl border-2 border-red-100 hover:bg-red-100 active:scale-95 transition-all text-sm uppercase tracking-wider shadow-sm"
                     >
-                        Delete Profile & Data
+                        Delete Account & Data
                     </button>
                     <p className="text-[10px] text-gray-400 text-center mt-4 leading-relaxed px-4">
                         To request data deletion after uninstalling the app, visit <span onClick={() => openLink('https://mastergrowbot.com/privacy-policy')} className="text-blue-500 underline cursor-pointer">mastergrowbot.com/privacy-policy</span> or email <a href="mailto:support@mastergrowbot.com" className="text-blue-500 underline">support@mastergrowbot.com</a>.

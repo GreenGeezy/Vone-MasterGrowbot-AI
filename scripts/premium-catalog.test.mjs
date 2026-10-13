@@ -29,6 +29,8 @@ test('active Premium entitlement is required, not merely subscription history', 
 test('only exactly associated packages are accepted', () => {
   const valid = Object.entries(ids).map(([identifier, id]) => ({ identifier, product: { identifier: id } }));
   assert.deepEqual(validatedPremiumPackages(valid), valid);
+  assert.deepEqual(validatedPremiumPackages([valid[1]]), [valid[1]]);
+  assert.deepEqual(validatedPremiumPackages([valid[0], valid[2]]), [valid[0], valid[2]]);
   assert.deepEqual(validatedPremiumPackages([{ identifier: 'weekly', product: { identifier: ids.monthly } }]), []);
   assert.deepEqual(validatedPremiumPackages([valid[0], valid[0]]), []);
   assert.deepEqual(validatedPremiumPackages([]), []);

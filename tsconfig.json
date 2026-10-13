@@ -29,6 +29,7 @@
   },
   "exclude": [
     "dist",
+    "output",
     "node_modules",
     "supabase/functions"
   ]

@@ -1,7 +1,7 @@
 module.exports = { content: ['./index.html', './index.tsx', './App.tsx', './screens/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'], ...{
         theme: {
           extend: {
-            fontFamily: { sans: ['Outfit', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+            fontFamily: { sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'], mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'] },
             colors: {
               primary: '#059669',
               'primary-light': '#34D399',

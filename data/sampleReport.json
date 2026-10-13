@@ -1,0 +1,31 @@
+{
+  "diagnosis": "Healthy (Late-Stage Natural Senescence / Flower Fade)",
+  "severity": "low",
+  "healthScore": 88,
+  "healthLabel": "Great",
+  "growthStage": "Late Flower",
+  "confidence": 90,
+  "topAction": "Keep environmental humidity low and prepare for final plain water flush as buds finish swelling.",
+  "fixSteps": [
+    "Lower indoor relative humidity to 40-45% to protect dense colas against mold or bud rot.",
+    "Gradually reduce nitrogen feeding as the plant naturally finishes and uses up stored mobile nutrients.",
+    "Monitor trichomes on the calyxes (not sugar leaves) using a jeweler's loupe or digital microscope."
+  ],
+  "preventionTips": [
+    "Ensure steady airflow with oscillating fans around the main colas without blowing directly on buds at high speed.",
+    "Avoid overwatering as water uptake naturally slows down in the final weeks of flowering."
+  ],
+  "yieldEstimate": "45–65g dry weight",
+  "harvestWindow": "1–2 Weeks",
+  "nutrientTargets": {
+    "ec": "1.2 - 1.4",
+    "ph": "6.2 - 6.5"
+  },
+  "environmentTargets": {
+    "vpd": "1.3 - 1.5 kPa",
+    "temp": "72-76°F",
+    "rh": "40-45%"
+  },
+  "environmentSummary": "Optimal Climate (Maintain low humidity for late flower)",
+  "riskScore": 15
+}

@@ -3,16 +3,27 @@ import { initializeSupabaseSession, supabase } from './supabaseClient';
 import { Capacitor } from '@capacitor/core';
 import { proFirstRelease } from './releaseFeatures';
 import { withTimeout } from './appInitializer';
+import { receiptEnvironment } from './subscriptionDisclosure';
 
 export type Attachment = {id:string;entry_id:string|null;draft_id:string;filename:string;mime_type:string;byte_size:number};
 export type LibraryConfig = {uploads:boolean;catalog:boolean;catalogCount:number};
 export const safeConfig:LibraryConfig={uploads:false,catalog:false,catalogCount:0};
 export async function libraryRequest(body:Record<string,unknown>|FormData,onProgress?:(value:number)=>void):Promise<any> {
+ if(import.meta.env.DEV && location.pathname.startsWith('/review')) {
+   const action=body instanceof FormData?'upload':body.action;
+   if(action==='config')return {uploads:false,catalog:true,catalogCount:300};
+   if(action==='catalog')return {items:[{id:'preview-reference',name:'Example expanded reference'}],more:false};
+   if(action==='profile')throw Object.assign(new Error('Premium is required for this feature.'),{code:'premium_required'});
+   if(action==='list')return {items:[]};
+   if(action==='event')return {ok:true};
+   throw new Error('This action is available in the iOS app. The review uses isolated sample data.');
+ }
  let session=await withTimeout(initializeSupabaseSession(),15000,'Saved session');const owner=session.user.id;
  for(let attempt=0;attempt<2;attempt++) {
   if(!session?.access_token||session.user.id!==owner) throw new Error('Reopen the app to restore your saved session.');
   const result=await new Promise<{status:number;data:any}>((resolve,reject)=>{
-   const xhr=new XMLHttpRequest();xhr.open('POST',`${CONFIG.SUPABASE_URL}/functions/v1/premium-library`);xhr.timeout=30000;
+   const endpoint=!(body instanceof FormData)&&body.action==='event'?'conversion-events':'premium-library';
+   const xhr=new XMLHttpRequest();xhr.open('POST',`${CONFIG.SUPABASE_URL}/functions/v1/${endpoint}`);xhr.timeout=30000;
    xhr.setRequestHeader('apikey',CONFIG.SUPABASE_ANON_KEY);xhr.setRequestHeader('Authorization',`Bearer ${session.access_token}`);
    if(!(body instanceof FormData)) xhr.setRequestHeader('Content-Type','application/json');
    xhr.upload.onprogress=e=>{if(e.lengthComputable)onProgress?.(Math.min(99,Math.round(e.loaded/e.total*100)));};
@@ -27,10 +38,25 @@ export async function libraryRequest(body:Record<string,unknown>|FormData,onProg
  throw new Error('Session unavailable. Please reopen the app.');
 }
 export const getLibraryConfig=():Promise<LibraryConfig>=>proFirstRelease?libraryRequest({action:'config'}).catch(()=>safeConfig):Promise.resolve(safeConfig);
-export function recordEvent(event:string,surface:string) {
- if(!proFirstRelease)return;
- // Never delay user work or include user-entered content in diagnostics.
- void libraryRequest({action:'event',id:crypto.randomUUID(),event,surface,version:'1.6.12'}).catch(()=>{});
+let eventInfo: Promise<{version:string;build:string}> | undefined;
+let pendingEvents = 0;
+let billingEnvironment: 'sandbox'|'production'|'unverified'='unverified';
+export function setAnalyticsReceipt(info:unknown) { billingEnvironment=receiptEnvironment(info); }
+export function recordEvent(event:string,surface:string,details:Record<string,string>={}) {
+ // Local previews and web fixtures never touch production analytics.
+ if(!proFirstRelease || !Capacitor.isNativePlatform() || pendingEvents >= 8)return;
+ const environment=billingEnvironment;
+ const allowed=['step','entry_point','variant','product_id','offering_id','outcome','error_category'];
+ const metadata=Object.fromEntries(Object.entries(details).filter(([k,v])=>allowed.includes(k)&&/^[a-zA-Z0-9_.:-]{1,100}$/.test(v)));
+ eventInfo ||= import('@capacitor/app').then(({App})=>App.getInfo()).then(info=>({version:info.version,build:info.build}));
+ pendingEvents++;
+ void eventInfo.then(async info=>{
+   let rcId:string|undefined;
+   try {const {Purchases}=await import('@revenuecat/purchases-capacitor');rcId=(await withTimeout(Purchases.getAppUserID(),2000,'Analytics identity')).appUserID;}catch{/* Unknown acquisition still records without a fabricated billing identity. */}
+   return libraryRequest({action:'event',id:crypto.randomUUID(),event,surface,version:info.version,
+   metadata:{variant:localStorage.getItem('mg_onboarding_variant_v2')||'none',...metadata,build:info.build,platform:Capacitor.getPlatform(),environment,...(rcId?{rc_app_user_id:rcId}:{})}});
+ })
+   .catch(()=>{eventInfo=undefined;}).finally(()=>{pendingEvents--;});
 }
 export async function openAttachment(file:Attachment) {
  const {url}=await libraryRequest({action:'open',id:file.id});

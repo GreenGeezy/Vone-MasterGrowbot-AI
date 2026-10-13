@@ -1,6 +1,8 @@
 import { supabase, ensureProfileExists, initializeSupabaseSession } from './supabaseClient';
 import { Capacitor } from '@capacitor/core';
 import { getStableRevenueCatId, recoverPendingRevenueCatBinding } from './revenueCatIdentity';
+import { hasVerifiedPaidAccess } from './paidAccess';
+import { setAnalyticsReceipt } from './premiumLibrary';
 
 export interface AppInitState {
   user: any | null;
@@ -96,7 +98,8 @@ async function checkSubscriptions(): Promise<boolean> {
         const hasActiveProEntitlement = Boolean(customerInfo?.entitlements?.active?.pro);
         const hasActiveSubscriptions = (customerInfo?.activeSubscriptions || []).some(id => ["weekly_pro_v2", "monthly_pro_v2", "yearly_pro_v2", "mastergrowbot_pro_weekly_v3", "mastergrowbot_pro_yearly_v3", "com.mastergrowbot.ai.sub.weekly", "com.mastergrowbot.ai.sub.monthly"].includes(id));
 
-        if (hasActiveProEntitlement || hasActiveSubscriptions) {
+        setAnalyticsReceipt(customerInfo);
+        if (hasVerifiedPaidAccess(customerInfo)) {
           isReturningSubscriber = true;
         }
       } else {

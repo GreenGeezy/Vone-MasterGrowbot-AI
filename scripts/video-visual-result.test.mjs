@@ -6,6 +6,7 @@ const source = await readFile(new URL('../services/videoVisualResult.ts', import
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const { parseVideoVisualResult: parse, formatVideoHealthReport: format } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const result = {
+  plantVisible: true,
   visualSummary: 'Several lower leaves appear yellow.', severity: 'uncertain', confidence: 45, healthScore: 58,
   growthStage: 'Vegetative stage appears likely; verify from plant records.',
   healthLabel: 'Possible early stress pattern',
@@ -28,7 +29,7 @@ test('excludes unrelated cultivation fields from projected results', () => {
   assert.deepEqual(parse({ ...result, harvestWindow: 'unexpected', nutrientTargets: { ec: 2 }, arbitrary: true }), result);
 });
 test('rejects missing required observations', () => {
-  for (const key of Object.keys(result)) {
+  for (const key of Object.keys(result).filter(key => key !== 'plantVisible')) {
     const broken = { ...result }; delete broken[key]; assert.throws(() => parse(broken));
   }
 });
@@ -56,4 +57,8 @@ test('requires a useful journal-ready care plan and grow-wide check', () => {
   assert.match(journal, /Priority action:/);
   assert.match(journal, /Care recommendations:/);
   assert.match(journal, /Grow-wide checks:/);
+});
+test('a screen recording does not display a plant health score', () => {
+  const unassessed = parse({ ...result, plantVisible: false, confidence: 0, healthScore: 0, growthStage: 'Not visible', visualSummary: 'Only a laptop screen is visible.' });
+  assert.match(format(unassessed), /Plant not directly visible; health not assessed/);
 });

@@ -23,6 +23,8 @@ export default function Journal({
   onDeleteEntry,
   busyActions = [],
   initialPlantId,
+  onAddPlant,
+  onVideoCheckIn,
 }: any) {
   const [plantId, setPlantId] = useState(initialPlantId || plants[0]?.id);
   const plant = plants.find((p: any) => p.id === plantId) || plants[0];
@@ -72,7 +74,6 @@ export default function Journal({
       plant.id
     );
     if (saved === false) throw new Error("Note was not saved");
-    recordEvent('journal_saved','journal');
     setCreator(false);
   };
   return (
@@ -99,7 +100,8 @@ export default function Journal({
         </label>
       ) : (
         <p className="text-sm text-amber-800 bg-amber-50 p-3 rounded-xl mb-4">
-          Add a plant from Home to start saving notes. You can add tasks now.
+          Add a plant to keep its check-ins together. You can add tasks now.
+          {onAddPlant && <button onClick={onAddPlant} className="block min-h-11 font-bold underline">Add your first plant</button>}
         </p>
       )}
       <div className="grid grid-cols-2 gap-3 mb-4">
@@ -108,7 +110,7 @@ export default function Journal({
           onClick={() => setCreator(true)}
           className="min-h-12 rounded-xl bg-emerald-600 text-white py-3 font-bold disabled:opacity-40"
         >
-          Add note
+          Add check-in
         </button>
         <button
           onClick={() => setTaskEditor({})}
@@ -117,6 +119,7 @@ export default function Journal({
           Add task
         </button>
       </div>
+      {proFirstRelease && onVideoCheckIn && <button onClick={onVideoCheckIn} className="w-full min-h-11 mb-4 text-left text-sm font-semibold text-purple-800">Explore video check-ins <span className="ml-2 rounded-full bg-purple-50 px-2 py-1 text-xs">Premium</span></button>}
       <div className="flex gap-2 mb-4" aria-label="Journal filters">
         {["All", "Notes", "Tasks"].map((f) => (
           <button
