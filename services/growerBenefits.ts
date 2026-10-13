@@ -3,7 +3,7 @@ import type { UserProfile } from '../types';
 /** Experience changes the introduction, never the analysis or subscription terms. */
 export function growerBenefits(profile?: Partial<UserProfile> | null) {
   if (profile?.onboardingIntent === 'learn') return {
-    headline: 'Build your grow knowledge.',
+    headline: 'Get to know your grow.',
     description: 'Explore strain references and keep what you learn in your journal.',
     photo: 'Check plant photos when you’re ready.',
     journal: 'Keep growing notes you can return to.',
@@ -39,8 +39,8 @@ export function growerBenefits(profile?: Partial<UserProfile> | null) {
     video: 'Add more views when one photo is not enough.',
   };
   return {
-    headline: 'A clearer place to start.',
-    description: 'See what a photo report shows, then keep your notes together.',
+    headline: 'Know what to check next.',
+    description: 'Turn a plant photo into practical next checks. Keep your progress in one place.',
     photo: 'Review visible signs and suggested next checks.',
     journal: 'Save your first check-in and find it again.',
     references: 'Explore strain references as you learn.',

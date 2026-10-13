@@ -382,21 +382,21 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, profile }) => {
   if (proFirstRelease) return (
     <div className="fixed inset-0 bg-white z-[60] flex flex-col overflow-hidden" data-testid="pro-paywall">
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <header className="bg-gradient-to-br from-green-950 to-emerald-800 text-white px-5 pt-[max(1rem,env(safe-area-inset-top,0px))] pb-4">
+        <header className="subscription-hero bg-gradient-to-br from-green-950 to-emerald-800 text-white px-5 pt-[max(1rem,env(safe-area-inset-top,0px))] pb-4">
           <button aria-label="Back" disabled={isPurchasing} onClick={onClose} className="mb-3 min-h-11 px-3 rounded-full border border-white/30 text-sm">Back</button>
           <p className="text-xs font-bold tracking-widest text-emerald-200 mb-2">MASTERGROWBOT AI PRO</p>
           <h1 className="text-2xl font-black leading-tight">{benefits.headline}</h1>
           <p className="text-xs text-emerald-100 mt-2">{benefits.description}</p>
         </header>
-        <div className="px-5 py-4">
-          <div className="paywall-guide"><Growbot size="md" mood="happy"/><p>Your next check-in starts here.<span>Pro includes photo reports, your journal, and strain references.</span></p></div><h2 className="text-sm font-bold text-slate-900 mb-3">Choose your Pro plan</h2>
+        <div className="subscription-content px-5 py-4">
+          <div className="paywall-guide"><Growbot size="md" mood="happy"/><p>Put your next step into action.<span>Pro includes photo reports, your journal, and strain references.</span></p></div><h2 className="text-sm font-bold text-slate-900 mb-3">Choose your Pro plan</h2>
           <div className="space-y-3" aria-label="Pro billing period">
             {packages.map(pkg => {
               const selected = pkg.identifier === selectedPkgIdentifier;
               const period = pkg.packageType === 'WEEKLY' ? 'week' : pkg.packageType === 'ANNUAL' ? 'year' : 'month';
               const meta = getPlanMeta(pkg);
-              return <button type="button" key={pkg.identifier} aria-pressed={selected} disabled={isPurchasing} onClick={() => {setSelectedPkgIdentifier(pkg.identifier);recordEvent('plan_selected','pro');}} className={`w-full text-left rounded-2xl border-2 px-4 py-3 flex items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${selected ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
-                <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-bold text-sm">{period === 'year' ? 'Yearly' : period === 'week' ? 'Weekly' : 'Monthly'}</span>{meta.badge && <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 rounded-full px-2 py-1">{meta.badge}</span>}</div><p className="text-sm text-slate-700 mt-1"><strong>{pkg.product.priceString}</strong> / {period}</p><p className="text-xs text-emerald-800 mt-1">{meta.subtext}</p></div>
+              return <button type="button" key={pkg.identifier} aria-pressed={selected} disabled={isPurchasing} onClick={() => {setSelectedPkgIdentifier(pkg.identifier);recordEvent('plan_selected','pro');}} className={`subscription-plan w-full text-left rounded-2xl border-2 px-4 py-3 flex items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${selected ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-bold text-sm">{period === 'year' ? 'Yearly' : period === 'week' ? 'Weekly' : 'Monthly'}</span>{meta.badge && <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 rounded-full px-2 py-1">{meta.badge}</span>}</div><p className="subscription-price text-sm text-slate-700 mt-1"><strong>{pkg.product.priceString}</strong> / {period}</p><p className="text-xs text-emerald-800 mt-1">{meta.subtext}</p></div>
                 <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'}`}>{selected && <Check size={16}/>}</span>
               </button>;
             })}

@@ -34,7 +34,7 @@ export default function PaywallTestimonials({ dark = false, premium = false }: {
   }, [paused, interacting, reducedMotion]);
   const move = (direction: number) => { setPaused(true); setIndex(value => (value + direction + quotes.length) % quotes.length); };
   return <section aria-label="MasterGrowbot user testimonials" aria-roledescription="carousel"
-    className={`mt-5 rounded-3xl border p-4 ${dark ? 'bg-white/5 border-white/10 text-slate-200' : 'bg-white border-[#dce4d9] text-slate-700'}`}
+    className={`grower-testimonials mt-5 rounded-3xl border p-4 ${dark ? 'bg-white/5 border-white/10 text-slate-200' : 'bg-white border-[#dce4d9] text-slate-700'}`}
     onMouseEnter={() => setInteracting(true)} onMouseLeave={() => setInteracting(false)}
     onFocusCapture={() => setInteracting(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setInteracting(false); }}
     onTouchStart={event => { setInteracting(true);touch.current = event.touches[0].clientX; }}
