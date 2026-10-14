@@ -12,7 +12,7 @@ export default function OnboardingSummary({profile,onContinue,onEdit}:{profile:U
   const intent=profile.onboardingIntent||'photo';
   const destination=firstActionDetails(profile).title;
   const Icon=intent==='journal'?BookOpen:['references','learn','explore'].includes(intent)?Sprout:Camera;
-  return <JourneyFrame title={goal?"Your goal. Your next step.":"Your starting point."} description={goal?.description || benefits.summary} onBack={()=>onEdit?.(4)} action="See Pro options" onAction={onContinue}>
+  return <JourneyFrame title={goal?"Your goal. Your next step.":"Your starting point."} description={goal?.description || benefits.summary} onBack={()=>onEdit?.(4)} action="Start 3-Day Free Trial" footer={<p className="text-xs text-center text-slate-600 mt-2">For eligible new subscribers. Review plans and billing terms next.</p>} onAction={onContinue}>
     {goal&&<section className="summary-goal"><span className="sample-eyebrow">YOUR GROWING GOAL</span><h2>{goal.title}</h2><div className="goal-path" aria-label="Suggested workflow"><span>Explore</span><span>Check in</span><span>Keep a record</span></div></section>}<div className="summary-mascot"><Growbot size="lg" mood="happy"/></div><section className="summary-next"><span className="sample-eyebrow">YOUR FIRST ACTION</span><Icon size={30}/><h2>{destination}</h2><p>Available after your Pro access is confirmed.</p></section>
     <div className="summary-preferences">{[
       ['Goal',goal?.title || 'Explore the tools',2],

@@ -42,11 +42,11 @@ export default function Home({
     />
   );
   return (
-    <div className="pb-32 px-5 pt-[max(3rem,env(safe-area-inset-top))] min-h-screen bg-surface">
-      <div className="flex items-center gap-4 mb-5">
+    <div className="grow-dashboard pb-32 px-5 pt-[max(3rem,env(safe-area-inset-top))] min-h-screen bg-surface">
+      <div className="dashboard-hero flex items-center gap-4 mb-5">
         <Growbot size="md" mood={pending.length ? "neutral" : "happy"} />
         <div>
-          <h1 className="text-2xl font-black">Today</h1>
+          <h1 className="text-2xl font-black">Your grow overview</h1>
           <p className="text-sm text-gray-600">
             {pending.length
               ? `${pending.length} tasks ready for you`
@@ -54,8 +54,14 @@ export default function Home({
           </p>
         </div>
       </div>
+      <nav className="grow-overview" aria-label="Grow overview">
+        <button onClick={plants.length ? onOpenJournal : onAddPlant}><strong>{plants.length}</strong><span>Plants</span></button>
+        <button onClick={onOpenJournal}><strong>{pending.length}</strong><span>Tasks due</span></button>
+        <button onClick={onOpenJournal}><strong>{plants.reduce((count: number, plant: any) => count + (plant.journal?.length || 0), 0)}</strong><span>Check-ins</span></button>
+      </nav>
       {proFirstRelease && <ProCheckIn plants={plants} onAddPlant={onAddPlant} onOpenJournal={onOpenJournal} onNavigateToPlant={onNavigateToPlant} />}
       {proFirstRelease && onCheckPhoto && <button onClick={onCheckPhoto} className="journey-primary mb-5">Check a plant photo</button>}
+      <h2 className="font-bold text-lg mb-3">Today’s tasks</h2>
       <div className="space-y-3">{pending.map(row)}</div>
       {!pending.length && (
         <div className="p-5 rounded-2xl bg-white border border-gray-100">

@@ -111,6 +111,12 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ExtendedDiagnosisResult | null>(isLocalReview?previewResult||null:null);
+  useEffect(() => {
+    if (!result) return;
+    (document.activeElement as HTMLElement | null)?.blur();
+    document.querySelector('.app-content')?.scrollTo({top:0,left:0});
+    window.scrollTo(0,0);
+  }, [result]);
   const [shareSummary, setShareSummary] = useState<AnalysisShareSummary | null>(null);
   const [requireRestore, setRequireRestore] = useState(false);
   const [videoThumbnail, setVideoThumbnail] = useState<string | null>(null);
@@ -386,8 +392,8 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     const healthDisplay = formatMetricDisplay(result.healthScore, 'health', defaultProfile?.experience);
 
     return (
-      <div className="bg-gray-50 min-h-screen pb-[120px] overflow-y-auto font-sans">
-        <div className="sticky top-0 z-[60] bg-white/90 backdrop-blur px-6 py-4 flex justify-between items-center shadow-sm">
+      <div className="health-report bg-gray-50 min-h-screen pb-[120px] font-sans">
+        <div className="health-report-header sticky top-0 z-[60] bg-white/90 backdrop-blur px-6 py-4 flex justify-between items-center shadow-sm">
           <div className="flex items-center gap-2 text-gray-800 font-black uppercase text-xs tracking-widest"><Activity size={16} className={themeColor} /> Health Report</div>
           <button aria-label="Close report" onClick={() => { setResult(null); setImage(null); }} className="min-h-11 min-w-11 grid place-items-center bg-gray-100 rounded-full hover:bg-gray-200"><X size={18} /></button>
         </div>
@@ -573,13 +579,13 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
                 ) : (
                   /* Standard Search UI */
                   <>
-                    <input className="w-full text-xs p-3 bg-gray-50 rounded-lg mb-2 outline-none font-bold" placeholder="Search Strains..." autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                    <input className="w-full text-base p-3 bg-gray-50 rounded-lg mb-2 outline-none font-bold" placeholder="Search Strains..." autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                     <div className="grid grid-cols-2 gap-2 mb-2 pb-2 border-b border-gray-50">
-                      <button onClick={() => { setStrain("Generic"); setShowStrainMenu(false); }} className="p-2 bg-green-50 text-green-700 rounded-lg text-xs font-bold text-center">✨ Generic</button>
+                      <button onClick={() => { setStrain("Generic"); setShowStrainMenu(false); (document.activeElement as HTMLElement | null)?.blur(); }} className="p-2 bg-green-50 text-green-700 rounded-lg text-xs font-bold text-center">✨ Generic</button>
                       <button onClick={() => { setShowCustomUi(true); setCustomStrainName(''); }} className="p-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold text-center border border-blue-100">+ Custom Strain</button>
                     </div>
                     {filteredStrains.map(s => (
-                      <button key={s.id} onClick={() => { setStrain(s.name); setShowStrainMenu(false); }} className="w-full text-left p-3 hover:bg-gray-50 rounded-lg text-sm font-bold text-gray-800 flex justify-between items-center group">
+                      <button key={s.id} onClick={() => { setStrain(s.name); setShowStrainMenu(false); (document.activeElement as HTMLElement | null)?.blur(); }} className="w-full text-left p-3 hover:bg-gray-50 rounded-lg text-sm font-bold text-gray-800 flex justify-between items-center group">
                         {s.name}
                       </button>
                     ))}

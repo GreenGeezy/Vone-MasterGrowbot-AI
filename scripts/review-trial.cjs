@@ -3,7 +3,7 @@ async (page) => {
   await page.setViewportSize({width:402,height:874});
   for (const trial of ['eligible','ineligible','unknown']) {
     await page.goto(`http://127.0.0.1:3011/review/screen?screen=pro&trial=${trial}`);
-    const label=trial==='eligible'?'Start 3-Day Free Trial':'Get Pro Access';
+    const label=trial==='eligible'?'Start 3-Day Free Trial':'Continue';
     await page.getByRole('button',{name:label,exact:true}).waitFor();
     for(const period of ['Weekly','Monthly','Yearly']) {
       await page.locator('[aria-label="Pro billing period"]').getByRole('button',{name:new RegExp(period)}).click();
@@ -14,9 +14,8 @@ async (page) => {
     if(trial==='eligible') { await page.emulateMedia({reducedMotion:'reduce'}); await page.screenshot({path:'output/playwright/V10MasterGrowbotProTrial.png'}); await page.emulateMedia({reducedMotion:'no-preference'}); }
   }
   await page.goto('http://127.0.0.1:3011/review/screen?screen=journal');
-  await page.getByRole('button',{name:/Want a closer look/}).waitFor();
-  await page.screenshot({path:'output/playwright/V10MasterGrowbotJournal.png'});
-  await page.getByRole('button',{name:/Want a closer look/}).click();
+  if(await page.locator('.premium-context-card').count())throw Error('Journal Premium card must be removed');
+  await page.goto('http://127.0.0.1:3011/review/screen?screen=premium');
   await page.getByRole('button',{name:'Continue with Premium'}).waitFor();
   await page.getByText('No free trial.',{exact:true}).waitFor();
   if(await page.getByRole('button',{name:/Start.*Free Trial/}).count())throw Error('Premium incorrectly offers a trial');

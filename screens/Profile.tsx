@@ -300,7 +300,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 </Section>
 
                 {/* 3. Community & Support */}
-                <Section title="Community & Support">
+                <Section title="Settings & Support">
                     <Row icon={ScanLine} label="View Tutorial" onClick={() => onViewTutorial && onViewTutorial()} />
                     <Row icon={Star} label="Rate on App Store" onClick={async () => {
                         if (Capacitor.getPlatform() === 'ios') {

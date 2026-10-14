@@ -4,6 +4,7 @@ import { completeOnboarding, readOnboarding, writeOnboarding, initialDestination
 import { recordEvent } from "./services/premiumLibrary";
 import { proFirstRelease } from "./services/releaseFeatures";
 import Splash from "./screens/Splash";
+import LaunchScreen from "./components/LaunchScreen";
 import Onboarding from "./screens/Onboarding";
 import LegacyOnboarding from "./screens/LegacyOnboarding";
 import OnboardingSummary from "./screens/OnboardingSummary";
@@ -14,7 +15,7 @@ import Journal from "./screens/Journal";
 import Profile from "./screens/Profile";
 import Paywall from "./screens/Paywall";
 import PostPaymentAuth from "./screens/PostPaymentAuth";
-import GetStartedTutorial from "./screens/GetStartedTutorial";
+import GetStartedTutorial, { TUTORIAL_VERSION } from "./screens/GetStartedTutorial";
 import BottomNav from "./components/BottomNav";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
@@ -104,6 +105,8 @@ const App: React.FC = () => {
   );
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [currentTab, setCurrentTab] = useState<AppScreen>(AppScreen.HOME);
+  const appContent = useRef<HTMLDivElement>(null);
+  useEffect(() => { appContent.current?.scrollTo({top:0,left:0}); }, [currentTab]);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [onboardingEditStep, setOnboardingEditStep] = useState<number | undefined>();
@@ -367,9 +370,9 @@ const App: React.FC = () => {
     const hasSeenTutorial = userProfile?.hasSeenTutorial;
     if (proFirstRelease) {
       completeOnboarding();
-      setShowTutorial(false);
-      setFirstActionHint(true);
-      setCurrentTab(initialDestination(userProfile) as AppScreen);
+      setShowTutorial(userProfile?.tutorialVersion !== TUTORIAL_VERSION);
+      setFirstActionHint(false);
+      setCurrentTab(initialDestination(userProfile));
     } else if (!hasSeenTutorial) { setShowTutorial(true); }
 
     // 5. Load user data
@@ -525,7 +528,8 @@ const App: React.FC = () => {
 
   const completeTutorial = () => {
     setShowTutorial(false);
-    handleUpdateProfile({ hasSeenTutorial: true });
+    setCurrentTab(AppScreen.HOME);
+    handleUpdateProfile({ hasSeenTutorial: true, tutorialVersion: TUTORIAL_VERSION });
   };
 
   // --- ONBOARDING FLOW HANDLERS ---
@@ -555,13 +559,14 @@ const App: React.FC = () => {
     setShowPaywall(false);
     if (proFirstRelease) {
       const profile = userProfile || { ...readOnboarding().profile, experience: 'Novice' };
-      const updated = { ...profile, isOnboarded: true, hasSeenTutorial: true };
+      const updated = { ...profile, isOnboarded: true };
       setUserProfile(updated as UserProfile);
       localStorage.setItem(LS_PROFILE, JSON.stringify(updated));
       setOnboardingStatus(OnboardingStep.COMPLETED);
       localStorage.setItem(LS_ONBOARDING_STATUS, OnboardingStep.COMPLETED);
-      completeOnboarding(); setFirstActionHint(true);
-      setCurrentTab(initialDestination(updated) as AppScreen);
+      completeOnboarding(); setFirstActionHint(false);
+      setShowTutorial(profile.tutorialVersion !== TUTORIAL_VERSION);
+      setCurrentTab(initialDestination(updated));
       runLoadUserDataInBackground();
     } else setShowAuth(true);
   };
@@ -601,16 +606,7 @@ const App: React.FC = () => {
 
   // 1. LOADING STATE (before initializeApp completes)
   if (!isAppReady) {
-    return (
-      <div className="h-screen w-screen bg-surface flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm font-bold text-text-sub">
-            Loading MasterGrowbot...
-          </p>
-        </div>
-      </div>
-    );
+    return <LaunchScreen/>;
   }
 
   if (showPaywall && (onboardingStatus === OnboardingStep.SPLASH || onboardingStatus === OnboardingStep.QUIZ_EXPERIENCE)) {
@@ -717,9 +713,9 @@ const App: React.FC = () => {
 
   // 7. MAIN APP (onboarding completed, tutorial done or skipped)
   return (
-    <div className="h-screen w-screen bg-surface overflow-hidden relative">
+    <div className="app-shell bg-surface">
       <ErrorBoundary>
-        <div className="h-full w-full overflow-y-auto pb-24">
+        <div className="app-content" ref={appContent}>
           {currentTab === AppScreen.HOME && (
             <Home
               busyActions={busyActions}
@@ -755,7 +751,6 @@ const App: React.FC = () => {
             <Journal
               initialPlantId={journalPlantId}
               onAddPlant={() => setCurrentTab(AppScreen.STRAINS)}
-              onVideoCheckIn={() => {setOpenVideoFromJournal(true);setCurrentTab(AppScreen.DIAGNOSE);}}
               busyActions={busyActions}
               onToggleTask={handleToggleTask}
               plants={plants}

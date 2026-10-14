@@ -16,7 +16,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate }) => {
     }`;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-6 py-3 pb-6 flex justify-between items-center shadow-lg-up z-50 rounded-t-3xl">
+    <div className="app-bottom-nav fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-6 py-3 pb-6 flex justify-between items-center shadow-lg-up z-50 rounded-t-3xl">
       <button onClick={() => onNavigate(AppScreen.HOME)} className={getContainerClass(AppScreen.HOME)}>
         <Home size={24} className={getIconColor(AppScreen.HOME)} />
         <span className="text-[10px] font-bold text-text-sub">Home</span>

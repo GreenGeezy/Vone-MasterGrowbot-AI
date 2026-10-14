@@ -9,10 +9,10 @@ const { planBenefit, trialDuration, proPurchaseLabel } = await import(`data:text
 test('Pro CTA promises a trial only for verified eligibility and a valid free offer', () => {
   const intro = {price:0, period:'P3D'};
   assert.equal(proPurchaseLabel(true,intro),'Start 3-Day Free Trial');
-  assert.equal(proPurchaseLabel(false,intro),'Get Pro Access');
-  assert.equal(proPurchaseLabel(true,{...intro,price:1}),'Get Pro Access');
-  assert.equal(proPurchaseLabel(true,{price:0}),'Get Pro Access');
-  assert.equal(proPurchaseLabel(true,null),'Get Pro Access');
+  assert.equal(proPurchaseLabel(false,intro),'Continue');
+  assert.equal(proPurchaseLabel(true,{...intro,price:1}),'Continue');
+  assert.equal(proPurchaseLabel(true,{price:0}),'Continue');
+  assert.equal(proPurchaseLabel(true,null),'Continue');
   assert.equal(proPurchaseLabel(true,{price:0,period:'P1W'}),'Start 1-Week Free Trial');
 });
 

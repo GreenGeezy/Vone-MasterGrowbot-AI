@@ -1,5 +1,7 @@
 import React, {useState} from 'react';
 import Onboarding from './Onboarding';
+import GetStartedTutorial from './GetStartedTutorial';
+import LaunchScreen from '../components/LaunchScreen';
 import OnboardingSummary from './OnboardingSummary';
 import Paywall from './Paywall';
 import PremiumPaywall from './PremiumPaywall';
@@ -23,6 +25,8 @@ const screens=[
  ['environment','Environment','Save preferences without promising a generated plan.'],
  ['summary','Starting point','Editable choices explain what happens after subscribing.'],
  ['pro','Pro subscription','Clear pricing, benefits, and restoration support an informed purchase.'],
+ ['tutorial','Tutorial','A short replayable guide helps subscribers use their tools.'],
+ ['launch','Launch screen','A branded first paint covers application startup.'],
  ['first','First check-in','Go straight to the selected activity after verified access.'],
  ['report','Report','A clear save action supports an ongoing journal habit.'],
  ['journal','Journal','Readable history and a clear next action support return visits.'],
@@ -38,11 +42,13 @@ function Preview({name}:{name:string}) {
  const [hint,setHint]=useState(true);
  const next=(n:string)=>setScreen(n);
  if(['welcome','sample','intent','experience','environment'].includes(screen))return <Onboarding key={screen} initialStep={['welcome','sample','intent','experience','environment'].indexOf(screen)} onComplete={p=>{setProfile(p);next('summary');}} onRestore={()=>next('pro')}/>;
+ if(screen==='tutorial')return <GetStartedTutorial onComplete={()=>next('first')}/>;
+ if(screen==='launch')return <LaunchScreen/>;
  if(screen==='summary')return <OnboardingSummary profile={profile} onContinue={()=>next('pro')} onEdit={s=>next(['welcome','sample','intent','experience','environment'][s])}/>;
  if(screen==='pro')return <Paywall profile={profile} onPurchase={()=>next('first')} onClose={()=>next('summary')} onSkip={()=>next('summary')}/>;
  if(screen==='premium')return <PremiumPaywall profile={profile} onClose={()=>next('journal')} onUnlocked={()=>next('journal')}/>;
  if(screen==='report')return <><div className="bg-purple-50 text-purple-900 text-xs p-3 font-semibold">Example report · existing sample · no live analysis</div><Diagnose previewResult={sample as any} previewImage="/images/V5MasterGrowbotExamplePlant.jpg" defaultProfile={profile} plant={plants[0]} onSaveToJournal={()=>{next('journal');return true;}} onAddTask={()=>true}/></>;
- if(screen==='journal')return <Journal plants={plants} tasks={[]} onAddPlant={()=>next('references')} onVideoCheckIn={()=>next('premium')} onAddEntry={async(e:any)=>{setPlants(p=>p.map(x=>({...x,journal:[{...e,id:crypto.randomUUID(),date:new Date().toLocaleDateString()},...x.journal]})));return true;}} onAddTask={async()=>true}/>;
+ if(screen==='journal')return <Journal plants={plants} tasks={[]} onAddPlant={()=>next('references')} onAddEntry={async(e:any)=>{setPlants(p=>p.map(x=>({...x,journal:[{...e,id:crypto.randomUUID(),date:new Date().toLocaleDateString()},...x.journal]})));return true;}} onAddTask={async()=>true}/>;
  if(screen==='references')return <StrainSearch onAddPlant={()=>next('journal')}/>;
  if(screen==='recovery')return <JourneyFrame title="Your draft is still here." description="We couldn’t save this change. Check your connection and try again." action="Try again" onAction={()=>next('journal')}><div className="summary-next" role="alert"><Growbot mood="neutral" size="lg"/><h2>Nothing to re-enter.</h2><p>When a save fails, the editor keeps your note and selected photo available.</p></div></JourneyFrame>;
  return <div>{hint&&<div className="p-4 bg-emerald-50 flex gap-3 items-center"><p className="text-sm flex-1">Start with your first check-in. Your tools are ready.</p><button className="min-h-11 font-bold" onClick={()=>setHint(false)}>Got it</button></div>}<Home plants={plants} tasks={[]} onCheckPhoto={()=>next('report')} onAddPlant={()=>next('references')} onOpenJournal={()=>next('journal')} onNavigateToPlant={()=>next('journal')}/></div>;

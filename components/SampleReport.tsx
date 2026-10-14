@@ -21,6 +21,6 @@ export default function SampleReport({compact=false}:{compact?:boolean}) {
       <p className="report-observation">{sample.diagnosis}</p>
       <div className="report-tip"><span className="report-tip-icon"><Lightbulb size={21}/></span><div><strong>YOUR NEXT CHECK</strong><p>{sample.preventionTips[1]}</p></div></div>
       {!compact&&<div className="report-followup"><BookOpen size={18}/><p>Save this report with a photo. Check back to see what changed.</p></div>}
-      <div className="sample-guide report-preview-guide"><Growbot size="sm" mood={playing?'thinking':'happy'}/><p>Photo. Clear next checks. Your grow journal.</p>{!compact&&<button type="button" className="sample-replay" aria-label="Replay photo-to-report animation" onClick={()=>setAnimation(n=>n+1)}><RotateCcw size={18}/></button>}</div>
+      <div className="sample-guide report-preview-guide"><Growbot size="sm" mood={playing?'thinking':'happy'}/><p>Shareable reports. Clear next checks. Your grow journal.</p>{!compact&&<button type="button" className="sample-replay" aria-label="Replay photo-to-report animation" onClick={()=>setAnimation(n=>n+1)}><RotateCcw size={18}/></button>}</div>
     </div></section>;
 }

@@ -1,134 +1,24 @@
-import React, { useState } from 'react';
-import { ChevronRight, CheckCircle2, ScanLine, Share2, Database, ClipboardCheck } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Camera, BookOpen, Dna, Share2, Check } from 'lucide-react';
+import JourneyFrame from '../components/JourneyFrame';
+import Growbot from '../components/Growbot';
+export const TUTORIAL_VERSION = 1;
 
-interface GetStartedTutorialProps {
-    onComplete: () => void;
+const steps = [
+  {title:'Turn a photo into next checks.',description:'Open Plant Health and choose a clear plant photo. Add your strain and setup, then review the AI’s observations and suggested checks.',icon:Camera,items:['Use a well-lit photo with the affected area visible.','Read the priority action and supporting details.','Save the report to your plant’s journal.']},
+  {title:'Build your grow record.',description:'Keep photos and notes for each plant in Journal. Add tasks for the care you want to remember.',icon:BookOpen,items:['Add a plant from the strain library.','Save a short note about what changed.','Come back for a follow-up and compare your records.']},
+  {title:'Get to know your strain.',description:'Open Strains to search your included reference library. Use it alongside your own observations as your grow develops.',icon:Dna,items:['Search by strain name or browse the library.','Read the available growing information.','Add the strain to start a plant record.']},
+  {title:'Invite a second look.',description:'Your plant health reports are shareable. Tap Share Analysis to preview your card and choose where to share it.',icon:Share2,items:['Review the card before sharing.','Choose whether to include your plant photo.','Return to Home for your plants, tasks, and check-ins.']},
+];
+export default function GetStartedTutorial({onComplete}:{onComplete:()=>void}) {
+  const [step,setStep]=useState(0);
+  const current=steps[step];const Icon=current.icon;
+  useEffect(()=>{document.querySelector<HTMLElement>('.journey-main h1')?.focus();},[step]);
+  return <JourneyFrame key={step} title={current.title} description={current.description} onBack={step?()=>setStep(value=>value-1):undefined} action={step===steps.length-1?'Open my dashboard':'Next'} onAction={()=>step===steps.length-1?onComplete():setStep(value=>value+1)} footer={<button className="journey-text-button" onClick={onComplete}>Skip tutorial</button>}>
+    <div className="tutorial-progress" role="progressbar" aria-label="Getting started" aria-valuemin={1} aria-valuemax={steps.length} aria-valuenow={step+1}><span style={{width:`${(step+1)/steps.length*100}%`}}/></div>
+    <p className="tutorial-step">{step+1} of {steps.length}</p>
+    <div className="tutorial-art" aria-hidden="true"><Growbot size="xl" mood="happy"/><span><Icon size={38}/></span></div>
+    <ul className="tutorial-tips">{current.items.map(item=><li key={item}><Check size={18} aria-hidden="true"/><span>{item}</span></li>)}</ul>
+    <p className="journey-note">Replay this guide anytime in Profile → Settings & Support → View Tutorial.</p>
+  </JourneyFrame>;
 }
-
-const GetStartedTutorial: React.FC<GetStartedTutorialProps> = ({ onComplete }) => {
-    const [step, setStep] = useState(0);
-
-    const steps = [
-        {
-            id: 'welcome',
-            title: "You're In!",
-            subtitle: "Welcome to the elite circle of Master Growers.",
-            icon: <CheckCircle2 size={64} className="text-green-500" />,
-            desc: "Your grow journey just got a massive upgrade. Let's make sure you hit the ground running.",
-            action: "Let's Go",
-            color: "bg-green-50"
-        },
-        {
-            id: 'scan',
-            title: "Diagnose Instantly",
-            subtitle: "Spot pests & issues before they spread.",
-            icon: <ScanLine size={64} className="text-blue-500" />,
-            desc: "Use the camera to scan leaves. Our AI detects nutrient deficiencies and pests in seconds.",
-            action: "Next",
-            color: "bg-blue-50"
-        },
-        {
-            id: 'strains_intro',
-            title: "Explore Strains",
-            subtitle: "Detailed insights for 300+ strains.",
-            icon: <Database size={64} className="text-purple-500" />,
-            desc: "Find the perfect environment and growing tips for your specific genetics.",
-            action: "Next",
-            color: "bg-purple-50"
-        },
-        {
-            id: 'strains',
-            title: "Unlock Genetic Intelligence",
-            subtitle: "300+ Strains at Your Fingertips",
-            icon: <Database size={64} className="text-orange-500" />,
-            desc: "Select your specific strain to calibrate the AI. Get advice tailored to your plant's unique DNA and traits.",
-            action: "Next",
-            color: "bg-orange-50"
-        },
-        {
-            id: 'journal',
-            title: "Your Grow Command Center",
-            subtitle: "Track, Log, and Optimize",
-            icon: <ClipboardCheck size={64} className="text-teal-500" />,
-            desc: "Manage daily tasks and keep a visual journal. Our AI analyzes your logs to predict yields and catch issues early.",
-            action: "Next",
-            color: "bg-teal-50"
-        },
-        {
-            id: 'share',
-            title: "Invite a Second Look",
-            subtitle: "Your plant check-in, your way.",
-            icon: <Share2 size={64} className="text-emerald-600" />,
-            desc: "After an analysis, tap Share Analysis to preview your card, edit your caption, and choose where to share. Choose whether to include your photo or a video frame. Review before sharing.",
-            action: "Explore My Dashboard",
-            color: "bg-emerald-50"
-        }
-    ];
-
-    const handleNext = () => {
-        if (step < steps.length - 1) {
-            setStep(step + 1);
-        } else {
-            onComplete();
-        }
-    };
-
-    const current = steps[step];
-
-    return (
-        <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
-            {/* Skip Button */}
-            <button
-                onClick={onComplete}
-                className="absolute top-12 right-6 text-gray-400 font-bold text-xs uppercase tracking-widest hover:text-gray-600 transition-colors"
-            >
-                Skip
-            </button>
-
-            {/* Main Card */}
-            <div className={`w-full max-w-sm rounded-[3rem] p-8 shadow-2xl transition-all duration-500 ${current.color} border border-white/50 relative overflow-hidden`}>
-                {/* Background Blur Blob */}
-                <div className="absolute -top-20 -right-20 w-64 h-64 bg-white/40 rounded-full blur-3xl"></div>
-
-                <div className="relative z-10 flex flex-col items-center text-center space-y-6">
-                    <div className="bg-white p-6 rounded-[2rem] shadow-sm animate-bounce-slow">
-                        {current.icon}
-                    </div>
-
-                    <div className="space-y-2">
-                        <h2 className="text-3xl font-black text-gray-900 leading-tight">
-                            {current.title}
-                        </h2>
-                        <p className="text-sm font-bold text-gray-500 uppercase tracking-wide">
-                            {current.subtitle}
-                        </p>
-                    </div>
-
-                    <p className="text-gray-600 font-medium leading-relaxed">
-                        {current.desc}
-                    </p>
-                </div>
-            </div>
-
-            {/* Progress Dots */}
-            <div className="flex gap-2 mt-8 mb-8">
-                {steps.map((_, idx) => (
-                    <div
-                        key={idx}
-                        className={`h-2 rounded-full transition-all duration-300 ${idx === step ? 'w-8 bg-gray-900' : 'w-2 bg-gray-200'}`}
-                    />
-                ))}
-            </div>
-
-            {/* Action Button */}
-            <button
-                onClick={handleNext}
-                className="w-full max-w-xs bg-gray-900 text-white font-black text-lg py-5 rounded-2xl shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-3"
-            >
-                {current.action} <ChevronRight strokeWidth={3} size={20} />
-            </button>
-        </div>
-    );
-};
-
-export default GetStartedTutorial;

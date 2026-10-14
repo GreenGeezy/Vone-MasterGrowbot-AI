@@ -1,4 +1,4 @@
-import type { UserProfile } from '../types';
+import { AppScreen, type UserProfile } from '../types';
 export const ONBOARDING_KEY = 'mg_onboarding_v2';
 export type OnboardingDraft = { version: 2; step: number; profile: Partial<UserProfile>; completed: boolean };
 export function readOnboarding(): OnboardingDraft {
@@ -19,10 +19,10 @@ export function onboardingVariant(enabled:boolean):'control'|'treatment' {
     const variant=crypto.getRandomValues(new Uint32Array(1))[0]%2===0?'control':'treatment';localStorage.setItem(key,variant);return variant;
   } catch{return 'treatment';}
 }
-export function initialDestination(p: Partial<UserProfile> | null) {
-  return p?.onboardingIntent === 'journal' ? 'JOURNAL'
-    : p?.onboardingIntent === 'references' || p?.onboardingIntent === 'learn' ? 'STRAINS'
-    : p?.onboardingIntent === 'explore' ? 'HOME' : 'DIAGNOSE';
+export function initialDestination(p: Partial<UserProfile> | null): AppScreen {
+  return p?.onboardingIntent === 'journal' ? AppScreen.JOURNAL
+    : p?.onboardingIntent === 'references' || p?.onboardingIntent === 'learn' ? AppScreen.STRAINS
+    : p?.onboardingIntent === 'explore' ? AppScreen.HOME : AppScreen.DIAGNOSE;
 }
 
 export function firstActionDetails(p?: Partial<UserProfile> | null) {

@@ -35,9 +35,9 @@ export function trialDuration(intro: { periodUnit?: string; periodNumberOfUnits?
 
 /** Never promise a trial from eligibility alone or from a configured paid intro offer. */
 export function proPurchaseLabel(eligible: boolean, intro?: { price?: number; periodUnit?: string; periodNumberOfUnits?: number; period?: string } | null): string {
-  if (!eligible || intro?.price !== 0) return 'Get Pro Access';
+  if (!eligible || intro?.price !== 0) return 'Continue';
   const duration = trialDuration(intro);
-  if (!duration) return 'Get Pro Access';
+  if (!duration) return 'Continue';
   const [count, unit] = duration.split(' ');
   return `Start ${count}-${unit.replace(/s$/, '').replace(/^./, char => char.toUpperCase())} Free Trial`;
 }

@@ -10,6 +10,7 @@ test('saved avatar and personal settings survive a cloud profile refresh', () =>
   assert.equal(merged.avatarUri,'data:image/jpeg;base64,saved');
   assert.equal(merged.name,'New');
   assert.equal(merged.id,'server');
+  assert.equal(api.mergeProfilePreferences({tutorialVersion:0}, {tutorialVersion:1}).tutorialVersion,1);
 });
 test('preset persists, absent local values retain server values, corrupt cache is harmless', () => {
   assert.equal(api.mergeProfilePreferences({}, {avatarUri:'/assets/avatars/the_bot.png'}).avatarUri,'/assets/avatars/the_bot.png');

@@ -32,7 +32,7 @@ export default function Onboarding({onComplete,onRestore,initialStep}:{onComplet
   if(draft.step===0)return <JourneyFrame title="A clearer view of your plant." description="See how a photo report and journal work together." action="See an example" onAction={()=>move(1)} footer={<button className="journey-text-button" onClick={onRestore}>Restore Purchases</button>}>
     <div className="welcome-art"><Growbot size="xl"/><span className="welcome-caption">A photo. A report. A place to keep it.</span></div><SampleReport compact/><PaywallTestimonials/>
   </JourneyFrame>;
-  if(draft.step===1)return <JourneyFrame title="Know what to check next." description="A plant photo. A health score. A useful next step." onBack={()=>move(0)} action="Make it yours" onAction={()=>move(2)}><SampleReport/></JourneyFrame>;
+  if(draft.step===1)return <JourneyFrame title="Know what to check next." description="A health score, useful next checks, and a shareable report." onBack={()=>move(0)} action="Make it yours" onAction={()=>move(2)}><SampleReport/></JourneyFrame>;
   const question=QUESTIONS[Math.min(draft.step-2,2)];
   const selected=question.key==='grow_mode'&&draft.profile.growSetupUndecided?'not_sure'
     :question.key==='grow_mode'&&draft.profile.notStartedYet?'not_started'

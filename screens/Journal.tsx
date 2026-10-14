@@ -5,7 +5,7 @@ import TaskEditor from "../components/TaskEditor";
 import AnalysisShareDialog from '../components/AnalysisShareDialog';
 import { journalShareSummary } from '../services/journalShare';
 import type { AnalysisShareSummary } from '../services/analysisShareCard';
-import { Share2, Film, ChevronRight } from 'lucide-react';
+import { Share2 } from 'lucide-react';
 import { proFirstRelease } from '../services/releaseFeatures';
 import { recordEvent } from '../services/premiumLibrary';
 import { analyzeGrowLog } from '../services/geminiService';
@@ -24,7 +24,6 @@ export default function Journal({
   busyActions = [],
   initialPlantId,
   onAddPlant,
-  onVideoCheckIn,
 }: any) {
   const [plantId, setPlantId] = useState(initialPlantId || plants[0]?.id);
   const plant = plants.find((p: any) => p.id === plantId) || plants[0];
@@ -119,7 +118,7 @@ export default function Journal({
           Add task
         </button>
       </div>
-      {proFirstRelease && entries.length > 0 && onVideoCheckIn && <button onClick={onVideoCheckIn} className="premium-context-card"><Film size={22} aria-hidden="true"/><span><strong>Want a closer look?</strong><span>Review multiple angles with video analysis.</span><small>Premium</small></span><ChevronRight size={20} aria-hidden="true"/></button>}
+
       <div className="flex gap-2 mb-4" aria-label="Journal filters">
         {["All", "Notes", "Tasks"].map((f) => (
           <button
