@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { --journey-ink:#163e32; --journey-muted:#52655f; --journey-paper:#fafbf7; --journey-green:#176447; --journey-purple:#6942a0; }
+:root { --journey-ink:#163e32; --journey-muted:#52655f; --journey-paper:#edf4f1; --journey-green:#176447; --journey-purple:#6942a0; }
 .journey-screen { min-height:100dvh; height:100dvh; display:flex; flex-direction:column; overflow:hidden; background:var(--journey-paper); color:var(--journey-ink); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
 .journey-content { flex:1; min-height:0; overflow-y:auto; padding: max(16px,env(safe-area-inset-top)) 24px 28px; }
 .journey-topbar,.journey-main,.journey-progress,.journey-footer>div { width:100%; max-width:480px; margin-inline:auto; }

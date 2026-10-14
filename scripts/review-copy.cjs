@@ -30,7 +30,7 @@ async (page) => {
  await page.setViewportSize({width:1280,height:1000});
  await page.goto('http://127.0.0.1:3011/review');
  await page.getByRole('combobox',{name:'Grower experience'}).selectOption('Expert');
- await page.getByRole('button',{name:'07 Pro subscription'}).click();
+ await page.getByRole('button',{name:/Pro subscription$/}).click();
  await page.frameLocator('iframe').getByRole('heading',{name:'Your observations. One grow record.'}).waitFor();
  if(errors.length)throw Error(errors.join('; '));
  return {cases,unblockedContinue:button,reducedMotion:true,visibleSelectedPlan:true,pageErrors:errors};

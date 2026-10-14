@@ -15,7 +15,7 @@ body { overflow-wrap:break-word; }
 .health-report-header > button { min-width:44px; flex-shrink:0; }
 .health-report img { max-width:100%; }
 .app-bottom-nav { padding-bottom:max(1.5rem,env(safe-area-inset-bottom,0px)); }
-.app-launch { min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding: max(32px,env(safe-area-inset-top,0px)) 24px max(32px,env(safe-area-inset-bottom,0px)); text-align:center; color:#163e32; background:radial-gradient(ellipse at top right,#e5ddef,transparent 60%),#fafbf7; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+.app-launch { min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding: max(32px,env(safe-area-inset-top,0px)) 24px max(32px,env(safe-area-inset-bottom,0px)); text-align:center; color:#163e32; background:var(--journey-background); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
 .app-launch-brand { font-weight:750; font-size:1rem; margin:24px 0 16px; }
 .app-launch-brand span { color:#6942a0; }
 .app-launch h1 { font-size:clamp(1.75rem,7vw,2.25rem); font-weight:750; line-height:1.2; letter-spacing:-.8px; }
@@ -41,3 +41,8 @@ body { overflow-wrap:break-word; }
 .tutorial-tips { display:grid; gap:14px; }
 .tutorial-tips li { display:flex; gap:12px; font-size:.9375rem; line-height:1.5; color:#304e3d; }
 .tutorial-tips svg { flex-shrink:0; color:#176447; margin-top:3px; }
+
+/* One surface token for launch and onboarding, including the first HTML paint. */
+.journey-screen { background:var(--journey-background); }
+.journey-footer { background:var(--journey-paper); }
+.app-launch > p:last-child { max-width:310px; line-height:1.6; }

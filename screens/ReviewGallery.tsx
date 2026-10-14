@@ -18,6 +18,7 @@ import type {UserProfile} from '../types';
 
 
 const screens=[
+ ['launch','Splash screen','A persistent splash preview. The actual app proceeds as soon as it is ready.'],
  ['welcome','Welcome','A concrete example establishes value before the subscription decision.'],
  ['sample','Sample report','Real sample content makes the experience easier to understand.'],
  ['intent','First action','A relevant starting point makes the first session useful.'],
@@ -26,7 +27,6 @@ const screens=[
  ['summary','Starting point','Editable choices explain what happens after subscribing.'],
  ['pro','Pro subscription','Clear pricing, benefits, and restoration support an informed purchase.'],
  ['tutorial','Tutorial','A short replayable guide helps subscribers use their tools.'],
- ['launch','Launch screen','A branded first paint covers application startup.'],
  ['first','First check-in','Go straight to the selected activity after verified access.'],
  ['report','Report','A clear save action supports an ongoing journal habit.'],
  ['journal','Journal','Readable history and a clear next action support return visits.'],
@@ -54,11 +54,11 @@ function Preview({name}:{name:string}) {
  return <div>{hint&&<div className="p-4 bg-emerald-50 flex gap-3 items-center"><p className="text-sm flex-1">Start with your first check-in. Your tools are ready.</p><button className="min-h-11 font-bold" onClick={()=>setHint(false)}>Got it</button></div>}<Home plants={plants} tasks={[]} onCheckPhoto={()=>next('report')} onAddPlant={()=>next('references')} onOpenJournal={()=>next('journal')} onNavigateToPlant={()=>next('journal')}/></div>;
 }
 export default function ReviewGallery() {
- const params=new URLSearchParams(location.search);const name=params.get('screen')||'welcome';
+ const params=new URLSearchParams(location.search);const name=params.get('screen')||'launch';
  const [index,setIndex]=useState(Math.max(0,screens.findIndex(x=>x[0]===name)));
  const [experience,setExperience]=useState('Novice');
  const [width,setWidth]=useState(402);const [largeText,setLargeText]=useState(false);
  if(location.pathname==='/review/screen')return <Preview name={name}/>;
- const select=(i:number)=>{setIndex(i);writeOnboarding({version:2,step:0,profile:{},completed:false});};
+ const select=(i:number)=>{history.replaceState(null,'',`/review?screen=${screens[i][0]}`);setIndex(i);writeOnboarding({version:2,step:0,profile:{},completed:false});};
  return <div className="review-gallery"><aside><span className="review-badge">LOCAL DESIGN REVIEW · NO CHARGES</span><h1>MasterGrowbot<br/>Your next iOS experience.</h1><p>Review each screen in order. Subscription prices here are preview fixtures; Apple supplies the real localized prices in the iOS app.</p><nav aria-label="Review screens">{screens.map(([key,label],i)=><button key={key} aria-current={i===index?'step':undefined} onClick={()=>select(i)}><span>{String(i+1).padStart(2,'0')}</span>{label}</button>)}</nav><label>Grower experience <select value={experience} onChange={e=>setExperience(e.target.value)}><option value="Novice">Getting started</option><option value="Intermediate">Some experience</option><option value="Expert">Experienced</option></select></label><label>iPhone layout <select value={width} onChange={e=>setWidth(Number(e.target.value))}>{[375,390,393,402,414,430,440].map(w=><option key={w} value={w}>{w} points wide</option>)}</select></label><label className="review-checkbox"><input type="checkbox" checked={largeText} onChange={e=>setLargeText(e.target.checked)}/> Larger text preview</label><p className="review-reason">{screens[index][2]}</p><div className="review-navigation"><button disabled={index===0} onClick={()=>select(index-1)}>Previous</button><button disabled={index===screens.length-1} onClick={()=>select(index+1)}>Next screen →</button></div></aside><div className="review-stage"><div className="review-phone" style={{width}}><iframe key={`${index}-${largeText}-${experience}`} title={`${screens[index][1]} iPhone preview`} src={`/review/screen?screen=${screens[index][0]}${largeText?'&text=large':''}&experience=${experience}`} style={{width,height:874}}/></div></div></div>;
 }
