@@ -338,7 +338,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 </div>
 
                 <div className="text-center pb-8 opacity-40">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 1.0.158</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 2.0</p>
                 </div>
             </div>
 
@@ -472,11 +472,6 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                             await submitUserFeedback({ rating, message }).catch(console.error);
 
                             alert("Feedback Sent! Thank you for helping us grow. 🌱");
-
-                            // 2. Neutral Prompt (Policy Compliant)
-                            if (window.confirm("Thanks for your feedback! Would you like to leave a public review on Google Play?")) {
-                                window.open("https://play.google.com/store/apps/details?id=com.mastergrowbot.app", "_blank");
-                            }
 
                             setShowFeedbackModal(false);
                             setSupportForm({ name: '', email: '', issue: '', message: '' });

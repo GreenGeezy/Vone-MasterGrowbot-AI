@@ -10,7 +10,7 @@ import AnalysisShareDialog from '../components/AnalysisShareDialog';
 import type { AnalysisShareSummary } from '../services/analysisShareCard';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
-// InAppReview dynamically imported below — static import crashes on web
+import { recordSuccessfulAnalysis, requestAnalysisReview, REVIEW_READING_DELAY_MS } from '../services/analysisReview';
 import { formatMetricDisplay, formatDiagnosisReport } from '../utils/diagnosisFormatter';
 import {proFirstRelease} from '../services/releaseFeatures';
 import {recordEvent} from '../services/conversionEvents';
@@ -100,6 +100,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   const [image, setImage] = useState<string | null>(isLocalReview?previewPhoto||null:null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reviewEligible, setReviewEligible] = useState(false);
   const [result, setResult] = useState<ExtendedDiagnosisResult | null>(isLocalReview?previewResult||null:null);
   useEffect(() => {
     if (!result) return;
@@ -149,10 +150,29 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     }
   }, [loading]);
 
+  // Give the user time to read the report. Never cover loading, sharing or media flows.
+  useEffect(() => {
+    if (!reviewEligible || !result || loading || shareSummary || pickingMedia || savingReport) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      clearTimeout(timer);
+      if (document.visibilityState !== 'visible') return;
+      timer = setTimeout(() => {
+        if (document.visibilityState !== 'visible') return;
+        setReviewEligible(false);
+        void requestAnalysisReview();
+      }, REVIEW_READING_DELAY_MS);
+    };
+    schedule();
+    document.addEventListener('visibilitychange', schedule);
+    return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', schedule); };
+  }, [reviewEligible, result, loading, shareSummary, pickingMedia, savingReport]);
+
   const processImage = async (dataUrl: string) => {
     setImage(dataUrl);
     setPreviewImage(null);
     setLoading(true);
+    setReviewEligible(false);
     setResult(null);
     try {
       // Use LOCAL STATE `growMethod` for the analysis, preserving global default separately
@@ -164,20 +184,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
       setResult(diagnosis);
       recordEvent('analysis_complete','photo');
 
-      // --- IN-APP REVIEW TRIGGER (3rd Success) ---
-      try {
-        const currentCount = parseInt(localStorage.getItem('diagnosis_success_count') || '0');
-        const newCount = currentCount + 1;
-        localStorage.setItem('diagnosis_success_count', newCount.toString());
-
-        if (newCount === 3 && Capacitor.isNativePlatform()) {
-          console.log("Triggering In-App Review...");
-          const { InAppReview } = await import('@capacitor-community/in-app-review');
-          await InAppReview.requestReview();
-        }
-      } catch (e) {
-        console.warn("Review trigger failed", e);
-      }
+      setReviewEligible(recordSuccessfulAnalysis(diagnosis));
 
     } catch (e: any) {
       console.error("Full Diagnosis Error:", e);
