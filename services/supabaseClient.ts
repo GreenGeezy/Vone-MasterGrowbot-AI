@@ -4,6 +4,10 @@ import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import { UserProfile } from '../types';
 
+const IDENTITY_MARKER = 'mg_supabase_identity_exists';
+const AUTH_STORAGE_KEY = 'sb-' + new URL(CONFIG.SUPABASE_URL).hostname.split('.')[0] + '-auth-token';
+if (typeof localStorage !== 'undefined' && localStorage.getItem(AUTH_STORAGE_KEY)) localStorage.setItem(IDENTITY_MARKER, 'true');
+
 export const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
   auth: {
     storage: typeof localStorage === 'undefined' ? undefined : localStorage,
@@ -22,12 +26,13 @@ export interface AuthInitializationResult {
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export function createAuthInitializer(auth: Pick<typeof supabase.auth, 'getSession' | 'signInAnonymously'>, retryDelayMs = 250) {
+export function createAuthInitializer(auth: Pick<typeof supabase.auth, 'getSession' | 'signInAnonymously'>, retryDelayMs = 250, identity?: { exists: () => boolean; remember: () => void }) {
   let initializationPromise: Promise<AuthInitializationResult> | null = null;
 
   const readCanonicalSession = async (): Promise<AuthInitializationResult> => {
+    const hadIdentity = identity?.exists();
     const first = await auth.getSession();
-    if (first.data.session) return { session: first.data.session, user: first.data.session.user, error: null };
+    if (first.data.session) { identity?.remember(); return { session: first.data.session, user: first.data.session.user, error: null }; }
 
     if (first.error) {
       await delay(retryDelayMs);
@@ -36,17 +41,19 @@ export function createAuthInitializer(auth: Pick<typeof supabase.auth, 'getSessi
       return { session: null, user: null, error: reread.error || first.error };
     }
 
+    if (hadIdentity) return { session: null, user: null, error: new Error('Saved session unavailable. Reconnect to restore your existing identity.') };
     const anonymous = await auth.signInAnonymously();
     if (anonymous.error || !anonymous.data.session?.user) {
       return { session: null, user: null, error: anonymous.error || new Error('Anonymous sign-in returned no session') };
     }
+    identity?.remember();
     return { session: anonymous.data.session, user: anonymous.data.user, error: null };
   };
 
   return (): Promise<AuthInitializationResult> => {
     if (!initializationPromise) {
       initializationPromise = readCanonicalSession().then(result => {
-        if (!result.session) initializationPromise = null;
+        initializationPromise = null;
         return result;
       }, error => {
         initializationPromise = null;
@@ -58,7 +65,7 @@ export function createAuthInitializer(auth: Pick<typeof supabase.auth, 'getSessi
 }
 
 /** All callers share one startup promise and one persisted Supabase client. */
-export const initializeSupabaseAuth = createAuthInitializer(supabase.auth);
+export const initializeSupabaseAuth = createAuthInitializer(supabase.auth, 250, { exists: () => typeof localStorage !== 'undefined' && localStorage.getItem(IDENTITY_MARKER) === 'true', remember: () => { if (typeof localStorage !== 'undefined') localStorage.setItem(IDENTITY_MARKER, 'true'); } });
 
 export interface EnsureProfileResult {
   ok: boolean;

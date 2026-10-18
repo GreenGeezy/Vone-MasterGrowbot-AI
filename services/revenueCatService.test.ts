@@ -111,7 +111,7 @@ describe('RevenueCat native initialization', () => {
 
 describe('paid access verification', () => {
   it('accepts the active pro entitlement', () => expect(hasVerifiedSubscription({ entitlements: { active: { pro: {} } }, activeSubscriptions: [] })).toBe(true));
-  it('accepts an active configured subscription product', () => expect(hasVerifiedSubscription({ entitlements: { active: {} }, activeSubscriptions: ['mg_annual'] })).toBe(true));
+  it('accepts an active configured subscription product', () => expect(hasVerifiedSubscription({ entitlements: { active: {} }, activeSubscriptions: ['mastergrowbot_pro:annual'] })).toBe(true));
   it('never unlocks an empty or cancelled customer', () => {
     expect(hasVerifiedSubscription(null)).toBe(false);
     expect(hasVerifiedSubscription({ entitlements: { active: {} }, activeSubscriptions: [] })).toBe(false);
@@ -162,7 +162,8 @@ describe('trial disclosure', () => {
   });
 });
 
-const annualPackage = { identifier: '$rc_annual', packageType: 'ANNUAL', product: { priceString: '$99.99' } };
+const annualOption = { id: 'annual', productId: 'mastergrowbot_pro', billingPeriod: { iso8601: 'P1Y' }, fullPricePhase: {price:{formatted:'$99.99',amountMicros:99990000,currencyCode:'USD'}} };
+const annualPackage = { identifier: '$rc_annual', packageType: 'ANNUAL', basePlanId:'annual', trialDays:null, __purchaseMode:'subscriptionOption', __subscriptionOption:annualOption, product: {identifier:'mastergrowbot_pro:annual', price:99.99, currencyCode:'USD', priceString:'$99.99', defaultOption:annualOption} };
 
 describe('RevenueCat plan loading', () => {
   const directProduct = {
@@ -172,7 +173,7 @@ describe('RevenueCat plan loading', () => {
       {
         id: 'mastergrowbot_pro:weekly',
         billingPeriod: { iso8601: 'P1W' },
-        fullPricePhase: { price: { formatted: '$7.99' } },
+        fullPricePhase: { price: { formatted: '$7.99',amountMicros:7990000,currencyCode:'USD' } },
       },
       {
         id: 'mastergrowbot_pro:monthly',
@@ -182,7 +183,7 @@ describe('RevenueCat plan loading', () => {
       {
         id: 'mastergrowbot_pro:annual',
         billingPeriod: { iso8601: 'P1Y' },
-        fullPricePhase: { price: { formatted: '$99.99' } },
+        fullPricePhase: { price: { formatted: '$99.99',amountMicros:99990000,currencyCode:'USD' } },
         freePhase: { billingPeriod: { iso8601: 'P7D' } },
       },
     ],
@@ -203,7 +204,7 @@ describe('RevenueCat plan loading', () => {
       productsTimeoutMs: 100,
     });
     expect(result.source).toBe('google_play_products');
-    expect(result.packages).toHaveLength(3);
+    expect(result.packages).toHaveLength(2);
     expect(getOfferings).not.toHaveBeenCalled();
   });
 

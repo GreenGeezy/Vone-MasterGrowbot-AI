@@ -1,3 +1,4 @@
+import { normalizeAndroidPlans } from './androidPlans';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { Purchases, type CustomerInfo } from '@revenuecat/purchases-capacitor';
@@ -161,7 +162,7 @@ export function resetRevenueCatInitializationForTests(): void {
 }
 
 export function hasVerifiedSubscription(customerInfo: CustomerInfo | any): boolean {
-  return Boolean(customerInfo?.entitlements?.active?.pro || (customerInfo?.activeSubscriptions?.length || 0) > 0);
+  return Boolean(customerInfo?.entitlements?.active?.pro || customerInfo?.activeSubscriptions?.some((id: string) => ['mastergrowbot_pro:weekly','mastergrowbot_pro:monthly','mastergrowbot_pro:annual','mastergrowbot_pro'].includes(id)));
 }
 
 export function packageHasFreeTrial(pkg: any): boolean {
@@ -360,7 +361,7 @@ export async function loadRevenueCatPlans(options: {
             'Google Play product retrieval',
             'RC_STORE_PRODUCTS_TIMEOUT',
           );
-          const directPackages = buildPackagesFromStoreProducts(rawProducts);
+          const directPackages = normalizeAndroidPlans(buildPackagesFromStoreProducts(rawProducts));
           storeProductsResult = directPackages.length ? 'success' : 'empty';
           logRevenueCat(directPackages.length ? 'RC_GET_PRODUCTS_SUCCESS' : 'RC_GET_PRODUCTS_EMPTY', {
             configured: true,
@@ -401,7 +402,7 @@ export async function loadRevenueCatPlans(options: {
       if (!current) {
         throw new RevenueCatOperationError('RC_CURRENT_OFFERING_MISSING', 'No subscription offering is currently available.');
       }
-      const packages = Array.isArray(current.availablePackages) ? current.availablePackages : [];
+      const packages = normalizeAndroidPlans(Array.isArray(current.availablePackages) ? current.availablePackages : []);
       if (!packages.length) {
         throw new RevenueCatOperationError('RC_PACKAGES_EMPTY', 'Google Play returned no subscription plans for this account.');
       }

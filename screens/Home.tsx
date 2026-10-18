@@ -1,78 +1,128 @@
-import React, { useState, useEffect } from 'react';
-import PlantCard from '../components/PlantCard';
-import Growbot from '../components/Growbot';
-import { Sun, CheckCircle2, Circle, Plus, Search, X } from 'lucide-react'; // Added icons
-import { getDailyInsight } from '../services/geminiService';
-import { STRAIN_DATABASE } from '../data/strains'; // Import Database
-import StrainCard from '../components/StrainCard'; // Import StrainCard
-import { matchesStrainSearch } from '../utils/strainSearch';
-
-const Home: React.FC<any> = ({ plants, tasks, onToggleTask, onNavigateToPlant, onAddPlant }) => {
-  const pendingTasks = tasks.filter((t: any) => !t.isCompleted);
-  const completedCount = tasks.filter((t: any) => t.isCompleted).length;
-
-  // Search State
-  const [showStrainSearch, setShowStrainSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStrain, setSelectedStrain] = useState<any | null>(null); // New State for Details View
-  const filteredStrains = STRAIN_DATABASE.filter(s => matchesStrainSearch(s, searchQuery));
-
-
+import React, { useState } from "react";
+import ProCheckIn from '../components/ProCheckIn';
+import {proFirstRelease} from '../services/releaseFeatures';
+import PlantCard from "../components/PlantCard";
+import Growbot from "../components/Growbot";
+import TaskRow from "../components/TaskRow";
+import TaskEditor from "../components/TaskEditor";
+import { localDate } from "../services/taskRequest";
+export default function Home({
+  plants = [],
+  tasks = [],
+  onToggleTask,
+  onEditTask,
+  onDeleteTask,
+  onDeletePlant,
+  onNavigateToPlant,
+  onAddPlant,
+  onOpenJournal,
+  onCheckPhoto,
+  busyActions = [],
+}: any) {
+  const [editing, setEditing] = useState<any>(null);
+  const [showDone, setShowDone] = useState(false);
+  const today = localDate();
+  const pending = tasks
+    .filter((t: any) => !t.isCompleted && (!t.dueDate || t.dueDate <= today))
+    .sort((a: any, b: any) =>
+      String(a.dueDate).localeCompare(String(b.dueDate))
+    );
+  const done = tasks.filter((t: any) => t.isCompleted);
+  const upcoming = tasks.filter(
+    (t: any) => !t.isCompleted && t.dueDate > today
+  ).length;
+  const row = (task: any) => (
+    <TaskRow
+      key={task.id}
+      task={task}
+      onEdit={setEditing}
+      onToggle={onToggleTask}
+      onDelete={onDeleteTask}
+      busy={busyActions.includes(`task:${task.id}`)}
+    />
+  );
   return (
-    <div className="pb-32 px-6 pt-12 min-h-screen bg-surface font-sans">
-      <div className="mb-8 flex justify-between items-end">
+    <div className="grow-dashboard pb-32 px-5 pt-[max(3rem,env(safe-area-inset-top))] min-h-screen bg-surface">
+      <div className="dashboard-hero flex items-center gap-4 mb-5">
+        <Growbot size="md" mood={pending.length ? "neutral" : "happy"} />
         <div>
-          <Growbot size="md" mood={pendingTasks.length === 0 ? "happy" : "neutral"} />
-          <h1 className="text-2xl font-black text-text-main mt-4">Daily Grow Tasks</h1>
-          <p className="text-sm text-text-sub font-medium">{pendingTasks.length} tasks remaining today</p>
-        </div>
-        <div className="text-right">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Completed</span>
-          <div className="text-2xl font-black text-green-500">{completedCount}</div>
+          <h1 className="text-2xl font-black">Your grow overview</h1>
+          <p className="text-sm text-gray-600">
+            {pending.length
+              ? `${pending.length} tasks ready for you`
+              : "No tasks due today"}
+          </p>
         </div>
       </div>
-
-      <div className="space-y-3">
-        {tasks.length === 0 ? (
-          <div className="p-8 bg-white rounded-[2rem] border border-gray-100 text-center shadow-sm">
-            <Sun size={40} className="text-orange-400 mx-auto mb-4 animate-spin-slow" />
-            <h3 className="text-lg font-bold text-gray-800 mb-1">All Caught Up!</h3>
-            <p className="text-xs text-gray-500 font-medium">Your garden is looking great. Enjoy the day.</p>
-          </div>
-        ) : (
-          tasks.map((task: any) => (
-            <div key={task.id} onClick={() => onToggleTask(task.id)} className={`flex items-center gap-4 p-5 rounded-2xl mb-3 shadow-sm transition-all active:scale-95 ${task.isCompleted ? 'bg-gray-50 border border-transparent opacity-60' : 'bg-white border border-gray-100'}`}>
-              {task.isCompleted ? <CheckCircle2 className="text-green-500" fill="currentColor" color="white" size={24} /> : <Circle className="text-gray-300" size={24} />}
-              <div className="flex-1">
-                <span className={`block text-sm font-bold transition-all ${task.isCompleted ? "line-through text-gray-400" : "text-text-main"}`}>{task.title}</span>
-                <div className="flex gap-2 mt-0.5">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{task.source === 'ai_diagnosis' ? 'AI Recommended' : 'Routine'}</span>
-                  {task.recurrence && task.recurrence !== 'once' && (
-                    <span className="text-[10px] text-blue-500 font-black uppercase tracking-wider bg-blue-50 px-1.5 rounded-md">
-                      {task.recurrence}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="mt-8">
+      <nav className="grow-overview" aria-label="Grow overview">
+        <button onClick={plants.length ? onOpenJournal : onAddPlant}><strong>{plants.length}</strong><span>Plants</span></button>
+        <button onClick={onOpenJournal}><strong>{pending.length}</strong><span>Tasks due</span></button>
+        <button onClick={onOpenJournal}><strong>{plants.reduce((count: number, plant: any) => count + (plant.journal?.length || 0), 0)}</strong><span>Check-ins</span></button>
+      </nav>
+      {proFirstRelease && <ProCheckIn plants={plants} onAddPlant={onAddPlant} onOpenJournal={onOpenJournal} onNavigateToPlant={onNavigateToPlant} />}
+      {proFirstRelease && onCheckPhoto && <button onClick={onCheckPhoto} className="journey-primary mb-5">Check a plant photo</button>}
+      <h2 className="font-bold text-lg mb-3">Today’s tasks</h2>
+      <div className="space-y-3">{pending.map(row)}</div>
+      {!pending.length && (
+        <div className="p-5 rounded-2xl bg-white border border-gray-100">
+          <h2 className="font-bold">You're caught up</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            {upcoming
+              ? `${upcoming} upcoming tasks in Journal.`
+              : "Capture what changed today with a note, or plan your next task in Journal."}
+          </p>
+        </div>
+      )}
+      {done.length > 0 && (
+        <div className="mt-4">
+          <button
+            aria-expanded={showDone}
+            onClick={() => setShowDone(!showDone)}
+            className="min-h-11 text-sm font-bold text-gray-600"
+          >
+            {showDone ? "Hide" : "Show"} completed ({done.length})
+          </button>
+          {showDone && <div className="space-y-3">{done.map(row)}</div>}
+        </div>
+      )}
+      <div className="mt-7">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold text-text-main">Your Plants</h2>
-          <button onClick={() => onAddPlant({ name: 'New Plant', image: '' })} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-full text-xs font-bold hover:bg-gray-200 transition-colors">
-            <Plus size={14} /> Add Plant
+          <h2 className="text-lg font-bold">Your plants</h2>
+          <button
+            onClick={onAddPlant}
+            className="min-h-11 px-4 rounded-xl bg-gray-100 text-sm font-bold"
+          >
+            Add plant
           </button>
         </div>
+        {plants.length === 0 && (
+          <p className="text-sm text-gray-600 mb-4">
+            Add your first plant to keep its notes and photos together.
+          </p>
+        )}
         <div className="space-y-4">
-          {plants.map((plant: any) => <PlantCard key={plant.id} plant={plant} onClick={() => onNavigateToPlant(plant.id)} />)}
+          {plants.map((plant: any) => (
+            <PlantCard
+              key={plant.id}
+              plant={plant}
+              onClick={() => onNavigateToPlant(plant.id)}
+              onDelete={() => onDeletePlant(plant.id)}
+            />
+          ))}
         </div>
       </div>
-
-
+      {editing && (
+        <TaskEditor
+          task={editing}
+          onClose={() => setEditing(null)}
+          onSave={(
+            title: string,
+            notes: string,
+            repeat: string,
+            date: string
+          ) => onEditTask(editing.id, title, notes, repeat, date)}
+        />
+      )}
     </div>
   );
-};
-export default Home;
+}

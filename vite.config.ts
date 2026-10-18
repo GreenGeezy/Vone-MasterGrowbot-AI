@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
     return {
       server: { port: 3000, host: '0.0.0.0' },
       plugins: [react()],
-      define: { 'process.env': JSON.stringify(env) },
+      // Public configuration is limited to Vite-prefixed variables.
       resolve: { alias: { '@': path.resolve(__dirname, './src') } },
       build: { outDir: 'dist', sourcemap: true }
     };

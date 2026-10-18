@@ -43,3 +43,7 @@ export function initializeApp(options: { verifySubscription?: boolean } = {}): P
   if (!appInitializationPromise) appInitializationPromise = runInitialization(Boolean(options.verifySubscription));
   return appInitializationPromise;
 }
+
+export async function initializeSubscriptions(): Promise<boolean> {
+  return (await getStartupSubscriptionStatus()).isSubscribed;
+}

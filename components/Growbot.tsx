@@ -12,12 +12,14 @@ const Growbot: React.FC<GrowbotProps> = ({ size = 'md', mood = 'happy', classNam
 
   // Blinking Logic
   useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let blinkTimeout: ReturnType<typeof setTimeout>;
     const blinkInterval = setInterval(() => {
       setIsBlinking(true);
-      setTimeout(() => setIsBlinking(false), 150);
+      blinkTimeout = setTimeout(() => setIsBlinking(false), 150);
     }, 4000 + Math.random() * 2000); 
 
-    return () => clearInterval(blinkInterval);
+    return () => { clearInterval(blinkInterval); clearTimeout(blinkTimeout); };
   }, []);
 
   const sizePx = {

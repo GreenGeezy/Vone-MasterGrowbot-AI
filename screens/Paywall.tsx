@@ -1,500 +1,113 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
-import {
-  Check, Star, ArrowRight, Lock, RotateCcw, Sparkles
-} from 'lucide-react';
-import type { PurchasesPackage } from '@revenuecat/purchases-capacitor';
-import { Capacitor } from '@capacitor/core';
-import { Browser } from '@capacitor/browser';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
+import {Check, ArrowRight} from 'lucide-react';
+import {Capacitor} from '@capacitor/core';
+import {Browser} from '@capacitor/browser';
 import Growbot from '../components/Growbot';
-import {
-  configureRevenueCat,
-  getRevenueCatDiagnosticSummary,
-  getRevenueCatUserFacingError,
-  hasVerifiedSubscription,
-  loadRevenueCatPlans,
-  packageHasFreeTrial,
-  purchaseRevenueCatPlan,
-  restoreRevenueCatPurchases,
-} from '../services/revenueCatService';
+import PaywallTestimonials from '../components/PaywallTestimonials';
+import {growerBenefits} from '../services/growerBenefits';
+import {readOnboarding} from '../services/onboardingState';
+import {annualComparison} from '../services/androidPlans';
+import {configureRevenueCat,loadRevenueCatPlans,purchaseRevenueCatPlan,restoreRevenueCatPurchases,hasVerifiedSubscription,getStartupSubscriptionStatus,getRevenueCatUserFacingError} from '../services/revenueCatService';
+import {pendingProPurchase,markProPurchasePending} from '../services/proPurchaseRecovery';
+import {recordEvent,setAnalyticsReceipt} from '../services/conversionEvents';
+import {PLAY_SUBSCRIPTIONS_URL} from '../services/support';
+import type {UserProfile} from '../types';
+export default function Paywall({profile,onClose,onPurchase}:{profile?:Partial<UserProfile>|null;onClose:()=>void;onPurchase:()=>void;onSkip:()=>void}) {
+ const benefits=growerBenefits(profile||readOnboarding().profile);
+ const [packages,setPackages]=useState<any[]>([]),[selectedPkgIdentifier,setSelectedPkgIdentifier]=useState<string|null>(null);
+ const [loading,setLoading]=useState(true),[isPurchasing,setIsPurchasing]=useState(false),[pending,setPending]=useState(false),[error,setError]=useState<string|null>(null);
+ const operation=useRef(false);
+ const loadProducts=useCallback(async(recover=false)=>{
+  setLoading(true);setError(null);
+  try {
+   setPending(await pendingProPurchase());
+   let plans:any[]=[];
+   if(Capacitor.isNativePlatform()) plans=(await loadRevenueCatPlans({recoverBeforeLoad:recover})).packages;
+   else if(import.meta.env.DEV) {
+    const trial=!['ineligible','unknown'].includes(new URLSearchParams(location.search).get('trial')||'');
+    plans=[{identifier:'preview_annual',packageType:'ANNUAL',trialDays:trial?3:null,product:{price:59.99,currencyCode:'USD',priceString:'$59.99'}},{identifier:'preview_weekly',packageType:'WEEKLY',trialDays:trial?3:null,product:{price:6.99,currencyCode:'USD',priceString:'$6.99'}}];
+   }
+   if(!plans.length)throw new Error('Google Play plans are unavailable. Please retry.');
+   setPackages(plans);setSelectedPkgIdentifier((plans.find(p=>p.packageType==='ANNUAL')||plans[0]).identifier);
+  } catch(e) {setError(getRevenueCatUserFacingError(e).message);}finally{setLoading(false);}
+ },[]);
+ useEffect(()=>{void loadProducts();recordEvent('paywall_view','pro');},[loadProducts]);
+ const finish=async(info:any)=>{if(!hasVerifiedSubscription(info))return false;await markProPurchasePending(false);setPending(false);setAnalyticsReceipt(info);recordEvent('purchase_success','pro',{outcome:'entitlement_verified'});onPurchase();return true;};
+ const checkPending=async()=>{
+  if(operation.current)return;operation.current=true;setIsPurchasing(true);setError(null);
+  try {const result=await getStartupSubscriptionStatus();if(!await finish(result.customerInfo))setError('Google Play has not confirmed access yet. Check your subscription or restore purchases.');}
+  catch{setError('Subscription verification could not finish. Please retry.');}finally{operation.current=false;setIsPurchasing(false);}
+ };
+ const handleStartTrial=async()=>{
+  if(operation.current||pending)return;const plan=packages.find(p=>p.identifier===selectedPkgIdentifier);if(!plan)return;
+  operation.current=true;setIsPurchasing(true);setError(null);
+  try {
+   if(!Capacitor.isNativePlatform()) {if(import.meta.env.DEV)onPurchase();return;}
+   const client=await configureRevenueCat();if(!client)throw new Error('Google Play is unavailable.');
+   await markProPurchasePending(true);setPending(true);recordEvent('purchase_attempt','pro');
+   const result=await purchaseRevenueCatPlan(client.plugin,plan);
+   if(!await finish(result.customerInfo)){const fresh=await getStartupSubscriptionStatus();if(!await finish(fresh.customerInfo))setError('Your purchase is awaiting confirmation. Check subscription status before trying another purchase.');}
+  }catch(e:any){
+   const cancelled=e.userCancelled===true||Number(e.code)===1;
+   // Only an explicit cancellation is proof that this purchase did not complete.
+   if(cancelled){await markProPurchasePending(false);setPending(false);}else setError('Google Play could not confirm the purchase. Check subscription status or restore before trying again.');
+   recordEvent(cancelled?'purchase_cancelled':'purchase_failed','pro',{error_category:cancelled?'cancelled':String(e.code||'unknown')});
+  }finally{operation.current=false;setIsPurchasing(false);}
+ };
+ const handleRestore=async()=>{
+  if(operation.current)return;operation.current=true;setIsPurchasing(true);setError(null);
+  try{const result=await restoreRevenueCatPurchases();if(!await finish(result.customerInfo))setError('No active subscription was found for this Google Play account.');}
+  catch{setError('Restoration could not finish. Your saved data has been kept. Please retry.');}finally{operation.current=false;setIsPurchasing(false);}
+ };
+ const openLink=async(url:string)=>{try{await Browser.open({url});}catch{window.open(url,'_blank','noopener,noreferrer');}};
+ const selectedPkg=packages.find(p=>p.identifier===selectedPkgIdentifier),trialEligible=selectedPkg?.trialDays===3;
+ const comparison=annualComparison(packages.find(p=>p.packageType==='ANNUAL'),packages.find(p=>p.packageType==='WEEKLY'));
+ const getPlanMeta=(pkg:any)=>pkg.packageType==='ANNUAL'?{badge:comparison.badge,subtext:comparison.subtext||'Support your full grow cycle'}:{badge:null,subtext:'Try a focused check-in this week'};
+ const getSubtext=()=>selectedPkg?(trialEligible?'3 days free, then ':'Auto-renews at ')+selectedPkg.product.priceString+'/'+(selectedPkg.packageType==='ANNUAL'?'year':'week')+'. Auto-renews unless canceled.':'';
+ if(loading)return <div className="journey-screen grid place-items-center" role="status"><p>Loading plans…</p></div>;
+ if(error&&!packages.length)return <div className="journey-screen grid place-items-center p-6"><div><h1 className="text-xl font-bold">Connection Issues</h1><p role="alert">{error}</p><button className="journey-primary mt-4" onClick={()=>void loadProducts(true)}>Retry Connection</button><button className="journey-text-button" onClick={handleRestore}>Restore Purchases</button><button className="journey-text-button" onClick={onClose}>Back</button></div></div>;
+ return (
+    <div className="fixed inset-0 bg-white z-[60] flex flex-col overflow-hidden" data-testid="pro-paywall">
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <header className="subscription-hero bg-gradient-to-br from-green-950 to-emerald-800 text-white px-5 pt-[max(1rem,env(safe-area-inset-top,0px))] pb-4">
+          <button aria-label="Back" disabled={isPurchasing} onClick={onClose} className="mb-3 min-h-11 px-3 rounded-full border border-white/30 text-sm">Back</button>
+          <p className="text-xs font-bold tracking-widest text-emerald-200 mb-2">MASTERGROWBOT AI PRO</p>
+          <h1 className="text-2xl font-black leading-tight">{benefits.headline}</h1>
+          <p className="text-xs text-emerald-100 mt-2">{benefits.description}</p>
+        </header>
+        <div className="subscription-content px-5 py-4">
+          <div className="paywall-guide"><Growbot size="md" mood="happy"/><p>Put your next step into action.<span>Pro includes photo reports, your journal, and strain references.</span></p></div><h2 className="text-sm font-bold text-slate-900 mb-3">Choose your Pro plan</h2>
+          <div className="space-y-3" aria-label="Pro billing period">
+            {packages.map(pkg => {
+              const selected = pkg.identifier === selectedPkgIdentifier;
+              const period = pkg.packageType === 'WEEKLY' ? 'week' : 'year';
+              const meta = getPlanMeta(pkg);
+              return <button type="button" key={pkg.identifier} aria-pressed={selected} disabled={isPurchasing} onClick={() => {setSelectedPkgIdentifier(pkg.identifier);recordEvent('plan_selected','pro');}} className={`subscription-plan w-full text-left rounded-2xl border-2 px-4 py-3 flex items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${selected ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-bold text-sm">{period === 'year' ? 'Yearly' : 'Weekly'}</span>{meta.badge && <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 rounded-full px-2 py-1">{meta.badge}</span>}</div><p className="subscription-price text-sm text-slate-700 mt-1"><strong>{pkg.product.priceString}</strong> / {period}</p><p className="text-xs text-emerald-800 mt-1">{meta.subtext}</p></div>
+                <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'}`}>{selected && <Check size={16}/>}</span>
+              </button>;
+            })}
+          </div>
 
-interface PaywallProps {
-  onClose: () => void;
-  onPurchase: () => void;
-  onSkip: () => void;
-}
-
-const ANNUAL_FALLBACK_PRICE = '$99.99';
-const ANNUAL_FALLBACK_PRICE_WITH_PERIOD = `${ANNUAL_FALLBACK_PRICE}/year`;
-
-const TESTIMONIALS = [
-  { name: 'Jake M.', text: 'Caught a magnesium deficiency before it wrecked my whole crop.' },
-  { name: 'Sarah K.', text: 'As a first-time grower I was totally lost. MasterGrowbot walked me through everything.' },
-  { name: 'Tom R.', text: 'My best harvests have been since using this app. The AI is spot-on.' },
-  { name: 'Alex D.', text: 'I caught early nutrient burn before it spread through my tent. Saved me a ton of stress.' },
-];
-
-const FEATURES = [
-  { icon: 'DNA', title: 'AI Strain Intelligence', desc: 'Genetic-specific grow guides' },
-  { icon: 'PLAN', title: 'Personalized Grow Plans', desc: 'Tailored to your setup' },
-  { icon: 'SCAN', title: 'Nutrient Deficiency Detection', desc: 'Catch problems early' },
-  { icon: 'PIC', title: 'Unlimited AI Plant Scans', desc: 'Diagnose with photos' },
-  { icon: 'LOG', title: 'Smart Grow Journal', desc: 'Track every grow cycle' },
-  { icon: 'TASK', title: 'Daily Reminders & Tasks', desc: 'Never miss a feeding' },
-];
-
-const TestimonialCard = memo(({ testimonial, index }: { testimonial: typeof TESTIMONIALS[0]; index: number }) => (
-  <div
-    key={index}
-    className="bg-white/80 backdrop-blur-sm rounded-2xl p-5 shadow-sm border border-white/60 flex-shrink-0 w-[260px]"
-  >
-    <div className="flex gap-0.5 mb-3">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Star key={i} size={14} className="text-yellow-400 fill-yellow-400" />
-      ))}
-    </div>
-    <p className="text-sm text-gray-700 font-medium leading-relaxed mb-3">
-      "{testimonial.text}"
-    </p>
-    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-      {testimonial.name}
-    </p>
-  </div>
-));
-TestimonialCard.displayName = 'TestimonialCard';
-
-function parsePrice(priceString?: string): number | null {
-  if (!priceString) return null;
-  const parsed = Number(priceString.replace(/[^0-9.]/g, ''));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function isAnnualPackage(pkg: PurchasesPackage | any): boolean {
-  return pkg?.packageType === 'ANNUAL';
-}
-
-function isMonthlyPackage(pkg: PurchasesPackage | any): boolean {
-  return pkg?.packageType === 'MONTHLY';
-}
-
-function isWeeklyPackage(pkg: PurchasesPackage | any): boolean {
-  return pkg?.packageType === 'WEEKLY';
-}
-
-const Paywall: React.FC<PaywallProps> = ({ onPurchase }) => {
-  const [selectedPkgIdentifier, setSelectedPkgIdentifier] = useState<string | null>(null);
-  const [packages, setPackages] = useState<PurchasesPackage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isPurchasing, setIsPurchasing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [diagnosticCode, setDiagnosticCode] = useState<string | null>(null);
-  const [diagnosticsCopied, setDiagnosticsCopied] = useState(false);
-  const [testimonialIndex, setTestimonialIndex] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTestimonialIndex(prev => (prev + 1) % TESTIMONIALS.length);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const loadProducts = useCallback(async (recoverBeforeLoad = false) => {
-    setLoading(true);
-    setError(null);
-    setDiagnosticCode(null);
-    setDiagnosticsCopied(false);
-    try {
-      if (!Capacitor.isNativePlatform()) {
-        const mockPackages = [
-          { identifier: 'mg_weekly', packageType: 'WEEKLY', product: { priceString: '$7.99', title: '', description: '' } } as any,
-          { identifier: 'mg_monthly', packageType: 'MONTHLY', product: { priceString: '$29.99', title: '', description: '' } } as any,
-          { identifier: 'mg_annual', packageType: 'ANNUAL', product: { priceString: ANNUAL_FALLBACK_PRICE, title: '', description: '' } } as any,
-        ];
-        setPackages(mockPackages);
-        setSelectedPkgIdentifier('mg_annual');
-        setLoading(false);
-        return;
-      }
-
-      const { packages: pkgs } = await loadRevenueCatPlans({ recoverBeforeLoad });
-
-      if (pkgs.length > 0) {
-        setPackages(pkgs);
-        const annual = pkgs.find((p: any) => isAnnualPackage(p));
-        setSelectedPkgIdentifier(annual ? annual.identifier : pkgs[0].identifier);
-
-      }
-    } catch (e: any) {
-      const failure = getRevenueCatUserFacingError(e);
-      setDiagnosticCode(failure.code);
-      setError(failure.message || 'Could not connect to Google Play. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void loadProducts(false); }, [loadProducts]);
-
-  const handleStartTrial = async () => {
-    if (!selectedPkgIdentifier) {
-      setError('Select a plan to continue.');
-      return;
-    }
-    setIsPurchasing(true);
-    setError(null);
-    try {
-      if (!Capacitor.isNativePlatform()) {
-        await new Promise(r => setTimeout(r, 1500));
-        onPurchase();
-        return;
-      }
-
-      const configuredClient = await configureRevenueCat();
-      const Purchases = configuredClient?.plugin;
-      if (!Purchases) throw new Error('Purchases are unavailable on this platform.');
-      const pkg = packages.find(p => p.identifier === selectedPkgIdentifier);
-      if (!pkg) {
-        setError('Selected plan unavailable.');
-        return;
-      }
-
-      const purchaseResult = await purchaseRevenueCatPlan(Purchases, pkg);
-      if (hasVerifiedSubscription(purchaseResult.customerInfo)) {
-        onPurchase();
-        return;
-      }
-
-      const { customerInfo: freshInfo } = await Purchases.getCustomerInfo();
-      if (hasVerifiedSubscription(freshInfo)) {
-        onPurchase();
-        return;
-      }
-
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        setError(`Activating your subscription... (${attempt}/3)`);
-        await new Promise(r => setTimeout(r, 2000));
-        const { customerInfo: retryInfo } = await Purchases.getCustomerInfo();
-        if (hasVerifiedSubscription(retryInfo)) {
-          setError(null);
-          onPurchase();
-          return;
-        }
-      }
-
-      setError('Subscription activation is taking longer than expected. Please tap "Restore Purchases" or try again later.');
-    } catch (e: any) {
-      if (!e.userCancelled) {
-        setError(e.message || 'Purchase failed. Please try again.');
-      }
-    } finally {
-      setIsPurchasing(false);
-    }
-  };
-
-  const handleRestore = async () => {
-    setIsPurchasing(true);
-    setError(null);
-    try {
-      if (Capacitor.isNativePlatform()) {
-        const result = await restoreRevenueCatPurchases();
-        if (result.restored) {
-          alert('Success! Your subscription has been restored.');
-          onPurchase();
-        } else {
-          alert('No active subscription found to restore.');
-        }
-      }
-    } catch (e) {
-      alert('Failed to restore purchases. Please try again.');
-    } finally {
-      setIsPurchasing(false);
-    }
-  };
-
-  const copyDiagnostics = async () => {
-    const summary = getRevenueCatDiagnosticSummary();
-    const text = `MasterGrowbot RevenueCat: ${summary || `code=${diagnosticCode || 'UNKNOWN'}`}`;
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-    }
-    setDiagnosticsCopied(true);
-  };
-
-  const openLink = async (url: string) => {
-    try { await Browser.open({ url }); } catch { window.open(url, '_blank'); }
-  };
-
-  const selectedPkg = packages.find(p => p.identifier === selectedPkgIdentifier);
-  const hasFreeTrial = packageHasFreeTrial(selectedPkg);
-  const monthlyPkg = packages.find(p => isMonthlyPackage(p));
-
-  const getDisplayPrice = (pkg: PurchasesPackage | any) => {
-    if (isAnnualPackage(pkg) && !pkg.product?.priceString) return ANNUAL_FALLBACK_PRICE;
-    return pkg.product?.priceString || '';
-  };
-
-  const getAnnualDiscount = (annualPkg: PurchasesPackage | any) => {
-    const monthly = parsePrice(monthlyPkg?.product?.priceString);
-    const annual = parsePrice(getDisplayPrice(annualPkg));
-    if (!monthly || !annual) return null;
-    const discount = Math.round((1 - annual / (monthly * 12)) * 100);
-    return discount > 0 ? discount : null;
-  };
-
-  const getSubtext = () => {
-    if (!selectedPkg) return '';
-    const price = isAnnualPackage(selectedPkg) ? getDisplayPrice(selectedPkg) : selectedPkg.product.priceString;
-    let period = 'month';
-    if (isWeeklyPackage(selectedPkg)) period = 'week';
-    if (isAnnualPackage(selectedPkg)) period = 'year';
-    const priceWithPeriod = isAnnualPackage(selectedPkg) && !price ? ANNUAL_FALLBACK_PRICE_WITH_PERIOD : `${price}/${period}`;
-    if (hasFreeTrial) {
-      return `Free trial, then ${priceWithPeriod} unless canceled.`;
-    }
-    return `Auto-renews at ${priceWithPeriod} unless canceled.`;
-  };
-
-  const getPlanMeta = (pkg: PurchasesPackage | any) => {
-    if (isAnnualPackage(pkg)) {
-      const discount = getAnnualDiscount(pkg);
-      return {
-        badge: 'BEST VALUE',
-        badgeColor: 'bg-gradient-to-r from-green-600 to-emerald-500',
-        subtext: discount ? `Save ${discount}% vs monthly` : 'Save over 60%',
-        emphasis: true,
-      };
-    }
-    if (isMonthlyPackage(pkg)) {
-      return {
-        badge: 'MOST POPULAR',
-        badgeColor: 'bg-gradient-to-r from-amber-500 to-orange-400',
-        subtext: 'Best balance of flexibility and savings',
-        emphasis: false,
-      };
-    }
-    return {
-      badge: null,
-      badgeColor: '',
-      subtext: 'Perfect for urgent grow issues',
-      emphasis: false,
-    };
-  };
-
-  if (loading) {
-    return (
-      <div className="fixed inset-0 bg-white z-[60] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-green-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm font-bold text-gray-600">Loading Plans...</p>
+          <div className="mt-5"><ul className="pro-benefits">
+            {[{icon:'📸',label:benefits.photo}, {icon:'📓',label:benefits.journal}, {icon:'🧬',label:benefits.references}, {icon:'📅',label:'Keep tasks and follow-ups with your grow.'}].map(({icon,label}) => <li key={label} className="flex items-center gap-2"><span aria-hidden="true" className="text-base shrink-0">{icon}</span>{label}</li>)}
+          </ul></div>
+          {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 text-red-800 p-3 text-sm">{error}</p>}
+          <PaywallTestimonials/>
         </div>
       </div>
-    );
-  }
-
-  if (error && !packages.length) {
-    return (
-      <div className="fixed inset-0 bg-white z-[60] flex flex-col items-center justify-center p-8 text-center">
-        <Growbot size="xl" mood="alert" className="mb-6 opacity-80" />
-        <h2 className="text-xl font-black text-gray-900 mb-2">Plans Unavailable</h2>
-        <p className="text-sm text-gray-500 mb-2 max-w-xs">{error}</p>
-        {diagnosticCode && (
-          <p className="text-[11px] font-bold text-gray-400 mb-6" aria-label="RevenueCat diagnostic code">
-            Diagnostic: {diagnosticCode}
-          </p>
-        )}
-        <button onClick={() => void loadProducts(true)} disabled={isPurchasing} className="bg-green-600 text-white font-bold px-8 py-3 rounded-xl shadow-lg hover:bg-green-700 active:scale-95 transition-all disabled:opacity-50">
-          Retry Connection
-        </button>
-        <button onClick={handleRestore} disabled={isPurchasing} className="mt-4 text-green-700 font-bold px-5 py-2 disabled:opacity-50">
-          {isPurchasing ? 'Checking Purchases...' : 'Already subscribed? Restore Purchases'}
-        </button>
-        <button onClick={copyDiagnostics} className="mt-2 text-gray-500 font-bold text-xs px-5 py-2">
-          {diagnosticsCopied ? 'Diagnostics Copied' : 'Copy Diagnostics'}
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 bg-white z-[60] flex flex-col overflow-hidden">
-      <div className="relative flex-shrink-0 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-green-900 via-emerald-800 to-green-950" />
-        <div className="absolute top-[-20%] right-[-10%] w-[300px] h-[300px] bg-emerald-400/20 rounded-full blur-[100px]" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-[250px] h-[250px] bg-green-300/10 rounded-full blur-[80px]" />
-        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-
-        <div className="relative px-6 pt-10 pb-8">
-          <div className="flex items-center gap-2 mb-5">
-            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-full p-2">
-              <Sparkles size={18} className="text-emerald-300" />
-            </div>
-            <span className="bg-white/10 backdrop-blur-md border border-white/20 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full">
-              AI-Powered Grow Assistant
-            </span>
-          </div>
-          <h1 className="text-[2rem] sm:text-[2.5rem] font-black leading-[1.1] mb-3 tracking-tight text-white">
-            Grow Like a Pro.<br />
-            <span className="text-emerald-300">Starting Today.</span>
-          </h1>
-          <p className="text-sm font-medium text-green-100/80 max-w-sm leading-relaxed">
-            Unlimited AI plant scans, personalized grow plans, and expert cannabis guidance in your pocket.
-          </p>
+      <footer className="shrink-0 border-t border-slate-200 bg-white px-5 pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]">
+        <p className="text-center text-xs text-slate-700 mb-2 font-semibold">{getSubtext()}</p>
+        <button disabled={isPurchasing || (!pending&&!selectedPkgIdentifier)} onClick={pending?checkPending:handleStartTrial} className="w-full min-h-12 rounded-2xl bg-emerald-800 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">{isPurchasing ? 'Confirming your subscription…' : pending ? 'Check subscription status' : trialEligible ? 'Start 3-Day Free Trial' : 'Continue'}{!isPurchasing && <ArrowRight size={18}/>}</button>
+        {pending&&<button onClick={()=>openLink('https://play.google.com/store/account/subscriptions?sku=mastergrowbot_pro&package=com.mastergrowbot.app')} className="journey-text-button">Open Google Play subscriptions</button>}
+        {pending&&error&&<button className="block min-h-11 text-xs underline mx-auto" onClick={async()=>{await markProPurchasePending(false);setPending(false);setError('Before purchasing again, confirm Google Play subscriptions shows no active or pending Pro plan.');}}>Google Play shows no plan? Choose a plan again</button>}
+        <button onClick={() => openLink(PLAY_SUBSCRIPTIONS_URL)} className="block mx-auto text-xs text-center text-slate-600 mt-2 min-h-11 underline">Manage or cancel in Google Play</button>
+        <div className="flex flex-wrap justify-center gap-x-3 text-xs text-slate-600">
+          <button disabled={isPurchasing} onClick={handleRestore} className="min-h-11 underline">Restore Purchases</button>
+          <button onClick={() => openLink('https://www.mastergrowbot.com/terms-of-service')} className="min-h-11 underline">Terms</button>
+          <button onClick={() => openLink('https://www.mastergrowbot.com/privacy-policy')} className="min-h-11 underline">Privacy</button>
         </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-white">
-        <div className="px-5 pt-6 pb-2">
-          <div className="bg-white rounded-2xl p-5 shadow-[0_2px_20px_rgba(0,0,0,0.06)] border border-gray-100">
-            <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4 text-center">
-              Everything You Get
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              {FEATURES.map((f, i) => (
-                <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-gray-50 transition-colors">
-                  <span className="text-[10px] font-black text-green-700 bg-green-50 border border-green-100 rounded-md px-1.5 py-1 leading-none mt-0.5 min-w-[34px] text-center">{f.icon}</span>
-                  <div>
-                    <p className="text-[11px] font-bold text-gray-800 leading-tight">{f.title}</p>
-                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">{f.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="px-5 py-5">
-          <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3">
-            What growers are saying
-          </p>
-          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-            <TestimonialCard testimonial={TESTIMONIALS[testimonialIndex]} index={testimonialIndex} />
-            <TestimonialCard testimonial={TESTIMONIALS[(testimonialIndex + 1) % TESTIMONIALS.length]} index={(testimonialIndex + 1) % TESTIMONIALS.length} />
-          </div>
-          <div className="flex justify-center gap-1.5 mt-2">
-            {TESTIMONIALS.map((_, i) => (
-              <div
-                key={i}
-                className={`h-1.5 rounded-full transition-all ${i === testimonialIndex ? 'bg-green-600 w-4' : 'bg-gray-300 w-1.5'}`}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="px-5 pb-4 space-y-3">
-          <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1 text-center">
-            Choose Your Plan
-          </p>
-          {packages.map((pkg) => {
-            const isSelected = selectedPkgIdentifier === pkg.identifier;
-            const meta = getPlanMeta(pkg);
-            const displayPrice = getDisplayPrice(pkg);
-
-            return (
-              <div
-                key={pkg.identifier}
-                onClick={() => setSelectedPkgIdentifier(pkg.identifier)}
-                className={`relative rounded-2xl border-2 p-4 transition-all duration-200 cursor-pointer ${
-                  isSelected
-                    ? meta.emphasis
-                      ? 'border-green-500 bg-gradient-to-br from-green-50 to-emerald-50/50 shadow-lg shadow-green-100/80'
-                      : 'border-green-400 bg-green-50/40 shadow-md'
-                    : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
-                }`}
-              >
-                {meta.badge && (
-                  <div className={`absolute -top-3 left-5 ${meta.badgeColor} text-white text-[9px] font-black uppercase tracking-wider px-3 py-1 rounded-full shadow-md`}>
-                    {meta.badge}
-                  </div>
-                )}
-                <div className="flex justify-between items-center">
-                  <div className="flex-1">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-0.5">
-                      {isWeeklyPackage(pkg) ? 'Weekly' : isMonthlyPackage(pkg) ? 'Monthly' : 'Yearly'}
-                    </p>
-                    <p className={`font-black text-3xl tracking-tight ${isSelected ? 'text-green-700' : 'text-gray-900'}`}>
-                      {displayPrice}
-                    </p>
-                    <p className="text-[11px] text-gray-500 font-semibold mt-0.5">
-                      {meta.subtext}
-                    </p>
-                  </div>
-                  <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
-                    isSelected ? 'border-green-600 bg-green-600' : 'border-gray-250 bg-gray-50'
-                  }`}>
-                    {isSelected && <Check size={15} className="text-white" strokeWidth={3} />}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="px-5 pb-2 flex flex-col items-center gap-2">
-          <div className="flex items-center gap-5 text-[11px] text-gray-500 font-medium">
-            <span className="flex items-center gap-1">
-              <Lock size={11} className="text-gray-400" /> Secure payment via Google Play
-            </span>
-            <span className="flex items-center gap-1">
-              <RotateCcw size={11} className="text-gray-400" /> Cancel anytime
-            </span>
-          </div>
-          <div className="flex items-center gap-1 text-[11px] text-gray-500 font-medium">
-            <Star size={11} className="text-amber-400 fill-amber-400" /> Premium AI grow guidance
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-shrink-0 bg-white/90 backdrop-blur-md border-t border-gray-100 p-5 pb-8 z-50">
-        <button
-          onClick={handleStartTrial}
-          disabled={isPurchasing || !selectedPkgIdentifier}
-          className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white font-black text-[17px] py-4 rounded-2xl shadow-lg shadow-green-200/50 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-50 disabled:shadow-none"
-        >
-          {isPurchasing && error?.includes('Activating') ? (
-            <span className="animate-pulse">{error}</span>
-          ) : isPurchasing ? (
-            <span className="animate-pulse">Processing...</span>
-          ) : hasFreeTrial ? (
-            <>Start Free Trial <ArrowRight strokeWidth={3} size={20} /></>
-          ) : (
-            <>Subscribe Now <ArrowRight strokeWidth={3} size={20} /></>
-          )}
-        </button>
-
-        <p className="text-center text-[12px] text-gray-600 font-semibold mt-3 leading-snug">
-          {getSubtext()}
-        </p>
-
-        <div className="flex justify-center items-center gap-2 mt-3 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-          <button onClick={() => openLink('https://mastergrowbot.com/terms-of-service')} className="hover:text-green-600 transition-colors px-1 py-0.5">
-            Terms
-          </button>
-          <span className="text-gray-300">•</span>
-          <button onClick={() => openLink('https://mastergrowbot.com/privacy-policy')} className="hover:text-green-600 transition-colors px-1 py-0.5">
-            Privacy
-          </button>
-          <span className="text-gray-300">•</span>
-          <button onClick={handleRestore} className="hover:text-green-600 transition-colors px-1 py-0.5">
-            Restore Purchases
-          </button>
-        </div>
-      </div>
-
-      {error && !error.includes('Activating') && (
-        <div className="absolute top-4 left-4 right-4 bg-red-500 text-white p-3.5 rounded-xl text-center text-xs font-bold shadow-xl z-[70]">
-          {error}
-        </div>
-      )}
+      </footer>
     </div>
   );
-};
-
-export default Paywall;
+}

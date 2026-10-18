@@ -183,10 +183,16 @@ export interface UserProfile {
   grow_mode?: 'Indoor' | 'Outdoor' | 'Greenhouse';
   goal?: 'Maximize Yield' | 'Improve Quality' | 'Learn Skills';
   space?: 'Small' | 'Medium' | 'Large';
+  onboardingIntent?: 'photo' | 'journal' | 'references' | 'learn' | 'explore';
+  onboardingGoal?: 'skills' | 'health' | 'size' | 'quality' | 'organize' | 'explore';
+  notStartedYet?: boolean;
+  experienceUndecided?: boolean;
+  growSetupUndecided?: boolean;
 
   // App State
   isOnboarded?: boolean;
   hasSeenTutorial?: boolean; // Track if they've seen the "Get Started" flow
+  tutorialVersion?: number;
   streak?: number;       // Consecutive days visited
   lastVisit?: string;    // ISO Date of last open
 }

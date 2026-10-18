@@ -1,3 +1,4 @@
+import { persistedTaskId, taskRequest } from './taskRequest';
 
 import { ensureProfileForCurrentUser, supabase } from './supabaseClient';
 import { isTransientPersistenceError, logOperationError } from './diagnostics';
@@ -104,6 +105,7 @@ const mapJournalRow = (row: any) => ({
   tags: row.tags || [],
   aiAnalysis: row.ai_analysis?.summary ? row.ai_analysis : (row.ai_analysis ? { summary: String(row.ai_analysis) } : undefined),
   diagnosisData: row.ai_analysis?.diagnosisData,
+  shareSummary: row.ai_analysis?.shareSummary,
 });
 
 const mapTaskRow = (row: any): GrowTask => ({
@@ -358,11 +360,13 @@ export const loadGrowData = async (streak: number): Promise<Plant[]> => {
     if (created?.id.startsWith('local_')) return [created];
   }
 
-  const [{ data: journalRows }, { data: taskRows }] = await Promise.all([
+  const [{ data: journalRows, error: journalError }, { data: taskRows, error: taskError }] = await Promise.all([
     supabase.from('journal_logs').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
     supabase.from('tasks').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
   ]);
 
+  if (journalError) throw journalError;
+  if (taskError) throw taskError;
   return (plantRows || []).map((plant: any) => {
     const plantJournal = (journalRows || []).filter((row: any) => row.plant_id === plant.id).map(mapJournalRow);
     const plantTasks = (taskRows || []).filter((row: any) => row.plant_id === plant.id).map(mapTaskRow);
@@ -395,10 +399,10 @@ export const saveJournalEntry = async (entry: {
     created_at: new Date().toISOString()
   };
 
-  if (!session || entry.plant_id?.startsWith('local_')) return keepLocal(STORAGE_KEYS.JOURNAL, newEntry);
+  if (!session || entry.plant_id?.startsWith('local_')) throw new Error('Reconnect and select a saved plant before saving. Your draft is still available.');
 
   const profile = await ensureProfileForCurrentUser();
-  if (!profile.ok) return keepLocal(STORAGE_KEYS.JOURNAL, newEntry, profile.error);
+  if (!profile.ok) throw profile.error || new Error('Saved session unavailable');
 
   const { data, error } = await supabase
     .from('journal_logs')
@@ -428,7 +432,8 @@ export const saveAppJournalEntry = async (plantId: string | undefined, entry: an
 
   if (session?.user?.id && imageData?.startsWith?.('data:image')) {
     const path = `${session.user.id}/journal/${Date.now()}.jpg`;
-    mediaUrl = await uploadImage(imageData, path) || imageData;
+    mediaUrl = await uploadImage(imageData, path);
+    if (!mediaUrl) throw new Error('Photo upload failed. Your draft is still available.');
   }
 
   const saved = await saveJournalEntry({
@@ -437,7 +442,7 @@ export const saveAppJournalEntry = async (plantId: string | undefined, entry: an
     content: entry.notes || entry.content || '',
     media_url: mediaUrl || undefined,
     tags: entry.tags || [],
-    ai_analysis: entry.aiAnalysis || (entry.diagnosisData ? { diagnosisData: entry.diagnosisData } : undefined),
+    ai_analysis: { ...(entry.aiAnalysis || {}), ...(entry.diagnosisData ? { diagnosisData: entry.diagnosisData } : {}), ...(entry.shareSummary ? { shareSummary: entry.shareSummary } : {}) },
   });
 
   return mapJournalRow(saved || {
@@ -451,7 +456,8 @@ export const saveAppJournalEntry = async (plantId: string | undefined, entry: an
   });
 };
 
-export const saveDiagnosisReport = async (plantId: string | undefined, entry: any) => {
+export const saveDiagnosisReport = async (plantId: string | undefined, entry: any, savedImageUrl?: string) => {
+  if (savedImageUrl) entry = { ...entry, image: savedImageUrl, imageUri: savedImageUrl };
   const { data: { session } } = await supabase.auth.getSession();
   if (!entry?.diagnosisData) return null;
 
@@ -487,59 +493,39 @@ export const saveDiagnosisReport = async (plantId: string | undefined, entry: an
 // --- Task Management System ---
 
 export const getPendingTasksForToday = async (): Promise<GrowTask[] | null> => {
+  // FIX (Step 2): Always read the freshest session. If anon sign-in has not
+  // yet resolved, bail out quietly rather than sending a request without a
+  // user_id filter (which would 400 or leak rows under permissive RLS).
   const { data: { session } } = await supabase.auth.getSession();
-  const today = new Date().toISOString().split('T')[0];
-
-  if (!session) {
-    const tasks = getLocal(STORAGE_KEYS.TASKS);
-    return tasks
-      .filter((t: any) => t.due_date <= today && !t.is_completed)
-      .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
-      .map((t: any) => ({
-        id: t.id,
-        plantId: t.plant_id,
-        title: t.title,
-        isCompleted: t.is_completed,
-        completed: t.is_completed,
-        dueDate: t.due_date,
-        source: t.source,
-        createdAt: t.created_at,
-        type: t.type
-      }));
-  }
-
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('*')
-    .eq('user_id', session.user.id)
-    .lte('due_date', today)
-    .eq('is_completed', false)
-    .order('due_date', { ascending: true });
-
-  if (error) return [];
-
-  return (data || []).map((t: any) => ({
-    id: t.id,
-    plantId: t.plant_id,
-    title: t.title,
-    isCompleted: t.is_completed,
-    completed: t.is_completed,
-    dueDate: t.due_date,
-    source: t.source,
-    createdAt: t.created_at,
-    type: t.type
-  }));
+  if (!session?.user?.id) return [];
+  const { data, error } = await taskRequest(signal => supabase
+    .from('tasks').select('*').eq('user_id', session.user.id)
+    .order('due_date', { ascending: true }).abortSignal(signal));
+  if (error) throw error;
+  return (data || []).map(mapTaskRow);
 };
 
 export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCompleted' | 'createdAt'>): Promise<GrowTask | null> => {
+  // FIX (Step 3): Without a session.user.id, Postgres rejects the NOT NULL
+  // user_id constraint with a 400. Guard first — callers already handle null.
   const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    console.warn('addNewTask: no authenticated session, skipping DB insert');
+    return null;
+  }
+
+  // FIX (Step 3): Normalize due_date to a YYYY-MM-DD string. Postgres `date`
+  // columns reject ISO datetimes with 'T' in them under strict configurations.
+  const normalizedDueDate = typeof task.dueDate === 'string' && task.dueDate.includes('T')
+    ? task.dueDate.split('T')[0]
+    : task.dueDate;
 
   const newTaskObj = {
-    user_id: session?.user.id || 'anon',
-    plant_id: task.plantId,
+    user_id: session.user.id,
+    plant_id: task.plantId ?? null,
     title: task.title,
     is_completed: false,
-    due_date: task.dueDate,
+    due_date: normalizedDueDate,
     source: task.source,
     type: task.type || 'other',
     recurrence: task.recurrence || null,
@@ -547,82 +533,28 @@ export const addNewTask = async (task: Omit<GrowTask, 'id' | 'completed' | 'isCo
     created_at: new Date().toISOString()
   };
 
-  if (!session || task.plantId?.startsWith('local_')) {
-    const tasks = getLocal(STORAGE_KEYS.TASKS);
-    const localTask = { ...newTaskObj, id: `local_${Date.now()}` };
-    tasks.push(localTask);
-    setLocal(STORAGE_KEYS.TASKS, tasks);
-
-    // Return mapped format
-    return {
-      id: localTask.id,
-      plantId: localTask.plant_id,
-      title: localTask.title,
-      isCompleted: localTask.is_completed,
-      completed: localTask.is_completed,
-      dueDate: localTask.due_date,
-      source: localTask.source,
-      createdAt: localTask.created_at,
-      type: localTask.type,
-      recurrence: localTask.recurrence,
-      notes: localTask.notes
-    };
-  }
-
-  const profile = await ensureProfileForCurrentUser();
-  if (!profile.ok) {
-    const localTask = { ...newTaskObj, id: `local_${Date.now()}` };
-    keepLocal(STORAGE_KEYS.TASKS, localTask, profile.error);
-    return mapTaskRow(localTask);
-  }
-
   const { data, error } = await supabase
     .from('tasks')
     .insert(newTaskObj)
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) {
-    logOperationError('add_task', error, true);
-    const localTask = { ...newTaskObj, id: `local_${Date.now()}` };
-    keepLocal(STORAGE_KEYS.TASKS, localTask, error);
-    return mapTaskRow(localTask);
+  if (error || !data) {
+    if (error) console.error('addNewTask insert error:', error);
+    return null;
   }
 
-  return {
-    id: data.id,
-    plantId: data.plant_id,
-    title: data.title,
-    isCompleted: data.is_completed,
-    completed: data.is_completed,
-    dueDate: data.due_date,
-    source: data.source,
-    createdAt: data.created_at,
-    type: data.type,
-    recurrence: data.recurrence,
-    notes: data.notes
-  };
+  return mapTaskRow(data);
 };
 
 export const toggleTaskCompletion = async (taskId: string, isCompleted: boolean): Promise<boolean> => {
-  const { data: { session } } = await supabase.auth.getSession();
-
-  if (!session || taskId.startsWith('local_')) {
-    const tasks = getLocal(STORAGE_KEYS.TASKS);
-    const updated = tasks.map((t: any) => t.id === taskId ? { ...t, is_completed: isCompleted } : t);
-    setLocal(STORAGE_KEYS.TASKS, updated);
-    return true;
-  }
-
-  const { error } = await supabase
-    .from('tasks')
-    .update({ is_completed: isCompleted })
-    .eq('id', taskId);
-
-  return !error;
+  const id = persistedTaskId(taskId);
+  if (!id) return false;
+  const { data, error } = await taskRequest(signal => supabase.from('tasks')
+    .update({ is_completed: Boolean(isCompleted) }).eq('id', id).select('id').abortSignal(signal));
+  if (error) throw error;
+  return Boolean(data?.length);
 };
-
-// --- Support & Feedback ---
 
 export const createSupportTicket = async (ticket: { name: string, email: string, issue: string, message: string }) => {
   const { data: { session } } = await supabase.auth.getSession();
@@ -908,34 +840,69 @@ export const getChatMessages = async (sessionId: string): Promise<StoredMessage[
 // --- Account Deletion ---
 
 export const deleteUserData = async (): Promise<boolean> => {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { deleteAccountWithConfirmation } = await import('./accountDeletion');
+  const { CONFIG } = await import('./config');
+  const { initializeSupabaseAuth } = await import('./supabaseClient');
+  return deleteAccountWithConfirmation({
+    remove: async () => {
+      const auth = await initializeSupabaseAuth();
+        const session = auth.session;
+        if (!session) throw new Error("Saved session unavailable");
+      const result = await taskRequest(signal => fetch(`${CONFIG.SUPABASE_URL}/functions/v1/delete-account`, {
+        method: 'POST', signal,
+        headers: { 'Content-Type': 'application/json', apikey: CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ confirm: 'DELETE' }),
+      }), 60000);
+      const payload = await result.json().catch(() => null);
+      if (!result.ok) throw new Error(payload?.error || 'Account deletion could not finish. Please retry.');
+      return payload;
+    },
+    clear: async () => {
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+      const { Preferences } = await import('@capacitor/preferences');
+      for (const key of ['mg_rc_stable_id','mg_rc_pending_previous_id','mg_rc_pending_premium_purchase','mg_rc_pending_pro_purchase']) await Preferences.remove({ key });
+      localStorage.clear();
+    },
+  });
+};
 
-  // 1. Clear Local Storage
-  localStorage.clear();
+export const updateTaskProperties = async (taskId: string, updates: any): Promise<boolean> => {
+  const id = persistedTaskId(taskId);
+  if (!id) return false;
+  const payload: any = { title: updates.title, notes: updates.notes || null, recurrence: updates.recurrence === 'once' ? null : updates.recurrence || null };
+  if (updates.dueDate) payload.due_date = updates.dueDate;
+  const { data, error } = await taskRequest(signal => supabase.from('tasks').update(payload).eq('id', id).select('id').abortSignal(signal));
+  if (error) throw error;
+  return Boolean(data?.length);
+};
 
-  // 2. Delete from Supabase (if authenticated)
-  if (session?.user?.id) {
-    const uid = session.user.id;
-    try {
-      // Execute deletions in parallel for speed, handle potential errors gracefully
-      await Promise.all([
-        supabase.from('profiles').delete().eq('id', uid),
-        supabase.from('grow_logs').delete().eq('user_id', uid), // Assuming this is the table name from user request
-        supabase.from('journal_logs').delete().eq('user_id', uid),
-        supabase.from('tasks').delete().eq('user_id', uid),
-        supabase.from('chat_sessions').delete().eq('user_id', uid),
-        supabase.from('chat_messages').delete().eq('user_id', uid), // Dependent on session usually, but for completeness
-        supabase.from('user_feedback').delete().eq('user_id', uid),
-        supabase.from('support_tickets').delete().eq('user_id', uid),
-        supabase.auth.signOut()
-      ]);
-      return true;
-    } catch (e) {
-      console.error("Error deleting user data from Supabase:", e);
-      // Even if DB fails (e.g. network), we treated local clear as success for the user's perception on this device
-      return false;
-    }
+export const deleteTask = async (taskId: string): Promise<boolean> => {
+  const id = persistedTaskId(taskId);
+  if (!id) return false;
+  const { data, error } = await taskRequest(signal => supabase.from('tasks').delete().eq('id', id).select('id').abortSignal(signal));
+  if (error) throw error;
+  return Boolean(data?.length);
+};
+
+export const deletePlant = async (plantId: string): Promise<boolean> => {
+  const id = String(plantId);
+  if (id.startsWith('local_')) {
+    setLocal(STORAGE_KEYS.PLANTS, getLocal(STORAGE_KEYS.PLANTS).filter((plant: any) => String(plant.id) !== id));
+    return true;
   }
+  const { data, error } = await taskRequest(signal => supabase.from('plants').delete().eq('id', id).select('id').abortSignal(signal));
+  if (error) throw error;
+  return Boolean(data?.length);
+};
 
-  return true; // Local only account deleted
+export const deleteJournalEntry = async (entryId: string): Promise<boolean> => {
+  const id = String(entryId);
+  if (id.startsWith('local_')) {
+    const entries = getLocal(STORAGE_KEYS.JOURNAL);
+    setLocal(STORAGE_KEYS.JOURNAL, entries.filter((entry: any) => String(entry.id) !== id));
+    return true;
+  }
+  const { data, error } = await taskRequest(signal => supabase.from('journal_logs').delete().eq('id', id).select('id').abortSignal(signal));
+  if (error) throw error;
+  return Boolean(data?.length);
 };

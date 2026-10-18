@@ -1,3 +1,5 @@
+import { SUPPORT_EMAIL, PLAY_SUBSCRIPTIONS_URL } from '../services/support';
+import { RotateCcw } from 'lucide-react';
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import {
@@ -79,7 +81,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
         const ticketId = `MG-${Math.floor(1000 + Math.random() * 9000)}`;
         const subject = `Support Ticket ${ticketId}: ${supportForm.issue}`;
         const body = `Name: ${supportForm.name}\nEmail: ${supportForm.email}\n\nMessage:\n${supportForm.message}`;
-        const mailtoLink = `mailto:Agcomsol@gmail.com,Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        const mailtoLink = `mailto:Agcomsol@gmail.com,${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         window.location.href = mailtoLink;
         alert(`Ticket #${ticketId} Generated! We will contact you shortly.`);
         setShowSupportModal(false);
@@ -89,7 +91,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
     const handleShareFeedback = () => {
         const subject = "App Feedback - MasterGrowbot AI";
         const body = "Thank You for Being Part of Our Elite MasterGrowbot AI Growers Community...\n\n[Your Feedback Here]";
-        const mailtoLink = `mailto:Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        const mailtoLink = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         window.location.href = mailtoLink;
         setShowFeedbackModal(false);
     };
@@ -103,7 +105,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 const body = `User: ${userProfile.email} (${userProfile.id})\nRequest Date: ${new Date().toISOString()}\n\nPlease delete all data associated with this user logic.`;
 
                 // Use the existing email trigger logic (using mailto as fallback immediate action + db log)
-                const mailtoLink = `mailto:Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                const mailtoLink = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
                 // Ideally log to DB if possible, but Email is the required "initiation" step
                 const { submitUserFeedback } = await import('../services/dbService');
@@ -118,7 +120,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
             } catch (e) {
                 console.error("Deletion error:", e);
                 // Fallback
-                alert("Please email Support@futuristiccannabis.ai to complete your deletion request.");
+                alert("Please email support@mastergrowbot.com to complete your deletion request.");
                 onSignOut();
             }
         }
@@ -293,10 +295,11 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                     />
                 </Section>
 
-                {/* 3. Community & Support */}
-                <Section title="Community & Support">
+                {/* 3. Settings & Support */}
+                <Section title="Settings & Support">
                     <Row icon={ScanLine} label="View Tutorial" onClick={() => onViewTutorial && onViewTutorial()} />
-                    <Row icon={Star} label="Rate on App Store" onClick={() => openLink('https://play.google.com/store/apps/details?id=com.mastergrowbot.app')} />
+                    <Row icon={Star} label="Rate on Google Play" onClick={() => openLink('https://play.google.com/store/apps/details?id=com.mastergrowbot.app')} />
+                    <Row icon={RotateCcw} label="Manage subscription" onClick={() => openLink(PLAY_SUBSCRIPTIONS_URL)} />
                     <Row icon={Mail} label="Contact Support" onClick={() => setShowSupportModal(true)} />
                     <Row icon={MessageSquare} label="Share Feedback" onClick={() => setShowFeedbackModal(true)} />
                 </Section>
@@ -312,10 +315,10 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 <div className="px-4 mt-8 mb-12">
                     <button
                         onClick={async () => {
-                            if (window.confirm('Warning: This action is permanent. All your grow logs, AI insights, and photos will be deleted. Do you wish to proceed?')) {
+                            if (window.confirm('Delete your account and saved data permanently? This does not cancel Google Play subscriptions. Manage or cancel your subscription in Google Play.')) {
                                 try {
                                     const { deleteUserData } = await import('../services/dbService');
-                                    await deleteUserData();
+                                    if (!(await deleteUserData())) throw new Error('Deletion was not confirmed.');
                                     onSignOut();
                                     // Force reload to clear any in-memory state
                                     window.location.reload();
@@ -330,12 +333,12 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                         Delete Profile & Data
                     </button>
                     <p className="text-[10px] text-gray-400 text-center mt-4 leading-relaxed px-4">
-                        To request data deletion after uninstalling the app, visit <span onClick={() => openLink('https://mastergrowbot.com/privacy-policy')} className="text-blue-500 underline cursor-pointer">mastergrowbot.com/privacy-policy</span> or email <a href="mailto:support@futuristiccannabis.ai" className="text-blue-500 underline">support@futuristiccannabis.ai</a>.
+                        To request data deletion after uninstalling the app, visit <span onClick={() => openLink('https://mastergrowbot.com/privacy-policy')} className="text-blue-500 underline cursor-pointer">mastergrowbot.com/privacy-policy</span> or email <a href="mailto:support@mastergrowbot.com" className="text-blue-500 underline">{SUPPORT_EMAIL}</a>.
                     </p>
                 </div>
 
                 <div className="text-center pb-8 opacity-40">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 1.0.153</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 1.0.158</p>
                 </div>
             </div>
 
@@ -412,13 +415,19 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                             const ticketId = `MG-${Math.floor(1000 + Math.random() * 9000)}`;
                             const subject = `Support Ticket ${ticketId}: ${supportForm.issue}`;
                             const body = `Name: ${supportForm.name}\nEmail: ${supportForm.email}\n\nMessage:\n${supportForm.message}`;
-                            const mailtoLink = `mailto:Agcomsol@gmail.com,Support@futuristiccannabis.ai?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                            const mailtoLink = `mailto:Agcomsol@gmail.com,${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
                             const { createSupportTicket } = await import('../services/dbService');
-                            createSupportTicket(supportForm).catch(console.error);
+                            try {
+                                const ticket = await createSupportTicket(supportForm);
+                                if (String(ticket?.id || '').startsWith('local_') || ticket?.sync_status) throw new Error('Not sent');
+                            } catch {
+                                alert('Your support message could not be submitted. Your draft has been kept. Please retry or email ' + SUPPORT_EMAIL + '.');
+                                return;
+                            }
 
                             window.location.href = mailtoLink;
-                            alert(`Ticket #${ticketId} Created! 📨 Opening your email client...`);
+                            alert('Support request recorded. Your email composer is opening; send the email there if you want to email support.');
                             setShowSupportModal(false);
                             setSupportForm({ name: '', email: '', issue: '', message: '' });
                         }} className="space-y-3">
@@ -465,7 +474,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                             alert("Feedback Sent! Thank you for helping us grow. 🌱");
 
                             // 2. Neutral Prompt (Policy Compliant)
-                            if (window.confirm("Thanks for your feedback! Would you like to leave a public review on the App Store?")) {
+                            if (window.confirm("Thanks for your feedback! Would you like to leave a public review on Google Play?")) {
                                 window.open("https://play.google.com/store/apps/details?id=com.mastergrowbot.app", "_blank");
                             }
 

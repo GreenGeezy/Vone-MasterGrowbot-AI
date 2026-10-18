@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, X, Camera, Sparkles, Sprout, ChevronRight, Leaf } from 'lucide-react';
+import { Search, Plus, X, Camera, Sparkles, Sprout, ChevronRight } from 'lucide-react';
 import { STRAIN_DATABASE } from '../data/strains';
 import { getCustomStrains, saveCustomStrain, uploadImage } from '../services/dbService';
 import { getStrainInsights } from '../services/geminiService';
 import { Strain } from '../types';
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
 import sproutIcon from '../src/assets/images/sprout-icon.png';
-import purpleGrowRoom from '../src/assets/images/purple-grow-room.jpg';
-import { formatStrainValue, matchesStrainSearch } from '../utils/strainSearch';
+import { matchesStrainSearch } from '../utils/strainSearch';
+import { StrainDetailModal } from '../components/StrainDetailModal';
+import {proFirstRelease} from '../services/releaseFeatures';
 
 interface StrainSearchProps {
     onAddPlant: (strain: Strain) => void; // Callback to add to Garden
@@ -60,9 +61,9 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
         const strainToSave = {
             ...newStrain,
             imageUri: newStrainImage, // Save the base64 string directly for offline support
-            thc_level: 'Not established',
-            cbd_level: 'Not established',
-            most_common_terpene: 'Not established'
+            thc_level: '',
+            cbd_level: '',
+            most_common_terpene: ''
         };
 
         saveCustomStrain(strainToSave);
@@ -104,8 +105,8 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
                     <h3 className="font-black text-gray-900 leading-tight break-words">{strain.name}</h3>
                     <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">{strain.type}</p>
                     <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-[11px] font-bold text-gray-700">
-                        <span><span className="text-gray-400">Est. THC</span> {formatStrainValue(strain.thc_level)}</span>
-                        <span><span className="text-gray-400">Est. CBD</span> {formatStrainValue(strain.cbd_level)}</span>
+                        {strain.thc_level && strain.thc_level !== 'Not established' && <span><span className="text-gray-400">Reported THC</span> {strain.thc_level}</span>}
+                        {strain.cbd_level && strain.cbd_level !== 'Not established' && <span><span className="text-gray-400">Reported CBD</span> {strain.cbd_level}</span>}
                     </div>
                 </div>
                 <ChevronRight size={20} className="text-gray-300" />
@@ -113,115 +114,6 @@ const StrainSearch: React.FC<StrainSearchProps> = ({ onAddPlant }) => {
         );
     };
 
-    const StrainDetailModal = ({ strain, onClose, onAdd }: { strain: Strain, onClose: () => void, onAdd: (s: Strain) => void }) => {
-        const [imgSrc, setImgSrc] = useState(strain.imageUri || sproutIcon);
-        const [localAiInsight, setLocalAiInsight] = useState<string | null>(null);
-        const [localIsLoading, setLocalIsLoading] = useState(false);
-
-        // Reset image when strain changes (though component usually remounts if key changes)
-        useEffect(() => {
-            setImgSrc(strain.imageUri || sproutIcon);
-            setLocalAiInsight(null);
-        }, [strain]);
-
-        const handleAi = async () => {
-            setLocalIsLoading(true);
-            const result = await getStrainInsights(strain.name, strain.description);
-            setLocalAiInsight(result);
-            setLocalIsLoading(false);
-        };
-
-        return (
-            <div className="fixed inset-0 z-[70] bg-white overflow-y-auto overscroll-contain animate-in slide-in-from-right pb-[calc(env(safe-area-inset-bottom)+2rem)]">
-                <div className="relative h-64">
-                    <img
-                        src={purpleGrowRoom}
-                        className="w-full h-full object-cover"
-                        alt="Hero"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                    <button aria-label="Back to strain library" onClick={onClose} className="absolute top-[calc(env(safe-area-inset-top)+1rem)] right-5 p-2 bg-black/50 rounded-full text-white"><X size={20} /></button>
-                    <div className="absolute bottom-0 inset-x-0 h-32 bg-gradient-to-t from-black/80 to-transparent" />
-                    <div className="absolute bottom-6 left-5 right-5 text-white">
-                        <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">{strain.type}</span>
-                        <h1 className="text-3xl font-black mt-2 leading-tight break-words">{strain.name}</h1>
-                    </div>
-                </div>
-
-                <div className="p-5 max-w-2xl mx-auto">
-                    <div className="grid grid-cols-2 border-y border-gray-100 py-4 mb-6">
-                        <div className="pr-4 border-r border-gray-100 text-center min-w-0">
-                            <div className="text-[10px] font-bold text-gray-400 uppercase">Estimated THC</div>
-                            <div className="text-xl font-black text-gray-900 mt-1 break-words">{formatStrainValue(strain.thc_level)}</div>
-                        </div>
-                        <div className="pl-4 text-center min-w-0">
-                            <div className="text-[10px] font-bold text-gray-400 uppercase">Estimated CBD</div>
-                            <div className="text-xl font-black text-gray-900 mt-1 break-words">{formatStrainValue(strain.cbd_level)}</div>
-                        </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 mb-6">
-                        <Leaf size={18} className="text-orange-500 mt-0.5 shrink-0" />
-                        <div className="min-w-0">
-                            <div className="text-[10px] font-bold text-gray-400 uppercase">Primary Terpene</div>
-                            <div className="font-black text-gray-900 break-words">{formatStrainValue(strain.most_common_terpene)}</div>
-                        </div>
-                    </div>
-
-                    <div className="mb-8">
-                        <h3 className="font-black text-gray-900 mb-2">About This Strain</h3>
-                        <p className="text-gray-600 leading-relaxed text-sm whitespace-pre-wrap break-words">
-                            {formatStrainValue(strain.description)}
-                        </p>
-                    </div>
-
-                    {/* AI INSIGHTS SECTION */}
-                    <div className="mb-8">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                                <Sparkles size={18} className="text-purple-500" /> AI Strain Intelligence
-                            </h3>
-                        </div>
-
-                        {!localAiInsight ? (
-                            <button
-                                onClick={handleAi}
-                                disabled={localIsLoading}
-                                className="w-full py-4 bg-purple-50 text-purple-700 rounded-xl font-bold border border-purple-100 hover:bg-purple-100 transition-colors flex items-center justify-center gap-2"
-                            >
-                                {localIsLoading ? (
-                                    <span className="animate-pulse">Analyzing Genetics...</span>
-                                ) : (
-                                    <>Generate Grow Tips</>
-                                )}
-                            </button>
-                        ) : (
-                            <div className={`p-5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap border shadow-sm animate-in fade-in ${localAiInsight?.startsWith('Error:') ? 'bg-red-50 text-red-600 border-red-100' : 'bg-gray-50 text-gray-700 border-gray-100'}`}>
-                                {localAiInsight?.startsWith('Error:') ? (
-                                    <>
-                                        <div className="font-bold mb-1 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500" /> Connection Failed</div>
-                                        {localAiInsight.replace('Error:', '')}
-                                    </>
-                                ) : (
-                                    localAiInsight
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    {/* ADD TO GARDEN */}
-                    <button
-                        onClick={() => {
-                            onAdd(strain);
-                            onClose();
-                        }}
-                        className="w-full py-4 bg-green-600 text-white rounded-xl font-black text-lg shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-2"
-                    >
-                        <Plus size={24} /> Add to Garden
-                    </button>
-                </div>
-            </div>
-        );
-    };
 
     return (
         <div className="bg-surface min-h-screen pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[calc(3rem+env(safe-area-inset-top))] px-5 flex flex-col font-sans overflow-x-hidden">
