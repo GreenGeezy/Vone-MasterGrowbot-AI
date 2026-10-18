@@ -48,3 +48,11 @@ There is no measured evidence yet that a description, category or tag change wil
 3. Retain a neutral Google Play in-app review request after a completed useful action. Never incentivize reviews, screen users by sentiment, or claim that ratings necessarily improve revenue.
 
 These are low-effort test candidates, not proven revenue gains or guarantees against store enforcement. No title or screenshot experiment is included.
+
+## Codemagic and phone testing
+
+The android-release workflow runs automatically on pushes to main when its webhook is enabled. It installs the locked dependencies, runs TypeScript, regression tests and strain validation, builds web assets, syncs Capacitor, and runs release lint, native unit tests and the signed AAB build. The existing production/app_config secret groups must still contain the signing and Firebase variables checked by the workflow.
+
+Publishing currently emails the AAB; Google Play automatic publishing is not configured. After a successful build, upload the signed AAB to the existing Play internal testing track, review and publish that testing release, then install/update through that track's existing opt-in link. Do not promote to production before physical-device purchase and restore tests. Confirm version code 158 is unused in every Play track before uploading.
+
+The Play prices and monthly store availability have not been modified by these source commits. The paywall reads live store pricing, so it will continue to show current store prices until the separately reviewed store changes are applied.

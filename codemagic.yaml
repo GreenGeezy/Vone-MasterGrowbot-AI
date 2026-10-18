@@ -9,7 +9,7 @@ workflows:
         - app_config
       vars:
         CM_KEYSTORE_PATH: /tmp/keystore.jks
-      node: 20.11.1
+      node: 22.16.0
       java: 21
     triggering:
       events:
@@ -21,6 +21,12 @@ workflows:
       - name: Install dependencies
         script: |
           npm ci
+
+      - name: Verify Android source
+        script: |
+          npm run typecheck
+          npm test
+          npm run validate:strains
 
       - name: Install Android 16 SDK
         script: |
