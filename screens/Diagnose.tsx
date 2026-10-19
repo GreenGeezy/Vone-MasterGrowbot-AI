@@ -182,11 +182,12 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
         userProfile: defaultProfile || { experience: 'Novice' } as UserProfile // Fallback
       });
       setResult(diagnosis);
-      recordEvent('analysis_complete','photo');
+      recordEvent('analysis_complete','photo',{outcome:'success'});
 
       setReviewEligible(recordSuccessfulAnalysis(diagnosis));
 
     } catch (e: any) {
+      recordEvent('analysis_complete','photo',{outcome:'failed',error_category:'analysis_error'});
       console.error("Full Diagnosis Error:", e);
       alert(`Analysis failed: ${e.message || JSON.stringify(e)}`);
     } finally {

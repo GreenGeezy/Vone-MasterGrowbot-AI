@@ -13,16 +13,18 @@ export function normalizeAndroidPlans(packages: any[]): any[] {
       const identifier = String(option.productId || product.identifier || '');
       const optionParts = String(option.id || '').split(':');
       const basePlanId = optionParts[0] === 'mastergrowbot_pro' ? optionParts[1] : optionParts[0] || identifier.split(':')[1];
-      if (!type || identifier.split(':')[0] !== 'mastergrowbot_pro' || !['annual', 'weekly'].includes(basePlanId)) continue;
+      if (!type || identifier.split(':')[0] !== 'mastergrowbot_pro' ||
+          (type === 'ANNUAL' ? basePlanId !== 'annual' : basePlanId !== 'weekly')) continue;
       const phase = option.fullPricePhase;
       const amount = phase?.price?.amountMicros;
-      const price = Number.isFinite(amount) ? amount / 1_000_000 : product.price;
-      const currencyCode = phase?.price?.currencyCode || product.currencyCode;
-      const priceString = phase?.price?.formatted || product.priceString;
+      // Never borrow a parent product's price from a different base plan.
+      const price = Number.isFinite(amount) ? amount / 1_000_000 : NaN;
+      const currencyCode = phase?.price?.currencyCode;
+      const priceString = phase?.price?.formatted;
       if (!Number.isFinite(price) || price <= 0 || !currencyCode || !priceString) continue;
       const free = option.freePhase;
       const trial = free?.billingPeriod?.iso8601;
-      const trialDays = trial === 'P3D' ? 3 : null;
+      const trialDays = trial === 'P3D' && free?.price?.amountMicros === 0 ? 3 : null;
       const normalized = {
         ...pkg, packageType: type, basePlanId, trialDays,
         product: { ...product, price, currencyCode, priceString, defaultOption: option },
@@ -41,7 +43,7 @@ export function annualComparison(annual: any, weekly: any): { badge: string | nu
   let subtext: string | null = null;
   try {
     const equivalent = new Intl.NumberFormat(undefined, { style: 'currency', currency: a.currencyCode, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(a.price / 52);
-    subtext = `About ${equivalent}/week, billed yearly`;
+    subtext = `About ${equivalent}/week, billed annually`;
   } catch { /* Invalid store currency cannot produce a comparison. */ }
   const savings = w?.currencyCode === a.currencyCode && Number.isFinite(w.price) && w.price > 0
     ? Math.floor((1 - a.price / (w.price * 52)) * 100) : 0;

@@ -26,6 +26,19 @@ describe('Android Pro catalog safety', () => {
   it('never invents a three-day trial from another duration', () => {
     expect(normalizeAndroidPlans([plan('annual','P1Y',59.99,'P7D')])[0].trialDays).toBeNull();
   });
+  it('does not call a paid or unpriced introductory phase free', () => {
+    const paid = plan('annual','P1Y',59.99,'P3D');
+    paid.product.defaultOption.freePhase!.price.amountMicros = 990000;
+    expect(normalizeAndroidPlans([paid])[0].trialDays).toBeNull();
+    delete (paid.product.defaultOption.freePhase!.price as any).amountMicros;
+    expect(normalizeAndroidPlans([paid])[0].trialDays).toBeNull();
+  });
+  it('rejects period/base-plan mismatches and missing option prices', () => {
+    const missing = plan('annual','P1Y',59.99);
+    (missing.product as any).price = 6.99;
+    delete (missing.product.defaultOption as any).fullPricePhase;
+    expect(normalizeAndroidPlans([missing,plan('annual','P1W',6.99),plan('weekly','P1Y',59.99)])).toEqual([]);
+  });
   it('rejects another product, malformed prices, and missing options', () => {
     const wrong=plan('annual','P1Y',59.99);wrong.product.defaultOption.productId='other_product';
     expect(normalizeAndroidPlans([wrong,plan('annual','P1Y',NaN),{product:{priceString:'$59.99'}}])).toEqual([]);

@@ -1,0 +1,6 @@
+<en-US>
+Reduced weekly and yearly Pro subscription prices for new subscriptions.
+Updated onboarding and tutorial to guide your first plant check.
+Clearer subscription pricing, renewal terms and annual-plan savings.
+Improved Android compatibility and release optimization.
+</en-US>
