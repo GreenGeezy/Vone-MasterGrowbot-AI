@@ -2,6 +2,7 @@ package com.mastergrowbot.app;
 
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
 
 import androidx.activity.EdgeToEdge;
 import androidx.core.graphics.Insets;
@@ -24,12 +25,21 @@ public class MainActivity extends BridgeActivity {
         if (webView == null) return;
 
         ViewCompat.setOnApplyWindowInsetsListener(webView, (view, windowInsets) -> {
-            Insets systemBars = windowInsets.getInsets(
-                WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
-            );
-            view.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-            // Preserve IME and plugin inset dispatch; only the WebView system-bar padding is owned here.
-            return windowInsets;
+            int handledTypes = WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout();
+            Insets systemBars = windowInsets.getInsets(handledTypes);
+            // Padding inside a WebView does not move CSS fixed/inset:0 controls.
+            // Resize its native bounds so every web viewport stays above system UI.
+            ViewGroup.MarginLayoutParams layout = (ViewGroup.MarginLayoutParams) view.getLayoutParams();
+            if (layout.leftMargin != systemBars.left || layout.topMargin != systemBars.top
+                    || layout.rightMargin != systemBars.right || layout.bottomMargin != systemBars.bottom) {
+                layout.setMargins(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+                view.setLayoutParams(layout);
+            }
+            // Native margins own these insets. Zero them to avoid double spacing
+            // in newer WebViews; leave keyboard insets/notifications intact.
+            return new WindowInsetsCompat.Builder(windowInsets)
+                .setInsets(handledTypes, Insets.NONE)
+                .build();
         });
         ViewCompat.requestApplyInsets(webView);
     }

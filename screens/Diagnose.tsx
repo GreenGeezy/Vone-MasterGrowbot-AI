@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Camera as CameraIcon, Upload, X, Zap, Activity, CheckSquare, Square, ChevronRight, Droplet, Calendar, Scale, ShieldAlert, Wind, CheckCircle, Share2, Save, RotateCcw, ScanLine, Film, Video, Crown, Eye, RefreshCw } from 'lucide-react';
 import { diagnosePlant, ExtendedDiagnosisResult } from '../services/geminiService';
-import { Plant, UserProfile } from '../types';
+import { Plant, Strain, UserProfile } from '../types';
+import { getCustomStrains, saveCustomStrain } from '../services/dbService';
+import { readPlantHealthSettings, savePlantHealthSettings, type GrowEnvironment } from '../services/plantHealthSettings';
 import Growbot from '../components/Growbot';
 import { STRAIN_DATABASE } from '../data/strains';
 import { matchesStrainSearch } from '../utils/strainSearch';
@@ -110,12 +112,19 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   }, [result]);
   const [shareSummary, setShareSummary] = useState<AnalysisShareSummary | null>(null);
   // LOCAL STATE OVERRIDES (Initialized from Global Defaults)
-  const [strain, setStrain] = useState<string>(plant?.strain || 'Generic');
-  // Initialize from defaultProfile, fallback to Indoor if undefined
-  const [growMethod, setGrowMethod] = useState<'Indoor' | 'Outdoor' | 'Greenhouse'>(defaultProfile?.grow_mode || 'Indoor');
-  const [growthStage, setGrowthStage] = useState('');
-  const [temperature, setTemperature] = useState('');
-  const [humidity, setHumidity] = useState('');
+  const [healthSettings, setHealthSettings] = useState(() => readPlantHealthSettings(defaultProfile?.grow_mode));
+  const { strain, growMethod } = healthSettings;
+  const [customStrains, setCustomStrains] = useState<Strain[]>(() => getCustomStrains());
+  const [strainError, setStrainError] = useState<string | null>(null);
+  const updateHealthSettings = (change: Partial<typeof healthSettings>) => {
+    const next = { ...healthSettings, ...change };
+    setHealthSettings(next);
+    savePlantHealthSettings(next);
+  };
+  const selectStrain = (name: string) => {
+    updateHealthSettings({strain:name});
+    setShowStrainMenu(false); setShowCustomUi(false); setSearchQuery(''); setStrainError(null);
+  };
 
   const [showStrainMenu, setShowStrainMenu] = useState(false);
   const [showCustomUi, setShowCustomUi] = useState(false); // Toggle for Custom UI
@@ -177,9 +186,10 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     try {
       // Use LOCAL STATE `growMethod` for the analysis, preserving global default separately
       const diagnosis = await diagnosePlant(dataUrl, {
-        strain: strain === 'Leave Blank' ? undefined : strain,
+        strain,
         growMethod,
-        userProfile: defaultProfile || { experience: 'Novice' } as UserProfile // Fallback
+        // The current screen selection takes precedence over onboarding/profile defaults.
+        userProfile: { ...defaultProfile, experience: defaultProfile?.experience || 'Novice', grow_mode: growMethod } as UserProfile
       });
       setResult(diagnosis);
       recordEvent('analysis_complete','photo',{outcome:'success'});
@@ -235,7 +245,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     finally { saveLock.current = false; setSavingReport(false); }
   };
 
-  const filteredStrains = STRAIN_DATABASE.filter(strain => matchesStrainSearch(strain, searchQuery));
+  const filteredStrains = [...customStrains, ...STRAIN_DATABASE].filter(strain => matchesStrainSearch(strain, searchQuery));
 
   // 1. Loading State
   if (loading) return (
@@ -387,6 +397,43 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
       </div>
 
       <div className="px-5 space-y-4 max-w-md mx-auto">
+        <section className="bg-white p-4 rounded-2xl border border-slate-200 space-y-4" aria-label="Plant analysis settings">
+          <div>
+            <span id="health-strain-label" className="block text-sm font-bold text-slate-700 mb-2">Strain</span>
+            <button type="button" aria-label={`Strain: ${strain}`} aria-expanded={showStrainMenu} aria-controls="health-strain-picker" onClick={() => {setShowStrainMenu(!showStrainMenu);setStrainError(null);}} className="w-full min-h-12 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-left font-semibold text-slate-800 flex justify-between items-center gap-2">
+              <span className="min-w-0 break-words">{strain}</span><ChevronRight size={18} className={showStrainMenu?'rotate-90 shrink-0':'shrink-0'}/>
+            </button>
+            {showStrainMenu && <div id="health-strain-picker" className="mt-3 space-y-3">
+              {showCustomUi ? <form onSubmit={event => {
+                event.preventDefault(); const name=customStrainName.trim(); if(!name)return;
+                try {
+                  const saved=saveCustomStrain({name,type:customStrainType,description:'Custom strain',userCreated:true});
+                  setCustomStrains(getCustomStrains()); selectStrain(saved.name); setCustomStrainName('');
+                } catch {setStrainError('Your custom strain could not be saved. Please retry.');}
+              }} className="space-y-3">
+                <label className="block text-sm font-semibold text-slate-700">Custom strain name<input autoFocus maxLength={120} required value={customStrainName} onChange={event=>setCustomStrainName(event.target.value)} className="block w-full mt-1 p-3 border border-slate-200 rounded-xl"/></label>
+                <label className="block text-sm font-semibold text-slate-700">Strain type<select value={customStrainType} onChange={event=>setCustomStrainType(event.target.value as 'Indica'|'Sativa'|'Hybrid')} className="block w-full mt-1 p-3 border border-slate-200 rounded-xl">{['Indica','Hybrid','Sativa'].map(type=><option key={type}>{type}</option>)}</select></label>
+                <button type="submit" disabled={!customStrainName.trim()} className="journey-primary">Save and select strain</button>
+                <button type="button" onClick={()=>{setShowCustomUi(false);setStrainError(null);}} className="min-h-11 w-full text-sm underline">Cancel custom strain</button>
+              </form> : <>
+                <label className="block text-sm font-semibold text-slate-700">Search strain library<input autoFocus value={searchQuery} onChange={event=>setSearchQuery(event.target.value)} className="block w-full mt-1 p-3 border border-slate-200 rounded-xl" placeholder="Search strains"/></label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={()=>selectStrain('Generic')} className="min-h-11 rounded-xl bg-emerald-50 text-emerald-800 font-semibold text-sm">Generic strain</button>
+                  <button type="button" onClick={()=>{setShowCustomUi(true);setCustomStrainName('');}} className="min-h-11 rounded-xl bg-purple-50 text-purple-800 font-semibold text-sm">Add custom strain</button>
+                </div>
+                <div className="max-h-60 overflow-y-auto border border-slate-100 rounded-xl" aria-label="Strain library">
+                  {filteredStrains.map((entry,index)=><button type="button" key={`${entry.id||entry.name}-${index}`} onClick={()=>selectStrain(entry.name)} className="block min-h-11 w-full px-3 py-3 text-left text-sm text-slate-800 hover:bg-emerald-50 border-b border-slate-100">{entry.name}{entry.userCreated&&<span className="ml-2 text-xs text-purple-700">Custom</span>}</button>)}
+                  {!filteredStrains.length&&<p className="p-3 text-sm text-slate-600">No matching strains. Use Generic or add your own.</p>}
+                </div>
+              </>}
+              {strainError&&<p role="alert" className="text-sm text-red-700">{strainError}</p>}
+            </div>}
+          </div>
+          <fieldset><legend className="text-sm font-bold text-slate-700 mb-2">Growing environment</legend>
+            <div className="grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">{(['Indoor','Outdoor','Greenhouse'] as GrowEnvironment[]).map(environment=><button type="button" key={environment} aria-pressed={growMethod===environment} onClick={()=>updateHealthSettings({growMethod:environment})} className={`min-h-12 px-1 rounded-lg text-xs font-bold ${growMethod===environment?'bg-white text-emerald-800 shadow-sm':'text-slate-600'}`}>{environment}</button>)}</div>
+          </fieldset>
+          <p className="text-xs text-slate-500">Your next analysis uses the strain and environment selected here.</p>
+        </section>
         <div className="grid grid-cols-2 gap-3">
           {mediaError && <p role="alert" className="col-span-2 text-sm text-red-700 bg-red-50 p-3 rounded-xl">{mediaError}</p>}
           <button disabled={!!pickingMedia} aria-busy={pickingMedia === 'camera'} onClick={handleStartCamera} className="bg-emerald-600 text-white min-h-[64px] rounded-2xl font-bold flex items-center justify-center gap-2"><CameraIcon size={22} /> {pickingMedia === 'camera' ? 'Opening camera…' : proFirstRelease ? 'Take Photo' : 'Take Pic'}</button>
