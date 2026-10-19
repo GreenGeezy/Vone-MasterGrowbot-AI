@@ -1,20 +1,15 @@
-# 1. PROTECT ENTRY POINTS (Fixes the Startup Crash)
+# Manifest entry points and the native RevenueCat bootstrap remain explicit.
 -keep public class com.mastergrowbot.app.MainActivity { *; }
 -keep public class com.mastergrowbot.app.MasterGrowbotApplication { *; }
 
-# 2. PROTECT CAPACITOR ENGINE
--keep public class com.getcapacitor.** { *; }
--keep public class com.getcapacitor.Plugin { *; }
--keep public class com.getcapacitor.BridgeActivity { *; }
--keep class com.getcapacitor.android.** { *; }
--keep class com.getcapacitor.bridge.** { *; }
-
-# 3. PROTECT FIREBASE & GOOGLE AUTH
--keep class com.google.firebase.** { *; }
--keep class com.google.android.gms.** { *; }
--keep class com.google.android.play.** { *; }
-
-# 4. GENERAL WEBVIEW PROTECTION
+# Capacitor ships consumer rules for its reflection-based plugin bridge.
+# Explicitly retain our registered diagnostics plugin and JS-callable methods.
+-keep @com.getcapacitor.annotation.CapacitorPlugin public class * {
+    @com.getcapacitor.PluginMethod public <methods>;
+    @com.getcapacitor.annotation.ActivityCallback <methods>;
+    @com.getcapacitor.annotation.PermissionCallback <methods>;
+}
+# Firebase, Play and RevenueCat ship their own consumer rules. Avoid keeping
+# entire dependency packages, which prevents R8 from optimizing unused code.
 -keepattributes *Annotation*
 -keepattributes SourceFile,LineNumberTable
--keep public class * extends com.getcapacitor.Plugin
