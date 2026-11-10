@@ -44,7 +44,7 @@ let billingEnvironment: 'sandbox'|'production'|'unverified'='unverified';
 export function setAnalyticsReceipt(info:unknown) { billingEnvironment=receiptEnvironment(info); }
 export function recordEvent(event:string,surface:string,details:Record<string,string>={}) {
  // Local previews and web fixtures never touch production analytics.
- if(!proFirstRelease || !Capacitor.isNativePlatform() || pendingEvents >= 8)return;
+ if(!proFirstRelease || !Capacitor.isNativePlatform() || pendingEvents >= 24)return;
  const environment=billingEnvironment;
  const allowed=['step','entry_point','variant','product_id','offering_id','outcome','error_category'];
  const metadata=Object.fromEntries(Object.entries(details).filter(([k,v])=>allowed.includes(k)&&/^[a-zA-Z0-9_.:-]{1,100}$/.test(v)));

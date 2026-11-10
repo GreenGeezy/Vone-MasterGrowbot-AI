@@ -30,7 +30,7 @@ import { readOnboarding } from '../services/onboardingState';
 import type { UserProfile } from '../types';
 interface PremiumPaywallProps {
   profile?: Partial<UserProfile> | null;
-  entryPoint?: 'video' | 'catalog';
+  entryPoint?: 'video' | 'catalog' | 'report';
   onClose: () => void;
   onUnlocked: () => void;
   requireRestore?: boolean;
@@ -45,7 +45,7 @@ const periodFor = (pkg: PurchasesPackage) =>
 const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, requireRestore = false, profile, entryPoint = 'video' }) => {
   const benefits=growerBenefits(profile || readOnboarding().profile);
   const [features,setFeatures]=useState(safeConfig);
-  useEffect(()=>{recordEvent('paywall_view','premium');void getLibraryConfig().then(setFeatures);},[]);
+  useEffect(()=>{recordEvent('paywall_view','premium',{entry_point:entryPoint});void getLibraryConfig().then(setFeatures);},[]);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,7 +114,8 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
       if (verified.length === 0) throw new Error('Premium plans are not available from the App Store yet. Please try again shortly.');
       const cadence = preferredPremiumCadence(customerInfo);
       setPackages(verified);
-      setSelected(cadence && verified.some(pkg => pkg.identifier === cadence) ? cadence : null);
+      // Start on the subscriber's current cadence, otherwise yearly. Nothing is purchased until Continue and Apple's sheet.
+      setSelected(cadence && verified.some(pkg => pkg.identifier === cadence) ? cadence : (verified.find(pkg => pkg.identifier === 'annual') || verified[0]).identifier);
       if (awaitingVerification) setNotice(premiumStatusMessage(customerInfo));
       if (requireRestore) setNotice('Your video is ready. Restore Premium or choose a plan to continue.');
       setLoading(false);
@@ -179,20 +180,20 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
       binding = await beginPremiumRevenueCatBinding(Purchases);
       await markPremiumPurchasePending();
       storeStarted = true;
-      recordEvent('purchase_attempt','premium');
+      recordEvent('purchase_attempt','premium',{entry_point:entryPoint,product_id:String(pkg.product.identifier||'')});
       // Apple owns the payment sheet's lifetime. A JS timeout cannot cancel it.
       const result = await Purchases.purchasePackage({ aPackage: pkg });
 
       const customerInfo = await refresh(Purchases, result.customerInfo);
       if (await confirmAccess(customerInfo)) {
-        recordEvent('purchase_success','premium',{outcome:'entitlement_verified'});
+        recordEvent('purchase_success','premium',{outcome:'entitlement_verified',entry_point:entryPoint,product_id:String(pkg.product.identifier||'')});
         return;
       } else {
         setPending(true);
         setNotice(premiumStatusMessage(customerInfo));
       }
     } catch (cause: any) {
-      recordEvent(isPurchaseCancelled(cause)?'purchase_cancelled':'purchase_failed','premium');
+      recordEvent(isPurchaseCancelled(cause)?'purchase_cancelled':'purchase_failed','premium',{entry_point:entryPoint});
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
       if (!wasPending && (!storeStarted || isPurchaseCancelled(cause))) {
         try { await rollbackPremiumRevenueCatBinding(Purchases, binding); } catch { /* retained for startup recovery */ }
@@ -259,10 +260,10 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
   };
 
   return (
-    <div className="fixed inset-0 z-[120] bg-[#fafbf7] text-emerald-950 flex flex-col overflow-hidden" data-testid="premium-paywall">
+    <div className="premium-paywall fixed inset-0 z-[120] bg-[#fafbf7] text-emerald-950 flex flex-col overflow-hidden" data-testid="premium-paywall">
       <div className="flex items-center px-5 pt-[max(1rem,env(safe-area-inset-top,0px))] pb-3">
         <button onClick={onClose} disabled={busy} aria-label="Close Premium" className="p-3 rounded-full bg-white/10 disabled:opacity-40"><ArrowLeft size={20} /></button>
-        <span className="ml-auto text-[10px] font-black tracking-[0.2em] text-emerald-800">MASTERGROWBOT AI PREMIUM</span>
+        <span className="premium-tag ml-auto">MASTERGROWBOT AI PREMIUM</span>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-6">
@@ -302,7 +303,12 @@ const PremiumPaywall: React.FC<PremiumPaywallProps> = ({ onClose, onUnlocked, re
           ))}
         </div>
 
-        <div className="rounded-2xl border border-slate-200 p-4 mb-5 text-sm"><p className="text-xs text-emerald-800 font-bold">EXAMPLE WORKFLOW</p><p className="mt-2 text-slate-700">Save a check-in → add a note → revisit what changed.</p><p className="text-xs text-slate-600 mt-2">Build a record you can return to throughout your grow.</p></div>
+        <table className="premium-compare mb-5"><caption>What changes with Premium</caption><thead><tr><th scope="col"><span className="sr-only">Feature</span></th><th scope="col">Pro</th><th scope="col">Premium</th></tr></thead><tbody>
+          <tr><th scope="row">Photo plant health reports</th><td>Included</td><td>Included</td></tr>
+          <tr><th scope="row">Grow journal and tasks</th><td>Included</td><td>Included</td></tr>
+          {features.catalog && features.catalogCount===300 && <tr><th scope="row">Strain profiles</th><td>300</td><td>600</td></tr>}
+          <tr><th scope="row">Video check-ins</th><td>Not included</td><td>Included</td></tr>
+        </tbody></table>
 
 
         <div ref={statusPanel}>

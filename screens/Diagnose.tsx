@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera as CameraIcon, Upload, X, Zap, Activity, CheckSquare, Square, ChevronRight, Droplet, Calendar, Scale, ShieldAlert, Wind, CheckCircle, Share2, Save, RotateCcw, ScanLine, Film, Video, Crown, Eye, RefreshCw } from 'lucide-react';
+import { Camera as CameraIcon, Upload, X, Zap, Activity, CheckSquare, Square, ChevronRight, Droplet, Calendar, Scale, ShieldAlert, Wind, CheckCircle, Share2, Save, RotateCcw, ScanLine, Film, Video, Crown, Eye, RefreshCw, ArrowRight } from 'lucide-react';
 import { diagnosePlant, ExtendedDiagnosisResult } from '../services/geminiService';
 import { Plant, UserProfile } from '../types';
 import Growbot from '../components/Growbot';
@@ -21,6 +21,9 @@ import VideoAnalysisContext from '../components/VideoAnalysisContext';
 import {proFirstRelease} from '../services/releaseFeatures';
 import {hasPremiumAccess} from '../services/premiumCatalog';
 import {recordEvent} from '../services/premiumLibrary';
+import {canSuggestPremium,dismissPremiumSuggestion,markPremiumSuggested,notePhotoReport} from '../services/premiumPrompts';
+import {noteSavedReport,requestSavedReportReview} from '../services/analysisReview';
+import {previousCheck} from '../services/growPlan';
 
 /**
  * Health Score Mapping help
@@ -105,6 +108,9 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [savingReport, setSavingReport] = useState(false);
   const [premiumMember,setPremiumMember]=useState(false);
+  const [premiumEntry,setPremiumEntry]=useState<'video'|'report'>('video');
+  const [suggestPremium,setSuggestPremium]=useState(false);
+  useEffect(()=>{if(suggestPremium&&!premiumMember){markPremiumSuggested();recordEvent('premium_entry_view','video',{entry_point:'report'});}},[suggestPremium,premiumMember]);
   useEffect(()=>{if(Capacitor.getPlatform()==='ios')void import('@revenuecat/purchases-capacitor').then(({Purchases})=>Purchases.getCustomerInfo()).then(({customerInfo})=>setPremiumMember(hasPremiumAccess(customerInfo))).catch(()=>{});},[]);
   const isLocalReview=import.meta.env.DEV && location.pathname.startsWith('/review');
   const [image, setImage] = useState<string | null>(isLocalReview?previewPhoto||null:null);
@@ -178,7 +184,8 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   useEffect(() => () => { ++videoSelection.current; videoAbortRef.current?.abort(); }, []);
   useEffect(() => () => { if (videoUrl) URL.revokeObjectURL(videoUrl); }, [videoUrl]);
 
-  const openVideo = () => {
+  const openVideo = (entry: 'video' | 'report' = 'video') => {
+    setPremiumEntry(entry);
     setVideoError(null);
     setRequireRestore(false);
     setShowPremiumPaywall(true);
@@ -287,21 +294,8 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
       });
       setResult(diagnosis);
       recordEvent('analysis_complete','photo');
-
-      // --- IN-APP REVIEW TRIGGER (3rd Success) ---
-      try {
-        const currentCount = parseInt(localStorage.getItem('diagnosis_success_count') || '0');
-        const newCount = currentCount + 1;
-        localStorage.setItem('diagnosis_success_count', newCount.toString());
-
-        if (newCount === 3 && Capacitor.isNativePlatform()) {
-          console.log("Triggering In-App Review...");
-          const { InAppReview } = await import('@capacitor-community/in-app-review');
-          await InAppReview.requestReview();
-        }
-      } catch (e) {
-        console.warn("Review trigger failed", e);
-      }
+      notePhotoReport();
+      setSuggestPremium(canSuggestPremium(diagnosis.severity));
 
     } catch (e: any) {
       console.error("Full Diagnosis Error:", e);
@@ -342,6 +336,8 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
         notes: formatDiagnosisReport(result), image, diagnosisData: result,
       });
       if (saved === false) throw new Error('Not saved');
+      // Rating request after the second saved report: finished work, not mid-reading.
+      if (noteSavedReport()) setTimeout(() => void requestSavedReportReview(), 1500);
       if (result.healthScore < 70 && onAddTask) {
         try {
           if (await onAddTask(`Review Diagnosis: ${result.diagnosis}`, new Date().toISOString().split('T')[0], 'ai_diagnosis') === false) throw new Error();
@@ -384,6 +380,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   // 3. Result View
   if (result) {
     const isCritical = result.severity === 'high';
+    const priorCheck = previousCheck(plant);
     const themeColor = isCritical ? 'text-red-500' : result.severity === 'medium' ? 'text-orange-500' : 'text-green-500';
     const bgTheme = isCritical ? 'bg-red-500' : result.severity === 'medium' ? 'bg-orange-500' : 'bg-green-600';
 
@@ -406,8 +403,13 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
             <p className="text-xs font-bold text-gray-400 mt-1 uppercase tracking-wide">Detected in {result.growthStage}</p>
           </div>
 
-          <button disabled={savingReport} onClick={handleSave} className="journey-primary"><Save size={18}/>{savingReport?'Saving…':'Save to Journal'}</button>
-          <p className="text-sm text-slate-600">Keep this report with your notes so you can revisit what changed.</p>
+          {proFirstRelease && priorCheck && <div className={`plan-compare ${result.healthScore < priorCheck.score - 2 ? 'is-down' : ''}`} data-testid="plan-compare">
+            <p className="plan-compare-label">SINCE YOUR LAST CHECK-IN</p>
+            <p className="plan-compare-scores"><span>{priorCheck.score}</span><ArrowRight size={18} aria-hidden="true"/><strong>{Math.round(result.healthScore)}</strong><em>{result.healthScore - priorCheck.score > 0 ? '+' : ''}{Math.round(result.healthScore - priorCheck.score)}</em></p>
+            <p className="plan-compare-note">Health score, {new Date(priorCheck.at).toLocaleDateString(undefined,{month:'short',day:'numeric'})} to today. Save this check-in to add it to your 7-day grow plan.</p>
+          </div>}
+          <button disabled={savingReport} onClick={handleSave} className="journey-primary"><Save size={18}/>{savingReport?'Saving…':priorCheck?'Save check-in':'Save and start my 7-day plan'}</button>
+          <p className="text-sm text-slate-600">{priorCheck?'Each saved check-in adds a point to this plant’s trend.':'Saving starts your 7-day grow plan. Re-check tomorrow to see this score next to a new one.'}</p>
 
           {/* Priority Action */}
           <div className={`${bgTheme} text-white p-6 rounded-[2rem] shadow-xl relative overflow-hidden`}>
@@ -482,6 +484,15 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
             </div>
           )}
 
+          {proFirstRelease && suggestPremium && !premiumMember && <div className="premium-suggest" data-testid="premium-report-card">
+            <button type="button" aria-label="Dismiss video suggestion" className="premium-suggest-close" onClick={()=>{dismissPremiumSuggestion();setSuggestPremium(false);}}><X size={16}/></button>
+            <span className="premium-tag">PREMIUM</span>
+            <p className="premium-suggest-title">One photo shows one side.</p>
+            <p className="premium-suggest-sub">Add a short video check-in to show every angle of this plant.</p>
+            <button type="button" className="premium-suggest-action" onClick={()=>openVideo('report')}><Film size={16}/> See video check-ins</button>
+          </div>}
+          {showPremiumPaywall && <PremiumPaywall profile={defaultProfile} entryPoint="report" onClose={() => setShowPremiumPaywall(false)} onUnlocked={() => { setPremiumMember(true); setShowPremiumPaywall(false); setResult(null); setImage(null); setShowVideoFlow(true); }} />}
+
           <div className="grid grid-cols-2 gap-4 pb-4">
             <button disabled={savingReport} onClick={handleSave} className="py-4 bg-gray-900 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"><Save size={18} /> {savingReport ? 'Saving…' : 'Save to Journal'}</button>
             <button onClick={handleShare} className="py-4 bg-emerald-100 text-emerald-900 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-emerald-200"><Share2 size={18} /> Share Analysis</button>
@@ -508,7 +519,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
           <button disabled={!!pickingMedia} aria-busy={pickingMedia === 'camera'} onClick={handleStartCamera} className="bg-emerald-600 text-white min-h-[64px] rounded-2xl font-bold flex items-center justify-center gap-2"><CameraIcon size={22} /> {pickingMedia === 'camera' ? 'Opening camera…' : proFirstRelease ? 'Take Photo' : 'Take Pic'}</button>
           <button disabled={!!pickingMedia} aria-busy={pickingMedia === 'photos'} onClick={handleGalleryUpload} className="bg-white text-slate-800 border border-slate-200 min-h-[64px] rounded-2xl font-bold flex items-center justify-center gap-2"><Upload size={20} /> {pickingMedia === 'photos' ? 'Opening photos…' : 'Analyze Image'}</button>
         </div>
-        {proFirstRelease?<button onClick={openVideo} data-testid="premium-video-card" className="w-full text-left flex items-center gap-2 min-h-11 px-3 py-2 border border-slate-200 rounded-xl bg-white text-slate-600 text-sm"><Film size={17}/><span>{premiumMember?'Analyze video':'Video analysis'}</span>{!premiumMember&&<><span className="text-[10px] px-2 py-1 bg-slate-100 rounded-full">Premium</span><span className="ml-auto font-semibold">Explore</span></>}<ChevronRight size={16}/></button>:<button onClick={openVideo} data-testid="premium-video-card" className="w-full text-left flex items-center gap-3 rounded-2xl bg-slate-950 p-4 text-white shadow-md active:scale-[0.99]">
+        {proFirstRelease?<button onClick={()=>openVideo('video')} data-testid="premium-video-card" className={`premium-entry ${premiumMember?'is-member':''}`}><span className="premium-entry-icon"><Film size={22}/></span><span className="flex-1 min-w-0"><span className="premium-entry-title">{premiumMember?'Analyze video':'Video check-in'}{!premiumMember&&<span className="premium-tag">PREMIUM</span>}</span><span className="premium-entry-sub">{premiumMember?'Record or choose a short clip of your plant.':'Show every angle of your plant in one short clip.'}</span></span><ChevronRight size={18}/></button>:<button onClick={()=>openVideo('video')} data-testid="premium-video-card" className="w-full text-left flex items-center gap-3 rounded-2xl bg-slate-950 p-4 text-white shadow-md active:scale-[0.99]">
           <span className="rounded-xl bg-emerald-400/15 p-3 text-emerald-300"><Film size={24} /></span>
           <span className="flex-1"><span className="block text-[10px] tracking-widest font-black text-emerald-300">PREMIUM</span><span className="block text-base font-black">Analyze Video</span><span className="block text-xs text-slate-300">See more angles · View plans</span></span><ChevronRight size={20} />
         </button>}
@@ -608,7 +619,7 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
       <input ref={recordVideoRef} className="hidden" type="file" accept="video/mp4,video/quicktime,.mov" capture="environment" onChange={event => { void selectVideo(event.target.files?.[0]); event.currentTarget.value = ''; }} />
       <input ref={chooseVideoRef} className="hidden" type="file" accept="video/mp4,video/quicktime,.mov" onChange={event => { void selectVideo(event.target.files?.[0]); event.currentTarget.value = ''; }} />
 
-      {showPremiumPaywall && <PremiumPaywall profile={defaultProfile} requireRestore={requireRestore} onClose={() => setShowPremiumPaywall(false)} onUnlocked={() => { setPremiumMember(true); setShowPremiumPaywall(false); setShowVideoFlow(true); }} />}
+      {showPremiumPaywall && <PremiumPaywall profile={defaultProfile} entryPoint={premiumEntry} requireRestore={requireRestore} onClose={() => setShowPremiumPaywall(false)} onUnlocked={() => { setPremiumMember(true); setShowPremiumPaywall(false); setShowVideoFlow(true); }} />}
 
       {showVideoFlow && (
         <div className={`fixed inset-0 z-[110] flex flex-col ${videoResult ? "bg-gray-50 text-slate-900" : "bg-slate-950 text-white"}`} data-testid="video-workflow">

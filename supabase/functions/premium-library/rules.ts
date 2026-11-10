@@ -2,7 +2,7 @@ export const FILE_TYPES: Record<string,string> = {
  pdf:'application/pdf', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
  xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', csv:'text/csv', txt:'text/plain',
 };
-export const EVENTS = new Set(['paywall_view','plan_selected','purchase_attempt','purchase_success','purchase_cancelled','purchase_failed','analysis_complete','journal_saved','followup_visit','attachment_upload','attachment_open','attachment_delete','catalog_interest','onboarding_view','onboarding_answer','onboarding_complete']);
+export const EVENTS = new Set(['paywall_view','plan_selected','purchase_attempt','purchase_success','purchase_cancelled','purchase_failed','analysis_complete','journal_saved','followup_visit','attachment_upload','attachment_open','attachment_delete','catalog_interest','onboarding_view','onboarding_answer','onboarding_complete','checklist_step','review_prompt_requested','premium_entry_view']);
 export const SURFACES = new Set(['pro','premium','photo','video','journal','home','catalog','onboarding']);
 export function eventMetadata(value:unknown):Record<string,string> {
  const allowed=new Set(['build','platform','environment','step','entry_point','variant','product_id','offering_id','outcome','error_category','rc_app_user_id']);

@@ -198,7 +198,8 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, profile }) => {
       const pkg = packages.find(p => p.identifier === selectedPkgIdentifier);
       if (!pkg) { setError('Selected plan unavailable'); return; }
 
-      recordEvent('purchase_attempt','pro');
+      const productId = String(pkg.product.identifier || '');
+      recordEvent('purchase_attempt','pro',{product_id:productId});
       await markProPurchasePending(true);setPending(true);
       const purchaseResult = await Purchases.purchasePackage({ aPackage: pkg });
 
@@ -206,7 +207,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, profile }) => {
       if (hasActivePaidAccess(purchaseResult.customerInfo)) {
         await markProPurchasePending(false);setPending(false);
         setAnalyticsReceipt(purchaseResult.customerInfo);
-        recordEvent('purchase_success','pro',{outcome:'entitlement_verified'});
+        recordEvent('purchase_success','pro',{outcome:'entitlement_verified',product_id:productId});
         onPurchase();
         return;
       }
@@ -217,7 +218,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, profile }) => {
       if (hasActivePaidAccess(freshInfo)) {
         await markProPurchasePending(false);setPending(false);
         setAnalyticsReceipt(freshInfo);
-        recordEvent('purchase_success','pro',{outcome:'entitlement_verified'});
+        recordEvent('purchase_success','pro',{outcome:'entitlement_verified',product_id:productId});
         onPurchase();
         return;
       }
@@ -231,7 +232,7 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, profile }) => {
           await markProPurchasePending(false);setPending(false);
           setAnalyticsReceipt(retryInfo);
           setError(null);
-          recordEvent('purchase_success','pro',{outcome:'entitlement_verified'});
+          recordEvent('purchase_success','pro',{outcome:'entitlement_verified',product_id:productId});
           onPurchase();
           return;
         }
@@ -318,6 +319,12 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, profile }) => {
           subtext: planBenefit('annual', annualPkg!.product),
         };
       }
+    }
+
+    const weeklyPrice = parsePackagePrice(packages.find((p: any) => p.packageType === 'WEEKLY'));
+    if (annualPrice && weeklyPrice) {
+      const savings = Math.round((1 - annualPrice / (weeklyPrice * 52)) * 100);
+      if (Number.isFinite(savings) && savings > 0) return { badge: `Save ${savings}% vs weekly`, subtext: planBenefit('annual', annualPkg!.product) };
     }
 
     return {
@@ -412,9 +419,14 @@ const Paywall: React.FC<PaywallProps> = ({ onClose, onPurchase, profile }) => {
               </button>;
             })}
           </div>
+          {trialEligible && selectedPkg && <ol className="trial-timeline" aria-label="How your free trial works">
+            <li><span aria-hidden="true">1</span><p><strong>Today</strong>Full Pro access. No charge today.</p></li>
+            <li><span aria-hidden="true">2</span><p><strong>During your trial</strong>Start your 7-day grow plan: check a plant, then re-check to see its score change.</p></li>
+            <li><span aria-hidden="true">3</span><p><strong>After {trialDuration(selectedPkg.product.introPrice)}</strong>{selectedPkg.product.priceString} per {selectedPkg.packageType === 'WEEKLY' ? 'week' : selectedPkg.packageType === 'ANNUAL' ? 'year' : 'month'} unless you cancel at least 24 hours before the trial ends.</p></li>
+          </ol>}
 
           <div className="mt-5"><ul className="pro-benefits">
-            {[{icon:'📸',label:benefits.photo}, {icon:'📓',label:benefits.journal}, {icon:'🧬',label:benefits.references}, {icon:'📅',label:'Keep tasks and follow-ups with your grow.'}].map(({icon,label}) => <li key={label} className="flex items-center gap-2"><span aria-hidden="true" className="text-base shrink-0">{icon}</span>{label}</li>)}
+            {[{icon:'📸',label:benefits.photo}, {icon:'📓',label:benefits.journal}, {icon:'🧬',label:benefits.references}, {icon:'📈',label:'Follow one plant with a 7-day grow plan.'}, {icon:'📅',label:'Keep tasks and follow-ups with your grow.'}].map(({icon,label}) => <li key={label} className="flex items-center gap-2"><span aria-hidden="true" className="text-base shrink-0">{icon}</span>{label}</li>)}
           </ul>
           <p className="text-xs text-slate-600 mb-4">Video analysis requires Premium and is not included in Pro.</p></div>
           {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 text-red-800 p-3 text-sm">{error}</p>}

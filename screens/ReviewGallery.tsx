@@ -34,11 +34,17 @@ const screens=[
  ['premium','Premium subscription','Explain additional features after a relevant user action.'],
  ['recovery','Recovery','Honest errors and retained drafts protect trust and successful saves.']
 ];
+/** Local design fixture only: ?plan=N adds N sample check-ins (ending yesterday, or today with &today=1). */
+function previewChecks() {
+ const params=new URLSearchParams(location.search);const count=Math.min(5,Number(params.get('plan'))||0);const offset=params.get('today')==='1'?0:1;
+ const days=[6,5,4,2,0].slice(5-count);const scores=[71,74,76,81,84].slice(0,count);
+ return days.map((d,i)=>{const at=new Date(Date.now()-(d+offset)*86400000);return {id:`plan-${i}`,date:at.toLocaleDateString(),createdAt:at.toISOString(),type:'Health Check',notes:'Sample check-in',imageUri:'/images/V5MasterGrowbotExamplePlant.jpg',diagnosisData:{...(sample as any),healthScore:scores[i]}};});
+}
 function Preview({name}:{name:string}) {
  const level=new URLSearchParams(location.search).get('experience');
  const [profile,setProfile]=useState<UserProfile>({experience:level==='Expert'?'Expert':level==='Intermediate'?'Intermediate':'Novice',grow_mode:'Indoor',onboardingIntent:'photo',onboardingGoal:'health'});
  const [screen,setScreen]=useState(name);
- const [plants,setPlants]=useState<any[]>([{id:'preview-plant',name:'My plant',strain:'Example plant',imageUri:'/images/V5MasterGrowbotExamplePlant.jpg',journal:[{id:'preview-entry',date:'Oct 12, 2026',createdAt:'2026-10-12T12:00:00Z',type:'note',notes:'Saved a photo check-in. Keeping this report with my notes.',imageUri:'/images/V5MasterGrowbotExamplePlant.jpg'}]}]);
+ const [plants,setPlants]=useState<any[]>([{id:'preview-plant',name:'My plant',strain:'Example plant',imageUri:'/images/V5MasterGrowbotExamplePlant.jpg',journal:[{id:'preview-entry',date:'Oct 12, 2026',createdAt:'2026-10-12T12:00:00Z',type:'note',notes:'Saved a photo check-in. Keeping this report with my notes.',imageUri:'/images/V5MasterGrowbotExamplePlant.jpg'},...previewChecks()]}]);
  const [hint,setHint]=useState(true);
  const next=(n:string)=>setScreen(n);
  if(['welcome','sample','intent','experience','environment'].includes(screen))return <Onboarding key={screen} initialStep={['welcome','sample','intent','experience','environment'].indexOf(screen)} onComplete={p=>{setProfile(p);next('summary');}} onRestore={()=>next('pro')}/>;

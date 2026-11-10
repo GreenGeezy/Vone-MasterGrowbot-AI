@@ -5,7 +5,7 @@ import Growbot from '../components/Growbot';
 export const TUTORIAL_VERSION = 1;
 
 const steps = [
-  {title:'Turn a photo into next checks.',description:'Open Plant Health and choose a clear plant photo. Add your strain and setup, then review the AI’s observations and suggested checks.',icon:Camera,items:['Use a well-lit photo with the affected area visible.','Read the priority action and supporting details.','Save the report to your plant’s journal.']},
+  {title:'Turn a photo into next checks.',description:'Open Plant Health and choose a clear plant photo. Add your strain and setup, then review the AI’s observations and suggested checks.',icon:Camera,items:['Use a well-lit photo with the affected area visible.','Read the priority action and supporting details.','Save the report to start your 7-day grow plan.']},
   {title:'Build your grow record.',description:'Keep photos and notes for each plant in Journal. Add tasks for the care you want to remember.',icon:BookOpen,items:['Add a plant from the strain library.','Save a short note about what changed.','Come back for a follow-up and compare your records.']},
   {title:'Get to know your strain.',description:'Open Strains to search your included reference library. Use it alongside your own observations as your grow develops.',icon:Dna,items:['Search by strain name or browse the library.','Read the available growing information.','Add the strain to start a plant record.']},
   {title:'Invite a second look.',description:'Your plant health reports are shareable. Tap Share Analysis to preview your card and choose where to share it.',icon:Share2,items:['Review the card before sharing.','Choose whether to include your plant photo.','Return to Home for your plants, tasks, and check-ins.']},

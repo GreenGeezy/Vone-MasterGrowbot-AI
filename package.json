@@ -13,7 +13,7 @@
     "test:premium": "node --test scripts/premium-catalog.test.mjs scripts/video-visual-result.test.mjs scripts/premium-backend.test.mjs scripts/premium-recovery.test.mjs scripts/premium-access.test.mjs",
     "test:sharing": "node --test scripts/analysis-share.test.mjs scripts/journal-share.test.mjs",
     "test:library": "node --test scripts/premium-library.test.mjs",
-    "test:growth": "node --test scripts/growth-reliability.test.mjs"
+    "test:growth": "node --test scripts/growth-reliability.test.mjs scripts/grow-plan.test.mjs"
   },
   "dependencies": {
     "@capacitor-community/in-app-review": "^6.0.0",
