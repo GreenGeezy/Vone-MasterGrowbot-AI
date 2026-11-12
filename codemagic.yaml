@@ -60,6 +60,8 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m2
     environment:
+      vars:
+        APP_STORE_APPLE_ID: "6752221060"
       groups:
         - ios-config # This MUST match the group name you created
       ios_signing:
@@ -106,6 +108,28 @@ workflows:
       - name: Set up code signing settings on Xcode project
         script: |
           xcode-project use-profiles
+
+      - name: Set a new iOS build number
+        script: |
+          set -euo pipefail
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID")
+          case "$LATEST_BUILD_NUMBER" in
+            ''|*[!0-9]*) echo "Apple returned an invalid build number: $LATEST_BUILD_NUMBER"; exit 1 ;;
+          esac
+          # Keep retries above the last shipped build, even if Apple's list is delayed.
+          case "${BUILD_NUMBER:-}" in
+            ''|*[!0-9]*) echo "Missing numeric Codemagic BUILD_NUMBER"; exit 1 ;;
+          esac
+          NEXT_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
+          MINIMUM_BUILD_NUMBER=$((182 + BUILD_NUMBER))
+          if [ "$NEXT_BUILD_NUMBER" -lt "$MINIMUM_BUILD_NUMBER" ]; then
+            NEXT_BUILD_NUMBER=$MINIMUM_BUILD_NUMBER
+          fi
+          cd "$CM_BUILD_DIR/ios/App"
+          agvtool new-version -all "$NEXT_BUILD_NUMBER"
+          ACTUAL_BUILD_NUMBER=$(agvtool what-version -terse)
+          test "$ACTUAL_BUILD_NUMBER" = "$NEXT_BUILD_NUMBER" || { echo "Xcode build number was not updated"; exit 1; }
+          echo "Archiving iOS build $NEXT_BUILD_NUMBER (latest uploaded build $LATEST_BUILD_NUMBER)"
 
       - name: Build IPA for App Store
         script: |
