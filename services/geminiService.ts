@@ -143,7 +143,7 @@ export async function diagnosePlant(
     return {
       ...result,
       severity: result.severity || 'low',
-      healthScore: result.healthScore || 80,
+      healthScore: result.healthScore ?? 80,
     };
 
   } catch (e) {

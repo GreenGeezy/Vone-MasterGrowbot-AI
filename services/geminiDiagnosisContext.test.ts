@@ -7,6 +7,10 @@ beforeEach(()=>{
   invoke.mockResolvedValue({data:{result:JSON.stringify({diagnosis:'Healthy',healthScore:95})},error:null});
 });
 describe('diagnosis request uses explicit Plant Health context',()=>{
+  it('preserves a zero health score instead of substituting a healthy score',async()=>{
+    invoke.mockResolvedValue({data:{result:JSON.stringify({diagnosis:'Severe damage',healthScore:0})},error:null});
+    expect((await diagnosePlant('data:image/jpeg;base64,fixture',{growMethod:'Indoor'})).healthScore).toBe(0);
+  });
   it.each(['Indoor','Outdoor','Greenhouse'] as const)('passes %s and the selected strain to the AI request',async growMethod=>{
     await diagnosePlant('data:image/png;base64,fixture',{strain:'My selected strain',growMethod,userProfile:{experience:'Novice',grow_mode:'Indoor'}});
     const [name,{body}]=invoke.mock.calls[0];

@@ -5,6 +5,7 @@ import { isTransientPersistenceError, logOperationError } from './diagnostics';
 import { GrowTask, Plant, Strain } from '../types';
 import { STRAIN_DATABASE } from '../data/strains';
 import { formatStrainValue } from '../utils/strainSearch';
+import sproutIcon from '../src/assets/images/sprout-icon.png';
 
 // --- Local Storage Helpers ---
 
@@ -86,7 +87,8 @@ export const uploadImage = async (base64: string, path: string): Promise<string 
   }
 };
 
-const defaultPlantImage = 'https://images.unsplash.com/photo-1603796846097-b36976ea2851';
+const legacyDefaultPlantImage = 'https://images.unsplash.com/photo-1603796846097-b36976ea2851';
+const defaultPlantImage = sproutIcon;
 
 const normalizeEntryType = (type?: string) => {
   if (type === 'Health Check' || type === 'diagnosis') return 'diagnosis';
@@ -94,7 +96,7 @@ const normalizeEntryType = (type?: string) => {
   return 'note';
 };
 
-const mapJournalRow = (row: any) => ({
+export const mapJournalRow = (row: any) => ({
   id: row.id,
   date: row.created_at ? new Date(row.created_at).toLocaleDateString() : new Date().toLocaleDateString(),
   type: row.entry_type === 'diagnosis' ? 'Health Check' : row.entry_type || 'note',
@@ -103,7 +105,7 @@ const mapJournalRow = (row: any) => ({
   imageUri: row.media_url,
   image: row.media_url,
   tags: row.tags || [],
-  aiAnalysis: row.ai_analysis?.summary ? row.ai_analysis : (row.ai_analysis ? { summary: String(row.ai_analysis) } : undefined),
+  aiAnalysis: row.ai_analysis?.summary ? row.ai_analysis : (typeof row.ai_analysis === 'string' ? { summary: row.ai_analysis } : undefined),
   diagnosisData: row.ai_analysis?.diagnosisData,
   shareSummary: row.ai_analysis?.shareSummary,
 });
@@ -132,7 +134,7 @@ const mapPlantRow = (row: any, journal: any[], tasks: GrowTask[], streak: number
     stage: row.stage || 'Seedling',
     healthScore: row.health_score ?? 100,
     daysInStage: row.days_in_stage ?? 1,
-    imageUri: row.image_url || defaultPlantImage,
+    imageUri: row.image_url && row.image_url !== legacyDefaultPlantImage ? row.image_url : defaultPlantImage,
     totalDays: row.total_days ?? 1,
     journal,
     tasks,
