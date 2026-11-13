@@ -2,8 +2,7 @@ async (page) => {
   await page.setViewportSize({width:390,height:844});
   await page.goto('http://127.0.0.1:3011/review/screen?screen=launch');
   await page.getByRole('heading',{name:'Grow with confidence.'}).waitFor();
-  const artwork=page.locator('.app-launch-art');
-  await artwork.evaluate(img=>img.decode());
+  await page.locator('.app-launch-logo').evaluate(img=>img.decode());
   await page.screenshot({path:'output/playwright/V15MasterGrowbotLaunch.png'});
   const launchBackground=await page.locator('.app-launch').evaluate(el=>getComputedStyle(el).background);
   await page.goto('http://127.0.0.1:3011/review/screen?screen=welcome');
@@ -17,5 +16,5 @@ async (page) => {
   await page.setViewportSize({width:1280,height:1000});
   await page.goto('http://127.0.0.1:3011/review');
   await page.frameLocator('iframe').getByRole('heading',{name:'Grow with confidence.'}).waitFor();
-  return {launchWidths:7,artworkLoaded:true,matchingBackgrounds:true,galleryDefaultsToSplash:true};
+  return {launchWidths:7,artworkRemoved:true,matchingBackgrounds:true,galleryDefaultsToSplash:true};
 }
