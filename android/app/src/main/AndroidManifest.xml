@@ -2,8 +2,6 @@
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Analytics remains enabled, but this non-advertising app must not collect ad identifiers. -->
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
@@ -11,7 +9,6 @@
     <uses-permission android:name="android.permission.ACCESS_ADSERVICES_ATTRIBUTION" tools:node="remove" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
         android:name=".MasterGrowbotApplication"

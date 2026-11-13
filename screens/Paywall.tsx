@@ -32,7 +32,8 @@ export default function Paywall({profile,onClose,onPurchase}:{profile?:Partial<U
   } catch(e) {setError(getRevenueCatUserFacingError(e).message);}finally{setLoading(false);}
  },[]);
  useEffect(()=>{void loadProducts();recordEvent('paywall_view','pro');},[loadProducts]);
- const finish=async(info:any)=>{if(!hasVerifiedSubscription(info))return false;await markProPurchasePending(false);setPending(false);setAnalyticsReceipt(info);recordEvent('purchase_success','pro',{outcome:'entitlement_verified'});onPurchase();return true;};
+ const productMeta=(plan:any):Record<string,string>=>{const id=String(plan?.product?.identifier||plan?.identifier||'');return id?{product_id:id}:{};};
+ const finish=async(info:any,plan?:any)=>{if(!hasVerifiedSubscription(info))return false;await markProPurchasePending(false);setPending(false);setAnalyticsReceipt(info);recordEvent('purchase_success','pro',{outcome:'entitlement_verified',...productMeta(plan)});onPurchase();return true;};
  const checkPending=async()=>{
   if(operation.current)return;operation.current=true;setIsPurchasing(true);setError(null);
   try {const result=await getStartupSubscriptionStatus();if(!await finish(result.customerInfo))setError('Google Play has not confirmed access yet. Check your subscription or restore purchases.');}
@@ -44,14 +45,14 @@ export default function Paywall({profile,onClose,onPurchase}:{profile?:Partial<U
   try {
    if(!Capacitor.isNativePlatform()) {if(import.meta.env.DEV)onPurchase();return;}
    const client=await configureRevenueCat();if(!client)throw new Error('Google Play is unavailable.');
-   await markProPurchasePending(true);setPending(true);recordEvent('purchase_attempt','pro');
+   await markProPurchasePending(true);setPending(true);recordEvent('purchase_attempt','pro',productMeta(plan));
    const result=await purchaseRevenueCatPlan(client.plugin,plan);
-   if(!await finish(result.customerInfo)){const fresh=await getStartupSubscriptionStatus();if(!await finish(fresh.customerInfo))setError('Your purchase is awaiting confirmation. Check subscription status before trying another purchase.');}
+   if(!await finish(result.customerInfo,plan)){const fresh=await getStartupSubscriptionStatus();if(!await finish(fresh.customerInfo,plan))setError('Your purchase is awaiting confirmation. Check subscription status before trying another purchase.');}
   }catch(e:any){
    const cancelled=e.userCancelled===true||Number(e.code)===1;
    // Only an explicit cancellation is proof that this purchase did not complete.
    if(cancelled){await markProPurchasePending(false);setPending(false);}else setError('Google Play could not confirm the purchase. Check subscription status or restore before trying again.');
-   recordEvent(cancelled?'purchase_cancelled':'purchase_failed','pro',{error_category:cancelled?'cancelled':String(e.code||'unknown')});
+   recordEvent(cancelled?'purchase_cancelled':'purchase_failed','pro',{error_category:cancelled?'cancelled':String(e.code||'unknown'),...productMeta(plan)});
   }finally{operation.current=false;setIsPurchasing(false);}
  };
  const handleRestore=async()=>{
@@ -76,21 +77,26 @@ export default function Paywall({profile,onClose,onPurchase}:{profile?:Partial<U
           <p className="text-xs text-emerald-100 mt-2">{benefits.description}</p>
         </header>
         <div className="subscription-content px-5 py-4">
-          <div className="paywall-guide"><Growbot size="md" mood="happy"/><p>Put your next step into action.<span>Pro includes photo reports, your journal, and strain references.</span></p></div><h2 className="text-sm font-bold text-slate-900 mb-3">Choose your Pro plan</h2>
+          <div className="paywall-guide"><Growbot size="md" mood="happy"/><p>Put your next step into action.<span>Pro includes photo reports, a 7-day grow plan, your journal, and strain references.</span></p></div><h2 className="text-sm font-bold text-slate-900 mb-3">Choose your Pro plan</h2>
           <div className="space-y-3" aria-label="Pro billing period">
             {packages.map(pkg => {
               const selected = pkg.identifier === selectedPkgIdentifier;
               const period = pkg.packageType === 'WEEKLY' ? 'week' : 'year';
               const meta = getPlanMeta(pkg);
-              return <button type="button" key={pkg.identifier} aria-pressed={selected} disabled={isPurchasing} onClick={() => {setSelectedPkgIdentifier(pkg.identifier);recordEvent('plan_selected','pro');}} className={`subscription-plan w-full text-left rounded-2xl border-2 px-4 py-3 flex items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${selected ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+              return <button type="button" key={pkg.identifier} aria-pressed={selected} disabled={isPurchasing} onClick={() => {setSelectedPkgIdentifier(pkg.identifier);recordEvent('plan_selected','pro',productMeta(pkg));}} className={`subscription-plan w-full text-left rounded-2xl border-2 px-4 py-3 flex items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${selected ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
                 <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-bold text-sm">{period === 'year' ? 'Yearly' : 'Weekly'}</span>{meta.badge && <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 rounded-full px-2 py-1">{meta.badge}</span>}</div><p className="subscription-price text-sm text-slate-700 mt-1"><strong>{pkg.product.priceString}</strong> / {period}</p><p className="text-xs text-emerald-800 mt-1">{meta.subtext}</p></div>
                 <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'}`}>{selected && <Check size={16}/>}</span>
               </button>;
             })}
           </div>
+          {trialEligible && selectedPkg && <ol className="trial-timeline" data-testid="trial-timeline" aria-label="How your free trial works">
+            <li><span aria-hidden="true">1</span><p><strong>Today</strong>Full Pro access. No charge today.</p></li>
+            <li><span aria-hidden="true">2</span><p><strong>During your trial</strong>Start your 7-day grow plan: check a plant, then re-check to see its score change.</p></li>
+            <li><span aria-hidden="true">3</span><p><strong>After 3 days</strong>{selectedPkg.product.priceString} per {selectedPkg.packageType === 'WEEKLY' ? 'week' : 'year'} unless you cancel in Google Play before the trial ends.</p></li>
+          </ol>}
 
           <div className="mt-5"><ul className="pro-benefits">
-            {[{icon:'📸',label:benefits.photo}, {icon:'📓',label:benefits.journal}, {icon:'🧬',label:benefits.references}, {icon:'📅',label:'Keep tasks and follow-ups with your grow.'}].map(({icon,label}) => <li key={label} className="flex items-center gap-2"><span aria-hidden="true" className="text-base shrink-0">{icon}</span>{label}</li>)}
+            {[{icon:'📸',label:benefits.photo}, {icon:'📓',label:benefits.journal}, {icon:'🧬',label:benefits.references}, {icon:'📈',label:'Follow one plant with a 7-day grow plan.'}, {icon:'📅',label:'Keep tasks and follow-ups with your grow.'}].map(({icon,label}) => <li key={label} className="flex items-center gap-2"><span aria-hidden="true" className="text-base shrink-0">{icon}</span>{label}</li>)}
           </ul></div>
           {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 text-red-800 p-3 text-sm">{error}</p>}
           <PaywallTestimonials/>

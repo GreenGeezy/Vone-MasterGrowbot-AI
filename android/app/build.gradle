@@ -13,8 +13,8 @@ android {
         minSdk rootProject.ext.minSdkVersion
         targetSdk rootProject.ext.targetSdkVersion
         // Increment for each Google Play release.
-        versionCode 161
-        versionName "2.0"
+        versionCode 162
+        versionName "2.1"
         // This is RevenueCat's public, platform-specific Google client key.
         buildConfigField "String", "REVENUECAT_ANDROID_API_KEY", '"goog_kqOynvNRCABzUPrpfyFvlMvHUna"'
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"

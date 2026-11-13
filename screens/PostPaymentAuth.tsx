@@ -38,10 +38,10 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete }) => {
         </div>
 
         <h1 className="text-3xl font-black text-gray-900 leading-tight mb-3">
-          Subscription Activated!
+          Pro is active.
         </h1>
         <p className="text-sm text-gray-600 font-medium leading-relaxed max-w-xs">
-          Welcome to the elite circle of Master Growers. Your AI assistant is ready.
+          Start with one plant photo. Your first saved report begins your 7-day grow plan.
         </p>
       </div>
 
@@ -50,22 +50,22 @@ const PostPaymentAuth: React.FC<PostPaymentAuthProps> = ({ onComplete }) => {
         <div className="flex items-start gap-4">
           <div className="bg-yellow-50 p-2 rounded-xl text-yellow-600"><Zap size={20} /></div>
           <div>
-            <h3 className="font-bold text-gray-900 text-sm">Instant Access</h3>
-            <p className="text-xs text-gray-500 font-medium">Start diagnosing plants immediately.</p>
+            <h3 className="font-bold text-gray-900 text-sm">Check a plant photo</h3>
+            <p className="text-xs text-gray-500 font-medium">Get an AI health report with clear next checks.</p>
           </div>
         </div>
         <div className="flex items-start gap-4">
           <div className="bg-green-50 p-2 rounded-xl text-green-600"><Shield size={20} /></div>
           <div>
-            <h3 className="font-bold text-gray-900 text-sm">Privacy First</h3>
-            <p className="text-xs text-gray-500 font-medium">Your data is stored locally on your device.</p>
+            <h3 className="font-bold text-gray-900 text-sm">Follow it for 7 days</h3>
+            <p className="text-xs text-gray-500 font-medium">Five quick check-ins show how its health score changes.</p>
           </div>
         </div>
         <div className="flex items-start gap-4">
           <div className="bg-gray-50 p-2 rounded-xl text-gray-600"><Lock size={20} /></div>
           <div>
-            <h3 className="font-bold text-gray-900 text-sm">Unlimited AI</h3>
-            <p className="text-xs text-gray-500 font-medium">No limits on queries or analysis.</p>
+            <h3 className="font-bold text-gray-900 text-sm">Keep your grow record</h3>
+            <p className="text-xs text-gray-500 font-medium">Reports, notes and tasks are saved to your journal.</p>
           </div>
         </div>
       </div>

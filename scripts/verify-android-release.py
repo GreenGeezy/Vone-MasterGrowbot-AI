@@ -47,10 +47,10 @@ def main():
     assert uses_sdk is not None, "Missing uses-sdk"
     source = (ROOT / "android/app/build.gradle").read_text()
     expected_code = int(re.search(r"versionCode\s+(\d+)", source).group(1))
-    assert expected_code >= 160, "Release code must be at least 160"
+    assert expected_code >= 162, "Release code must be at least 162"
     expected = {
         "package": "com.mastergrowbot.app",
-        ANDROID + "versionName": "2.0",
+        ANDROID + "versionName": "2.1",
         ANDROID + "versionCode": str(expected_code),
     }
     for name, value in expected.items():
@@ -116,7 +116,7 @@ def main():
             assert loads, f"No ELF LOAD segments: {name}"
             libraries.append({"path": name, "load_alignments": loads})
     report = {
-        "package": expected["package"], "version": "2.0", "versionCode": expected_code,
+        "package": expected["package"], "version": "2.1", "versionCode": expected_code,
         "minSdk": 24, "targetSdk": 36, "bundle_sha256": hashlib.sha256(bundle.read_bytes()).hexdigest(),
         "upload_certificate_sha256": hashlib.sha256(signed_cert).hexdigest(),
         "r8_mapping": str(mapping.relative_to(ROOT)), "native_libraries": libraries,

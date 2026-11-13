@@ -3,7 +3,7 @@ import { Check, Camera, BookOpen, Sprout, Leaf, Award, HelpCircle, Sun, Trees, W
 import type { UserProfile } from '../types';
 import JourneyFrame from '../components/JourneyFrame';
 import SampleReport from '../components/SampleReport';
-import Growbot from '../components/Growbot';
+import WelcomeHero from '../components/WelcomeHero';
 import PaywallTestimonials from '../components/PaywallTestimonials';
 import { answerOnboarding, readOnboarding, writeOnboarding } from '../services/onboardingState';
 import { recordEvent } from '../services/conversionEvents';
@@ -29,8 +29,8 @@ export default function Onboarding({onComplete,onRestore,initialStep}:{onComplet
     const profile=answerOnboarding(draft.profile,key,value);
     const next={...draft,profile};writeOnboarding(next);setDraft(next);recordEvent('onboarding_answer','onboarding',{step:String(draft.step)});
   };
-  if(draft.step===0)return <JourneyFrame title="A clearer view of your plant." description="See how a photo report and journal work together." action="See an example" onAction={()=>move(1)} footer={<button className="journey-text-button" onClick={onRestore}>Restore Purchases</button>}>
-    <div className="welcome-art"><Growbot size="xl"/><span className="welcome-caption">A photo. A report. A place to keep it.</span></div><SampleReport compact/><PaywallTestimonials/>
+  if(draft.step===0)return <JourneyFrame title="Snap a photo. Know what to check next." action="Get started" onAction={()=>move(2)} footer={<button className="journey-text-button" onClick={onRestore}>Restore Purchases</button>}>
+    <WelcomeHero onSeeReport={()=>move(1)}/><p className="welcome-sub">An AI plant health report with clear next checks, saved to your grow journal.</p><PaywallTestimonials/>
   </JourneyFrame>;
   if(draft.step===1)return <JourneyFrame title="Know what to check next." description="A health score, useful next checks, and a shareable report." onBack={()=>move(0)} action="Make it yours" onAction={()=>move(2)}><SampleReport/></JourneyFrame>;
   const question=QUESTIONS[Math.min(draft.step-2,2)];
@@ -38,7 +38,7 @@ export default function Onboarding({onComplete,onRestore,initialStep}:{onComplet
     :question.key==='grow_mode'&&draft.profile.notStartedYet?'not_started'
     :question.key==='experience'&&draft.profile.experienceUndecided?'not_sure':draft.profile[question.key];
   const unsureValue=question.key==='onboardingGoal'?'explore':'not_sure';
-  return <JourneyFrame title={question.title} description={question.description} step={draft.step-1} onBack={()=>move(draft.step-1)} action="Continue" disabled={!selected} onAction={()=>{
+  return <JourneyFrame title={question.title} description={question.description} step={draft.step-1} onBack={()=>move(draft.step===2?0:draft.step-1)} action="Continue" disabled={!selected} onAction={()=>{
     if(draft.step<4)move(draft.step+1);else {const profile={...draft.profile,experience:draft.profile.experience||'Novice'} as UserProfile;writeOnboarding({...draft,profile,step:5});onComplete(profile);}
   }}><div className="journey-options">{question.options.map(option=>{
     const Icon='icon' in option?option.icon:null;

@@ -15,7 +15,7 @@ export default function SampleReport({compact=false}:{compact?:boolean}) {
     return ()=>{clearTimeout(done);preference.removeEventListener('change',stop);};
   },[animation,compact]);
   return <section className={`sample-report report-preview ${compact?'report-preview-compact':''} ${playing?'sample-playing':''}`} aria-label="Plant health report preview">
-    <div className="sample-photo"><img src="/images/V5MasterGrowbotExamplePlant.jpg" alt="Plant with yellow lower leaves"/><span className="report-example-label">Example</span>{playing&&<div className="sample-scan" aria-hidden="true"/>}</div>
+    <div className="sample-photo"><img src="/images/V5MasterGrowbotExamplePlant.jpg" alt="Flowering cannabis plant with yellowing fan leaves"/><span className="report-example-label">Example</span>{playing&&<div className="sample-scan" aria-hidden="true"/>}</div>
     <div className="sample-body">
       <div className="report-preview-heading"><div><div className="sample-eyebrow"><Leaf size={15}/> PLANT HEALTH</div><h2>{sample.healthLabel}</h2><p className="report-stage">{sample.growthStage} · Low severity</p></div><div className="report-score" style={{'--health-score': `${sample.healthScore}%`} as React.CSSProperties} aria-label={`AI health score ${sample.healthScore} out of 100`}><strong>{sample.healthScore}<small>/100</small></strong><span>AI health score</span></div></div>
       <p className="report-observation">{sample.diagnosis}</p>

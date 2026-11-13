@@ -1,0 +1,7 @@
+<en-US>
+New 7-day grow plan: follow one plant with five photo check-ins and see its health score change.
+Health reports now show your score next to your last check-in.
+Simpler welcome screen and a new launch screen with the app logo.
+Clearer free-trial steps and pricing on the plan screen.
+You can now report a problem with an AI result from the report.
+</en-US>

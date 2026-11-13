@@ -90,7 +90,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
 
     const handleShareFeedback = () => {
         const subject = "App Feedback - MasterGrowbot AI";
-        const body = "Thank You for Being Part of Our Elite MasterGrowbot AI Growers Community...\n\n[Your Feedback Here]";
+        const body = "Thank you for using MasterGrowbot AI.\n\n[Your Feedback Here]";
         const mailtoLink = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         window.location.href = mailtoLink;
         setShowFeedbackModal(false);
@@ -338,7 +338,7 @@ const Profile: React.FC<ProfileProps> = ({ userProfile, onUpdateProfile, onSignO
                 </div>
 
                 <div className="text-center pb-8 opacity-40">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 2.0</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase">Version 2.1</p>
                 </div>
             </div>
 

@@ -1,19 +1,32 @@
-Understand possible plant problems and keep your grow organized with MasterGrowbot AI.
+MasterGrowbot AI is a cannabis grow assistant for home growers. Take a photo of your plant, get an AI-assisted plant health report with clear next checks, and follow your plant's progress in a grow journal.
 
-Upload a plant photo for an AI-assisted health analysis and suggested next checks. Keep notes in your grow journal, organize grow tasks, and explore 300 strain profiles.
+AI PLANT HEALTH CHECK
+• Take or upload a photo of your cannabis plant.
+• Get a health score, what the AI noticed, and suggested next checks.
+• Reports take your strain and your indoor, outdoor or greenhouse setup into account.
+• Useful when you notice yellow leaves, spots, drooping, or signs of a possible nutrient deficiency, pests or mold.
 
-PLANT PHOTO ANALYSIS
-Get help interpreting visible symptoms and deciding what to check next.
+7-DAY GROW PLAN
+• Follow one plant with five quick photo check-ins over a week.
+• See each new health score next to your last check-in.
+• Finish the week with a day 1 and latest comparison.
 
-YOUR GROW IN ONE PLACE
-Record observations and follow your plants' progress with journal entries and tasks.
+GROW JOURNAL AND GROW TRACKER
+• Save reports, photos and notes for each plant.
+• Add grow tasks and follow-ups so nothing gets missed.
+• Share a report card when you want a second opinion.
 
-STRAIN INFORMATION
-Explore strain profiles to support your growing research.
+CANNABIS STRAIN GUIDE
+• Search and browse 300 strain profiles.
+• Add your own custom strains.
+
+FOR NEW AND EXPERIENCED GROWERS
+Whether it is your first grow or your tenth, MasterGrowbot AI helps you keep a clear record of your marijuana plants from seedling to harvest.
 
 PRO ACCESS
-Weekly and annual subscriptions are available. Eligible new subscribers can receive a three-day free trial. Your price and renewal terms appear before purchase. Subscriptions renew automatically unless canceled through Google Play.
+MasterGrowbot AI requires a Pro subscription. Weekly and annual plans are available. Eligible new subscribers can receive a three-day free trial. Your price and renewal terms appear before purchase. Subscriptions renew automatically unless canceled through Google Play.
 
-AI results can be inaccurate and do not replace expert assessment. Photo analysis and cloud services require an internet connection. MasterGrowbot provides educational information and does not facilitate cannabis sales. Follow applicable local laws.
+IMPORTANT
+AI results can be inaccurate and do not replace expert assessment. Photo analysis and cloud services require an internet connection. MasterGrowbot AI provides educational information for adults and does not facilitate the sale of cannabis. Grow only where it is legal for you to do so and follow your local laws.
 
 Support: support@mastergrowbot.com

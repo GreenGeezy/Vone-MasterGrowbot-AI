@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera as CameraIcon, Upload, X, Zap, Activity, CheckSquare, Square, ChevronRight, Droplet, Calendar, Scale, ShieldAlert, Wind, CheckCircle, Share2, Save, RotateCcw, ScanLine, Film, Video, Crown, Eye, RefreshCw } from 'lucide-react';
+import { Camera as CameraIcon, Upload, X, Zap, Activity, CheckSquare, Square, ChevronRight, Droplet, Calendar, Scale, ShieldAlert, Wind, CheckCircle, Share2, Save, RotateCcw, ScanLine, Film, Video, Crown, Eye, RefreshCw, ArrowRight } from 'lucide-react';
 import { diagnosePlant, ExtendedDiagnosisResult } from '../services/geminiService';
 import { Plant, Strain, UserProfile } from '../types';
 import { getCustomStrains, saveCustomStrain } from '../services/dbService';
@@ -12,10 +12,12 @@ import AnalysisShareDialog from '../components/AnalysisShareDialog';
 import type { AnalysisShareSummary } from '../services/analysisShareCard';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
-import { recordSuccessfulAnalysis, requestAnalysisReview, REVIEW_READING_DELAY_MS } from '../services/analysisReview';
+import { noteSavedReport, requestSavedReportReview, REVIEW_SAVE_DELAY_MS } from '../services/analysisReview';
+import { previousCheck, planChecks } from '../services/growPlan';
 import { formatMetricDisplay, formatDiagnosisReport } from '../utils/diagnosisFormatter';
 import {proFirstRelease} from '../services/releaseFeatures';
 import {recordEvent} from '../services/conversionEvents';
+import {SUPPORT_EMAIL} from '../services/support';
 
 /**
  * Health Score Mapping help
@@ -102,7 +104,6 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   const [image, setImage] = useState<string | null>(isLocalReview?previewPhoto||null:null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [reviewEligible, setReviewEligible] = useState(false);
   const [result, setResult] = useState<ExtendedDiagnosisResult | null>(isLocalReview?previewResult||null:null);
   useEffect(() => {
     if (!result) return;
@@ -159,29 +160,10 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
     }
   }, [loading]);
 
-  // Give the user time to read the report. Never cover loading, sharing or media flows.
-  useEffect(() => {
-    if (!reviewEligible || !result || loading || shareSummary || pickingMedia || savingReport) return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const schedule = () => {
-      clearTimeout(timer);
-      if (document.visibilityState !== 'visible') return;
-      timer = setTimeout(() => {
-        if (document.visibilityState !== 'visible') return;
-        setReviewEligible(false);
-        void requestAnalysisReview();
-      }, REVIEW_READING_DELAY_MS);
-    };
-    schedule();
-    document.addEventListener('visibilitychange', schedule);
-    return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', schedule); };
-  }, [reviewEligible, result, loading, shareSummary, pickingMedia, savingReport]);
-
   const processImage = async (dataUrl: string) => {
     setImage(dataUrl);
     setPreviewImage(null);
     setLoading(true);
-    setReviewEligible(false);
     setResult(null);
     try {
       // Use LOCAL STATE `growMethod` for the analysis, preserving global default separately
@@ -193,8 +175,6 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
       });
       setResult(diagnosis);
       recordEvent('analysis_complete','photo',{outcome:'success'});
-
-      setReviewEligible(recordSuccessfulAnalysis(diagnosis));
 
     } catch (e: any) {
       recordEvent('analysis_complete','photo',{outcome:'failed',error_category:'analysis_error'});
@@ -236,6 +216,8 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
         notes: formatDiagnosisReport(result), image, diagnosisData: result,
       });
       if (saved === false) throw new Error('Not saved');
+      // Ask for a rating only after completed work: the second saved report.
+      if (noteSavedReport()) setTimeout(() => { void requestSavedReportReview().then(asked => { if (asked) recordEvent('review_prompt_requested','journal'); }); }, REVIEW_SAVE_DELAY_MS);
       if (result.healthScore < 70 && onAddTask) {
         try {
           if (await onAddTask(`Review Diagnosis: ${result.diagnosis}`, new Date().toISOString().split('T')[0], 'ai_diagnosis') === false) throw new Error();
@@ -278,6 +260,8 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
   // 3. Result View
   if (result) {
     const isCritical = result.severity === 'high';
+    const priorCheck = previousCheck(plant);
+    const planStarted = planChecks(plant).length > 0;
     const themeColor = isCritical ? 'text-red-500' : result.severity === 'medium' ? 'text-orange-500' : 'text-green-500';
     const bgTheme = isCritical ? 'bg-red-500' : result.severity === 'medium' ? 'bg-orange-500' : 'bg-green-600';
 
@@ -300,8 +284,13 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
             <p className="text-xs font-bold text-gray-400 mt-1 uppercase tracking-wide">Detected in {result.growthStage}</p>
           </div>
 
-          <button disabled={savingReport} onClick={handleSave} className="journey-primary"><Save size={18}/>{savingReport?'Saving…':'Save to Journal'}</button>
-          <p className="text-sm text-slate-600">Keep this report with your notes so you can revisit what changed.</p>
+          {priorCheck && <div className={`plan-compare ${result.healthScore < priorCheck.score - 2 ? 'is-down' : ''}`} data-testid="plan-compare">
+            <p className="plan-compare-label">SINCE YOUR LAST CHECK-IN</p>
+            <p className="plan-compare-scores"><span>{priorCheck.score}</span><ArrowRight size={18} aria-hidden="true"/><strong>{Math.round(result.healthScore)}</strong><em>{result.healthScore - priorCheck.score > 0 ? '+' : ''}{Math.round(result.healthScore - priorCheck.score)}</em></p>
+            <p className="plan-compare-note">Health score, {new Date(priorCheck.at).toLocaleDateString(undefined,{month:'short',day:'numeric'})} to today. Save this check-in to add it to your 7-day grow plan.</p>
+          </div>}
+          <button disabled={savingReport} onClick={handleSave} className="journey-primary"><Save size={18}/>{savingReport?'Saving…':planStarted?'Save check-in':'Save and start my 7-day plan'}</button>
+          <p className="text-sm text-slate-600">{planStarted?'Each saved check-in adds a point to this plant’s trend.':'Saving starts your 7-day grow plan. Re-check tomorrow to see this score next to a new one.'}</p>
 
           {/* Priority Action */}
           <div className={`${bgTheme} text-white p-6 rounded-[2rem] shadow-xl relative overflow-hidden`}>
@@ -377,10 +366,11 @@ const Diagnose: React.FC<DiagnoseProps> = ({ plant, onBack, onSaveToJournal, onA
           )}
 
           <div className="grid grid-cols-2 gap-4 pb-4">
-            <button disabled={savingReport} onClick={handleSave} className="py-4 bg-gray-900 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"><Save size={18} /> {savingReport ? 'Saving…' : 'Save to Journal'}</button>
+            <button disabled={savingReport} onClick={handleSave} className="py-4 bg-gray-900 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"><Save size={18} /> {savingReport ? 'Saving…' : planStarted ? 'Save check-in' : 'Save to Journal'}</button>
             <button onClick={handleShare} className="py-4 bg-emerald-100 text-emerald-900 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-emerald-200"><Share2 size={18} /> Share Analysis</button>
           </div>
           <p className="text-xs text-center text-gray-500 pb-3">Share a plant check-in. Invite a second look.</p>
+          <p className="text-xs text-center text-gray-500 pb-3">AI results can be inaccurate. <a className="underline font-semibold text-emerald-800 inline-block py-2" data-testid="report-result" href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Report a problem with an AI result')}&body=${encodeURIComponent(`Result: ${result.diagnosis}\n\nWhat was wrong or inappropriate about this result?\n`)}`}>Report a problem with this result</a></p>
           {shareSummary && <AnalysisShareDialog summary={shareSummary} onClose={() => setShareSummary(null)} />}
         </div>
       </div>

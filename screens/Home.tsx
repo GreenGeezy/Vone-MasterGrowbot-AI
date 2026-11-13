@@ -59,7 +59,7 @@ export default function Home({
         <button onClick={onOpenJournal}><strong>{pending.length}</strong><span>Tasks due</span></button>
         <button onClick={onOpenJournal}><strong>{plants.reduce((count: number, plant: any) => count + (plant.journal?.length || 0), 0)}</strong><span>Check-ins</span></button>
       </nav>
-      {proFirstRelease && <ProCheckIn plants={plants} onAddPlant={onAddPlant} onOpenJournal={onOpenJournal} onNavigateToPlant={onNavigateToPlant} />}
+      {proFirstRelease && <ProCheckIn plants={plants} onCheckPhoto={onCheckPhoto} onAddPlant={onAddPlant} onOpenJournal={onOpenJournal} onNavigateToPlant={onNavigateToPlant} />}
       {proFirstRelease && onCheckPhoto && <button onClick={onCheckPhoto} className="journey-primary mb-5">Check a plant photo</button>}
       <h2 className="font-bold text-lg mb-3">Today’s tasks</h2>
       <div className="space-y-3">{pending.map(row)}</div>

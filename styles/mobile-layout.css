@@ -16,11 +16,11 @@ body { overflow-wrap:break-word; }
 .health-report img { max-width:100%; }
 .app-bottom-nav { padding-bottom:max(1.5rem,env(safe-area-inset-bottom,0px)); }
 .app-launch { min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding: max(32px,env(safe-area-inset-top,0px)) 24px max(32px,env(safe-area-inset-bottom,0px)); text-align:center; color:#163e32; background:var(--journey-background); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
-.app-launch-brand { font-weight:750; font-size:1rem; margin:24px 0 16px; }
+.app-launch-brand { font-weight:750; font-size:1rem; margin:20px 0 16px; }
 .app-launch-brand span { color:#6942a0; }
 .app-launch h1 { font-size:clamp(1.75rem,7vw,2.25rem); font-weight:750; line-height:1.2; letter-spacing:-.8px; }
 .app-launch > p:last-child { margin-top:12px; color:#52655f; font-size:1rem; }
-.app-launch-art { width:min(100%,360px); height:auto; display:block; border-radius:28px; border:1px solid #d8e2d3; box-shadow:0 16px 40px #173e3214; }
+.app-launch-logo { width:120px; height:120px; display:block; border-radius:27px; box-shadow:0 12px 30px #173e3220; }
 .grow-overview { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:0 0 20px; }
 .grow-overview button { min-height:88px; min-width:0; padding:12px 6px; border:1px solid #dbe5dc; border-radius:18px; background:#fff; color:#163e32; text-align:center; }
 .grow-overview strong { display:block; font-size:1.5rem; font-weight:750; }
